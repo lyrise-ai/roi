@@ -1,56 +1,63 @@
-import React from 'react'
+import React, { useEffect, useState } from 'react'
 import Image from 'next/legacy/image'
 import Link from 'next/link'
 import Logo from '../../assets/rebranding/logo_black.svg'
 import { scrollToSection } from '../../utilities/helpers'
 import MainHeaderMobile from './MainHeaderMobile'
-import { useRouter } from 'next/navigation'
+import { useRouter, usePathname } from 'next/navigation'
 import styles from './styles.module.css'
-import { WaitlistModal } from '../../components/MainLandingPage/OurGuarantee/WaitlistModal'
+import { createClient } from '../../lib/supabase-browser'
 
 const BUTTONS = [
   {
     id: 'btn_0',
     label: 'Get your AI Agent',
-    path: 'https://calendly.com/elena-lyrise/30min',
+    path: 'https://api.leadconnectorhq.com/widget/bookings/strategy-call-with-lyrisesivto9',
   },
 ]
 
 const NAVIGATIONS = [
-  // {
-  //   id: 'nav_0',
-  //   label: 'Our Products',
-  //   path: '/',
-  //   isPage: false,
-  // },
   {
     id: 'nav_1',
     label: 'Our Blog',
     path: 'https://blog.lyrise.ai/',
     isPage: false,
   },
-  // {
-  //   id: 'nav_2',
-  //   label: 'Who are we?',
-  //   path: '/about',
-  //   isPage: true,
-  // },
-
-  // {
-  //   id: 'nav_3',
-  //   label: 'AI Accelerator',
-  //   path: '/accelerator',
-  //   isPage: true,
-  // },
 ]
 
-export default function MainHeader() {
+export default function MainHeader({ user = null }) {
   const router = useRouter()
+
+  const handleSignOut = async () => {
+    await fetch('/api/auth/logout', {
+      method: 'POST',
+      credentials: 'include',
+    })
+    window.location.href = '/'
+  }
+
   const navigate = (path) => {
     router.push(path)
   }
+
+  const pathname = usePathname()
+  const isRoiPage =
+    pathname === '/roi-report' || pathname?.startsWith('/report/')
+
+  const [isClient, setIsClient] = useState(false)
+  const [isEmployee, setIsEmployee] = useState(false)
+
+  useEffect(() => {
+    const supabase = createClient()
+    supabase.auth.getUser().then(({ data: { user } }) => {
+      const employee = user?.email?.endsWith('@lyrise.ai') ?? false
+      setIsClient(!!user && !employee)
+      setIsEmployee(employee)
+    })
+  }, [])
+
   return (
-    <header className="py-4 mt-3 px-2 sm:px-10  mb-10 lg:mb-0">
+    <header className="px-2 py-4 mt-3 mb-10 sm:px-10 lg:mb-0">
       <div
         className={`custom-container px-[1rem] sm:px[2.5rem] flex items-center justify-between gap-4 py-3 ${styles.navbar}`}
       >
@@ -64,7 +71,7 @@ export default function MainHeader() {
           />
         </Link>
 
-        <ul className="hidden lg:flex items-center gap-10 font-outfit font-normal text-new-black">
+        <ul className="items-center hidden gap-10 font-normal lg:flex font-outfit text-new-black">
           {NAVIGATIONS.map(({ label, path, isPage }) => (
             <li key={path}>
               <div
@@ -87,17 +94,42 @@ export default function MainHeader() {
           ))}
         </ul>
 
-        <div className="hidden lg:block">
-          {BUTTONS.map(({ label, path }) => (
-            <WaitlistModal>
-              <div
-                key={path}
-                className="cursor-pointer group relative text-[22px] font-[400] flex items-center justify-center gap-2 p-2 px-5 leading-[24px]  rounded-[30px] text-white bg-new-black transition-colors hover:bg-new-black/85 font-outfit"
+        <div className="items-center hidden gap-4 lg:flex">
+          {isClient && isRoiPage && (
+            <Link
+              href="/dashboard"
+              className="font-outfit text-[16px] font-[600] text-new-black hover:opacity-70 transition-opacity"
+            >
+              My Reports
+            </Link>
+          )}
+          {isEmployee && isRoiPage && (
+            <Link
+              href="/dashboard"
+              className="font-outfit text-[16px] font-[600] text-new-black hover:opacity-70 transition-opacity"
+            >
+              ← Dashboard
+            </Link>
+          )}
+
+          {isClient || isEmployee ? (
+            <button
+              type="button"
+              onClick={handleSignOut}
+              className="cursor-pointer text-[18px] font-[500] flex items-center justify-center gap-2 p-2 px-5 leading-[24px] rounded-[30px] text-gray-600 border border-gray-300 hover:bg-gray-50 transition-colors font-outfit"
+            >
+              Sign out
+            </button>
+          ) : (
+            <>
+              <Link
+                href="/auth/login"
+                className="cursor-pointer text-[18px] font-[500] flex items-center justify-center gap-2 p-2 px-5 leading-[24px] rounded-[30px] text-gray-600 border border-gray-300 hover:bg-gray-50 transition-colors font-outfit"
               >
-                {label}
-              </div>
-            </WaitlistModal>
-          ))}
+                Log in
+              </Link>
+            </>
+          )}
         </div>
 
         <MainHeaderMobile navigation={NAVIGATIONS} buttons={BUTTONS} />
