@@ -6,7 +6,6 @@ import Image from 'next/legacy/image'
 import CloseIcon from '@mui/icons-material/Close'
 import { useRouter } from 'next/navigation'
 import { scrollToSection } from '../../utilities/helpers'
-import { WaitlistModal } from '../../components/MainLandingPage/OurGuarantee/WaitlistModal'
 
 const MainHeaderMobile = ({ navigation, buttons }) => {
   const [isOpen, setIsOpen] = useState(false)
@@ -91,21 +90,7 @@ const MainHeaderMobile = ({ navigation, buttons }) => {
               </li>
             ))}
           </ul>
-          <div className="flex-1 flex flex-row items-end justify-start">
-            {buttons.map(({ id, label, path }) => (
-              <WaitlistModal>
-                <div
-                  key={id}
-                  // href={path}
-                  // target="_blank"
-                  // rel="noopener noreferrer"
-                  className="cursor-pointer text-xl inline-block px-4 py-2 rounded-lg text-white bg-new-black transition-colors hover:bg-new-black/90"
-                >
-                  {label}
-                </div>
-              </WaitlistModal>
-            ))}
-          </div>
+          <div className="flex-1 flex flex-row items-end justify-start" />
         </div>
       </Drawer>
     </div>
