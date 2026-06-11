@@ -675,7 +675,7 @@ export function assembleReport(state: ReportState): AssembleReportOutput {
             l.derived_from ?? '',
           )}</td>` +
           `<td>${esc(l.baseline_data ?? '')}</td>` +
-          `<td>${esc(l.assumption ?? '')}</td>` +
+          `<td>${esc((l as any).assumption ?? '')}</td>` +
           `<td style="font-size:8pt;color:#2d2d2d;font-family:monospace">${leverArithmetic[i]}</td>` +
           `</tr>`
         )
