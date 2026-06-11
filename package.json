@@ -22,6 +22,8 @@
     "@emotion/react": "latest",
     "@emotion/server": "latest",
     "@emotion/styled": "latest",
+    "@fontsource/cairo": "^5.2.7",
+    "@hookform/resolvers": "^5.4.0",
     "@mui/icons-material": "latest",
     "@mui/material": "latest",
     "@mui/system": "^5.11.11",
@@ -44,12 +46,14 @@
     "react-dom": "^18.3.1",
     "react-ga": "^3.3.1",
     "react-gtm-module": "^2.0.11",
+    "react-hook-form": "^7.78.0",
     "react-icons": "^4.10.1",
     "react-intersection-observer": "^9.5.2",
     "react-markdown": "^10.1.0",
     "react-pdf": "^8.0.2",
     "react-toastify": "^10.0.6",
     "remark-gfm": "^4.0.1",
+    "yup": "^1.7.1",
     "zod": "^4.3.6"
   },
   "husky": {
