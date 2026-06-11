@@ -2,6 +2,7 @@ const path = require('path')
 
 module.exports = {
   reactStrictMode: false,
+  transpilePackages: ['@mui/icons-material', '@mui/material', '@mui/system'],
   eslint: {
     ignoreDuringBuilds: true,
   },
