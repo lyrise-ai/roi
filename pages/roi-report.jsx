@@ -4,14 +4,13 @@ import { motion, AnimatePresence } from 'framer-motion'
 import { FaCheckCircle } from 'react-icons/fa'
 import clsx from 'clsx'
 import MainHeader from '../src/layout/MainHeader'
-import LogosMarquee from '../src/components/MainLandingPage/LogosMarquee'
-import LastSection from '../src/components/MainLandingPage/LastSection'
 import ReportLoadingScreen from '../src/components/ROIGenerator/ReportLoadingScreen'
 import ReportViewer from '../src/components/ROIGenerator/ReportViewer'
 import GeneratingView from '../src/components/ROIGenerator/GeneratingView'
 import { drainSSE } from '../src/lib/drainSSE'
 import { PIPELINE_LOG_TOOL_NAMES } from '../src/lib/roi/constants'
 import { useRouter } from 'next/router'
+import ErrorBoundary from '../src/components/shared/ErrorBoundary'
 
 // ── Constants ─────────────────────────────────────────────────────────────────
 
@@ -367,12 +366,18 @@ function Step2({ data, onChange, errors, isDev }) {
 
 // ── Generating & Success views ────────────────────────────────────────────────
 
-function ErrorView({ message, onRetry, onUseEstimates }) {
+function ErrorView({ message, onRetry, onUseEstimates, isEmployee }) {
   const isResearchFailure =
     message?.includes('Stages done: none') ||
     message?.includes('no assembled report') ||
     message?.includes("couldn't research") ||
     message?.includes('retrieve specific web pages')
+
+  const displayMessage =
+    isEmployee || isResearchFailure
+      ? message
+      : 'Something went wrong. Our team has been notified and will look into it.'
+
   return (
     <div className="px-8 py-10 text-center">
       <div
@@ -413,7 +418,7 @@ function ErrorView({ message, onRetry, onUseEstimates }) {
       ) : (
         <>
           <p className="max-w-sm mx-auto mb-6 text-sm text-gray-500">
-            {message || 'Something went wrong. Please try again.'}
+            {displayMessage || 'Something went wrong. Please try again.'}
           </p>
           <div className="flex flex-col max-w-xs gap-3 mx-auto">
             <button
@@ -693,7 +698,7 @@ function sseEventToLogLine(event) {
   return labels[event.tool] ?? `[${event.tool}]`
 }
 
-export default function ROIReport({ isEmployee }) {
+function ROIReportInner({ isEmployee }) {
   const router = useRouter()
   const [step, setStep] = useState(1)
   const [viewState, setViewState] = useState(VIEW_STATES.FORM)
@@ -726,6 +731,25 @@ export default function ROIReport({ isEmployee }) {
       : { email: '', recipientName: '', recipientTitle: '', currency: '' },
   )
   const [errors, setErrors] = useState({})
+
+  const handleGenerationError = useCallback(
+    (message) => {
+      setErrorMessage(message)
+      setViewState(VIEW_STATES.ERROR)
+      if (!isEmployee) {
+        fetch('/api/notify-error', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({
+            error: message,
+            context: { page: 'roi-report', company: s1.companyName || '(unknown)' },
+            url: typeof window !== 'undefined' ? window.location.href : undefined,
+          }),
+        }).catch(() => {})
+      }
+    },
+    [isEmployee, s1.companyName],
+  )
 
   const changeS1 = useCallback((key, val) => {
     setS1((prev) => ({ ...prev, [key]: val }))
@@ -850,10 +874,9 @@ export default function ROIReport({ isEmployee }) {
                 setIsGenerationComplete(true)
                 setViewState(VIEW_STATES.FINALISING)
               } else {
-                setErrorMessage(
+                handleGenerationError(
                   'Report generation finished without a complete report.',
                 )
-                setViewState(VIEW_STATES.ERROR)
               }
             } else if (event.type === 'error') {
               throw new Error(event.message)
@@ -861,13 +884,12 @@ export default function ROIReport({ isEmployee }) {
           },
         )
       } catch (err) {
-        setErrorMessage(
+        handleGenerationError(
           err.message || 'Something went wrong. Please try again.',
         )
-        setViewState(VIEW_STATES.ERROR)
       }
     },
-    [s1, s2],
+    [s1, s2, handleGenerationError],
   )
 
   // Finalisation lifecycle: enforce minimum visible loader duration, then
@@ -906,13 +928,12 @@ export default function ROIReport({ isEmployee }) {
       return () => clearTimeout(timeout)
     }
     const fallback = setTimeout(() => {
-      setErrorMessage(
+      handleGenerationError(
         'Report was generated but could not be saved. Please try again or check server logs.',
       )
-      setViewState(VIEW_STATES.ERROR)
     }, 8000)
     return () => clearTimeout(fallback)
-  }, [viewState, reportId, router])
+  }, [viewState, reportId, router, handleGenerationError])
 
   const next = useCallback(
     async ({ skipLLM = false } = {}) => {
@@ -982,11 +1003,7 @@ export default function ROIReport({ isEmployee }) {
               isEmployee={isEmployee}
             />
           </div>
-          <div className="w-full mt-12 md:w-1/2">
-            <LogosMarquee />
-          </div>
         </div>
-        <LastSection />
       </div>
     )
   }
@@ -1001,6 +1018,7 @@ export default function ROIReport({ isEmployee }) {
               message={errorMessage}
               onRetry={() => runGeneration()}
               onUseEstimates={() => runGeneration({ estimatesOnly: true })}
+              isEmployee={isEmployee}
             />
           </div>
         </div>
@@ -1122,11 +1140,18 @@ export default function ROIReport({ isEmployee }) {
           </motion.div>
         </div>
 
-        <div className="w-full mt-12 md:w-1/2">
-          <LogosMarquee />
-        </div>
       </div>
-      <LastSection />
     </div>
+  )
+}
+
+export default function ROIReport(props) {
+  return (
+    <ErrorBoundary
+      isEmployee={props.isEmployee}
+      pageContext={{ page: 'roi-report' }}
+    >
+      <ROIReportInner {...props} />
+    </ErrorBoundary>
   )
 }
