@@ -11,7 +11,6 @@ import { FaSpinner, FaCheckCircle } from 'react-icons/fa'
 import clsx from 'clsx'
 import 'react-toastify/dist/ReactToastify.css'
 import MainHeader from '../src/layout/MainHeader'
-import LastSection from '../src/components/MainLandingPage/LastSection'
 
 // Questions Configuration
 const questions = [
@@ -295,7 +294,6 @@ export default function ROIFeedback() {
           </div>
         </div>
       </div>
-      <LastSection />
     </div>
   )
 }
