@@ -3,36 +3,6 @@
 @tailwind utilities;
 
 @font-face {
-  font-family: 'Space Grotesk';
-  src: url('../fonts/SpaceGrotesk-Light.ttf');
-  font-weight: 300;
-}
-
-@font-face {
-  font-family: 'Space Grotesk';
-  src: url('../fonts/SpaceGrotesk-Regular.ttf');
-  font-weight: 400;
-}
-
-@font-face {
-  font-family: 'Space Grotesk';
-  src: url('../fonts/SpaceGrotesk-Medium.ttf') format('truetype');
-  font-weight: 500;
-}
-
-@font-face {
-  font-family: 'Space Grotesk';
-  src: url('../fonts/SpaceGrotesk-SemiBold.ttf');
-  font-weight: 600;
-}
-
-@font-face {
-  font-family: 'Space Grotesk';
-  src: url('../fonts/SpaceGrotesk-Bold.ttf');
-  font-weight: 700;
-}
-
-@font-face {
   font-family: Poppins;
   src: url('../fonts/poppins.ttf') format('opentype');
   font-weight: 400;
@@ -74,11 +44,6 @@
   font-weight: 700;
 }
 
-@font-face {
-  font-family: Toxigenesis;
-  src: url('../fonts/Toxigenesis.otf') format('opentype');
-  font-weight: 700;
-}
 
 :root {
   --section-spacing: 120px;
