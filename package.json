@@ -17,15 +17,15 @@
   "dependencies": {
     "@ai-sdk/openai": "^3.0.48",
     "@emailjs/browser": "^4.4.1",
-    "@emotion/cache": "latest",
+    "@emotion/cache": "^11.11.0",
     "@emotion/css": "^11.10.5",
-    "@emotion/react": "latest",
-    "@emotion/server": "latest",
-    "@emotion/styled": "latest",
+    "@emotion/react": "^11.11.1",
+    "@emotion/server": "^11.11.0",
+    "@emotion/styled": "^11.11.0",
     "@fontsource/cairo": "^5.2.7",
     "@hookform/resolvers": "^5.4.0",
-    "@mui/icons-material": "latest",
-    "@mui/material": "latest",
+    "@mui/icons-material": "^5.14.11",
+    "@mui/material": "^5.14.11",
     "@mui/system": "^5.11.11",
     "@sparticuz/chromium": "^143.0.4",
     "@supabase/ssr": "^0.12.0",
@@ -62,9 +62,7 @@
     }
   },
   "lint-staged": {
-    "*.jsx": "eslint --cache --fix",
-    "*.{js,jsx}": "eslint --fix --ignore-path ./.gitignore",
-    "*.{js,jsx,json,css,md}": "prettier --write"
+    "*.{js,jsx,ts,tsx,json,css,md}": "prettier --write"
   },
   "devDependencies": {
     "@types/react": "^18.3.12",
