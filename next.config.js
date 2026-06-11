@@ -14,11 +14,15 @@ module.exports = {
     ]
   },
   webpack: (config) => {
+    config.module.rules.push({
+      test: /\.m?js$/,
+      type: 'javascript/auto',
+      resolve: { fullySpecified: false },
+    })
     config.resolve.alias = {
       ...config.resolve.alias,
       '@components': path.resolve(__dirname, 'src/components'),
       '@hooks': path.resolve(__dirname, 'src/hooks'),
-      // ROI pipeline uses @/ as project root alias
       '@': path.resolve(__dirname),
     }
     return config
