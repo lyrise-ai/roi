@@ -4,13 +4,13 @@ import { motion, AnimatePresence } from 'framer-motion'
 import { FaCheckCircle } from 'react-icons/fa'
 import clsx from 'clsx'
 import MainHeader from '../src/layout/MainHeader'
-import LogosMarquee from '../src/components/MainLandingPage/LogosMarquee'
-import LastSection from '../src/components/MainLandingPage/LastSection'
 import ReportLoadingScreen from '../src/components/ROIGenerator/ReportLoadingScreen'
 import ReportViewer from '../src/components/ROIGenerator/ReportViewer'
 import GeneratingView from '../src/components/ROIGenerator/GeneratingView'
 import { drainSSE } from '../src/lib/drainSSE'
+import { PIPELINE_LOG_TOOL_NAMES } from '../src/lib/roi/constants'
 import { useRouter } from 'next/router'
+import ErrorBoundary from '../src/components/shared/ErrorBoundary'
 
 // ── Constants ─────────────────────────────────────────────────────────────────
 
@@ -77,7 +77,9 @@ const REVENUE_OPTS = [
 ]
 const TOTAL_STEPS = 2
 const IS_DEV = process.env.NODE_ENV === 'development'
-const MIN_VISIBLE_DURATION = 8000
+// Minimum time the loader stays visible (ms). Override via NEXT_PUBLIC_ROI_MIN_LOADER_MS.
+const MIN_VISIBLE_DURATION =
+  Number(process.env.NEXT_PUBLIC_ROI_MIN_LOADER_MS) || 3500
 const VIEW_STATES = {
   FORM: 'form',
   LOADING: 'loading',
@@ -364,12 +366,18 @@ function Step2({ data, onChange, errors, isDev }) {
 
 // ── Generating & Success views ────────────────────────────────────────────────
 
-function ErrorView({ message, onRetry, onUseEstimates }) {
+function ErrorView({ message, onRetry, onUseEstimates, isEmployee }) {
   const isResearchFailure =
     message?.includes('Stages done: none') ||
     message?.includes('no assembled report') ||
     message?.includes("couldn't research") ||
     message?.includes('retrieve specific web pages')
+
+  const displayMessage =
+    isEmployee || isResearchFailure
+      ? message
+      : 'Something went wrong. Our team has been notified and will look into it.'
+
   return (
     <div className="px-8 py-10 text-center">
       <div
@@ -410,7 +418,7 @@ function ErrorView({ message, onRetry, onUseEstimates }) {
       ) : (
         <>
           <p className="max-w-sm mx-auto mb-6 text-sm text-gray-500">
-            {message || 'Something went wrong. Please try again.'}
+            {displayMessage || 'Something went wrong. Please try again.'}
           </p>
           <div className="flex flex-col max-w-xs gap-3 mx-auto">
             <button
@@ -653,7 +661,7 @@ export async function getServerSideProps({ req, res }) {
   } = await supabase.auth.getUser()
 
   if (!user) {
-    return { redirect: { destination: '/login', permanent: false } }
+    return { redirect: { destination: '/auth/login', permanent: false } }
   }
 
   const admin = createAdminClient()
@@ -669,7 +677,28 @@ export async function getServerSideProps({ req, res }) {
   return { props: { isEmployee } }
 }
 
-export default function ROIReport({ isEmployee }) {
+// Tools with pipeline_log coverage emit their own messages from the server-side
+// execute function. Returning null here prevents a duplicate tool_start entry
+// from flooding the log before the classified pipeline_log message arrives.
+const PIPELINE_LOG_TOOLS = new Set(PIPELINE_LOG_TOOL_NAMES)
+
+function sseEventToLogLine(event) {
+  if (event.type !== 'tool_start') return null
+  if (PIPELINE_LOG_TOOLS.has(event.tool)) return null
+  const labels = {
+    search_evidence: 'Searching evidence base…',
+    update_copy: 'Updating report section…',
+    update_workflow: 'Updating workflow assumptions…',
+    add_workflow: 'Adding workflow…',
+    remove_workflow: 'Removing workflow…',
+    scale_rates: 'Adjusting salary rates…',
+    set_currency: 'Setting currency…',
+    update_globals: 'Updating global inputs…',
+  }
+  return labels[event.tool] ?? `[${event.tool}]`
+}
+
+function ROIReportInner({ isEmployee }) {
   const router = useRouter()
   const [step, setStep] = useState(1)
   const [viewState, setViewState] = useState(VIEW_STATES.FORM)
@@ -677,6 +706,7 @@ export default function ROIReport({ isEmployee }) {
   const [isGenerationComplete, setIsGenerationComplete] = useState(false)
   const generationStartedAt = useRef(Date.now())
   const [generationLog, setGenerationLog] = useState('')
+  const [sseEvents, setSseEvents] = useState([])
   const [reportState, setReportState] = useState(null)
   const [errorMessage, setErrorMessage] = useState('')
   const [reportId, setReportId] = useState(null)
@@ -702,6 +732,25 @@ export default function ROIReport({ isEmployee }) {
   )
   const [errors, setErrors] = useState({})
 
+  const handleGenerationError = useCallback(
+    (message) => {
+      setErrorMessage(message)
+      setViewState(VIEW_STATES.ERROR)
+      if (!isEmployee) {
+        fetch('/api/notify-error', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({
+            error: message,
+            context: { page: 'roi-report', company: s1.companyName || '(unknown)' },
+            url: typeof window !== 'undefined' ? window.location.href : undefined,
+          }),
+        }).catch(() => {})
+      }
+    },
+    [isEmployee, s1.companyName],
+  )
+
   const changeS1 = useCallback((key, val) => {
     setS1((prev) => ({ ...prev, [key]: val }))
     setErrors((prev) => ({ ...prev, [key]: '' }))
@@ -718,6 +767,7 @@ export default function ROIReport({ isEmployee }) {
       setIsGenerationComplete(false)
       setViewState(VIEW_STATES.GENERATING)
       setGenerationLog('')
+      setSseEvents([])
       setReportState(null)
       setErrorMessage('')
 
@@ -750,7 +800,7 @@ export default function ROIReport({ isEmployee }) {
         })
 
         if (response.status === 401) {
-          window.location.href = '/login'
+          window.location.href = '/auth/login'
           return
         }
 
@@ -759,20 +809,34 @@ export default function ROIReport({ isEmployee }) {
           if (data.report_id) {
             try {
               const existing = await fetch('/api/roi-agent')
-              const existingData = await existing.json()
-              if (existingData?.report?.rendered_html) {
-                const { buildStateFromReportRow } = await import(
-                  '../src/lib/roi/reportState'
+              if (!existing.ok) {
+                // eslint-disable-next-line no-console -- intentional 409 fallback diagnostics
+                console.warn(
+                  'GET /api/roi-agent failed during 409 fallback:',
+                  existing.status,
                 )
-                const builtState = buildStateFromReportRow(existingData.report)
-                setReportId(data.report_id)
-                setReportState(builtState)
-                setIsGenerationComplete(true)
-                setViewState(VIEW_STATES.FINALISING)
-                return
+              } else {
+                const existingData = await existing.json()
+                if (existingData?.report?.rendered_html) {
+                  const { buildStateFromReportRow } = await import(
+                    '../src/lib/roi/reportState'
+                  )
+                  const builtState = buildStateFromReportRow(
+                    existingData.report,
+                  )
+                  setReportId(data.report_id)
+                  setReportState(builtState)
+                  setIsGenerationComplete(true)
+                  setViewState(VIEW_STATES.FINALISING)
+                  return
+                }
               }
-            } catch (_) {
-              // fallback: navigate to the persisted report page
+            } catch (err) {
+              // eslint-disable-next-line no-console -- intentional 409 fallback diagnostics
+              console.warn(
+                'Failed to load existing report from 409 fallback:',
+                err,
+              )
             }
             window.location.href = `/report/${data.report_id}`
           }
@@ -788,6 +852,15 @@ export default function ROIReport({ isEmployee }) {
               setGenerationLog((prev) => (prev + event.delta).slice(-2000))
             } else if (event.type === 'tool_start') {
               setGenerationLog((prev) => `${prev}\n[${event.tool}]`)
+              const line = sseEventToLogLine(event)
+              if (line) {
+                setSseEvents((prev) => [...prev, { text: line }])
+              }
+            } else if (event.type === 'pipeline_log') {
+              setGenerationLog((prev) =>
+                `${prev}\n${event.message}`.slice(-2000),
+              )
+              setSseEvents((prev) => [...prev, { text: event.message }])
             } else if (event.type === 'report_update') {
               latestState = event.state
               setReportState(event.state)
@@ -801,10 +874,9 @@ export default function ROIReport({ isEmployee }) {
                 setIsGenerationComplete(true)
                 setViewState(VIEW_STATES.FINALISING)
               } else {
-                setErrorMessage(
+                handleGenerationError(
                   'Report generation finished without a complete report.',
                 )
-                setViewState(VIEW_STATES.ERROR)
               }
             } else if (event.type === 'error') {
               throw new Error(event.message)
@@ -812,18 +884,16 @@ export default function ROIReport({ isEmployee }) {
           },
         )
       } catch (err) {
-        setErrorMessage(
+        handleGenerationError(
           err.message || 'Something went wrong. Please try again.',
         )
-        setViewState(VIEW_STATES.ERROR)
       }
     },
-    [s1, s2],
+    [s1, s2, handleGenerationError],
   )
 
   // Finalisation lifecycle: enforce minimum visible loader duration, then
-  // transition to preview once both the state is FINALISING and renderedHtml
-  // is available.
+  // transition to COMPLETE once FINALISING and renderedHtml are available.
   useEffect(() => {
     if (viewState !== VIEW_STATES.FINALISING) return () => {}
     if (!reportState?.renderedHtml) return () => {}
@@ -834,23 +904,36 @@ export default function ROIReport({ isEmployee }) {
     const remaining = Math.max(0, MIN_VISIBLE_DURATION - elapsed)
 
     // Force a paint cycle so the FINALISING state visually mounts
-    requestAnimationFrame(() => {
+    const rafId = requestAnimationFrame(() => {
       timeout = setTimeout(() => {
         setViewState(VIEW_STATES.COMPLETE)
-      }, remaining + 500)
+      }, remaining + 200)
     })
 
-    return () => clearTimeout(timeout)
+    return () => {
+      cancelAnimationFrame(rafId)
+      clearTimeout(timeout)
+    }
   }, [viewState, reportState])
 
-  // COMPLETE lifecycle: Wait a brief moment, then navigate to the report
+  // COMPLETE lifecycle: brief beat, then navigate to the persisted report.
+  // If reportId hasn't arrived within 8s of COMPLETE, show an error — the
+  // report save likely failed server-side (check server logs).
   useEffect(() => {
-    if (viewState !== VIEW_STATES.COMPLETE || !reportId) return () => {}
-    const timeout = setTimeout(() => {
-      router.push(`/report/${reportId}`)
-    }, 800)
-    return () => clearTimeout(timeout)
-  }, [viewState, reportId, router])
+    if (viewState !== VIEW_STATES.COMPLETE) return () => {}
+    if (reportId) {
+      const timeout = setTimeout(() => {
+        router.push(`/report/${reportId}`)
+      }, 400)
+      return () => clearTimeout(timeout)
+    }
+    const fallback = setTimeout(() => {
+      handleGenerationError(
+        'Report was generated but could not be saved. Please try again or check server logs.',
+      )
+    }, 8000)
+    return () => clearTimeout(fallback)
+  }, [viewState, reportId, router, handleGenerationError])
 
   const next = useCallback(
     async ({ skipLLM = false } = {}) => {
@@ -900,6 +983,7 @@ export default function ROIReport({ isEmployee }) {
         >
           <ReportLoadingScreen
             generationLog={generationLog}
+            sseEvents={sseEvents}
             viewState={viewState}
           />
         </motion.div>
@@ -919,11 +1003,7 @@ export default function ROIReport({ isEmployee }) {
               isEmployee={isEmployee}
             />
           </div>
-          <div className="w-full mt-12 md:w-1/2">
-            <LogosMarquee />
-          </div>
         </div>
-        <LastSection />
       </div>
     )
   }
@@ -938,6 +1018,7 @@ export default function ROIReport({ isEmployee }) {
               message={errorMessage}
               onRetry={() => runGeneration()}
               onUseEstimates={() => runGeneration({ estimatesOnly: true })}
+              isEmployee={isEmployee}
             />
           </div>
         </div>
@@ -1059,11 +1140,18 @@ export default function ROIReport({ isEmployee }) {
           </motion.div>
         </div>
 
-        <div className="w-full mt-12 md:w-1/2">
-          <LogosMarquee />
-        </div>
       </div>
-      <LastSection />
     </div>
+  )
+}
+
+export default function ROIReport(props) {
+  return (
+    <ErrorBoundary
+      isEmployee={props.isEmployee}
+      pageContext={{ page: 'roi-report' }}
+    >
+      <ROIReportInner {...props} />
+    </ErrorBoundary>
   )
 }
