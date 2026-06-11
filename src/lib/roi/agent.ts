@@ -1998,7 +1998,7 @@ ${
       if (part.type === 'text-delta') {
         callbacks.onTextDelta(part.text)
       } else if (part.type === 'tool-call') {
-        callbacks.onToolStart(part.toolName, part.args as Record<string, unknown>)
+        callbacks.onToolStart(part.toolName, part.input as Record<string, unknown>)
       } else if (part.type === 'error') {
         // An abort surfaces here as an error part — treat it as a clean stop,
         // not a generation failure, so the caller doesn't persist/email it.
