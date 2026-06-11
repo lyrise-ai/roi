@@ -8,16 +8,12 @@ const PHASES = [
     subLabel: 'Collecting benchmark and market inputs',
     heading: 'Running company research',
     logs: [
-      'Fetching company profile…',
-      'Querying SIC classification…',
-      'Resolving peer-company set…',
-      'Loading industry benchmark data…',
-      'Cross-referencing public filings…',
-      'Validating source coverage…',
-      'Aggregating sector metrics…',
-      'Normalising headcount ranges…',
-      'Confirming regional salary bands…',
-      'Checking attrition benchmarks…',
+      'Profiling company from public sources…',
+      'Looking up company intelligence…',
+      'Reading company website…',
+      'Sourcing salary benchmarks…',
+      'Checking regional compensation data…',
+      'Research complete — workflows identified…',
     ],
   },
   {
@@ -26,16 +22,9 @@ const PHASES = [
     subLabel: 'Running ROI projections and scenario analysis',
     heading: 'Running financial analysis',
     logs: [
-      'Initialising model inputs…',
-      'Computing headcount cost basis…',
-      'Applying regional salary adjustments…',
-      'Calibrating CAC payback periods…',
-      'Running 3-year projection set…',
-      'Stress-testing attrition assumptions…',
-      'Reconciling output values…',
-      'Validating model constraints…',
-      'Checking sensitivity thresholds…',
-      'Locking projection assumptions…',
+      'Calibrating ROI model inputs…',
+      'Refining model assumptions…',
+      '3-year financial projections validated…',
     ],
   },
   {
@@ -44,28 +33,40 @@ const PHASES = [
     subLabel: 'Compiling executive summary and financial outputs',
     heading: 'Preparing ROI report',
     logs: [
-      'Compiling executive summary…',
-      'Rendering profit-lever analysis…',
-      'Formatting financial tables…',
-      'Applying document structure…',
-      'Assembling section index…',
-      'Inserting benchmark comparisons…',
-      'Validating section completeness…',
-      'Encoding report payload…',
-      'Finalising deliverable…',
-      'Report ready for review…',
+      'Writing profit levers and executive summary…',
+      'Rendering financial tables and report layout…',
     ],
   },
 ]
 
-const PHASE_DURATION_MS = 9000
-const LOG_INTERVAL_MS = 1400
+const MAX_LOG_LINES = 8
+// Only auto-advance phases on a timer when the pipeline is silent this long
+const PHASE_IDLE_ADVANCE_MS = 45000
+const MIN_LOG_GAP_MS = 2500
+
+const PIPELINE_MILESTONE_RE =
+  /^(Research complete|Calibrating ROI|Refining model assumptions|3-year financial|Writing profit|Rendering financial)/i
+
+// Rotating messages from web_search pools in agent.ts — collapse to one summary line
+const SEARCH_POOL_RE =
+  /^(Profiling company|Looking up company|Estimating headcount|Checking company footprint|Sourcing salary|Querying role-based|Cross-referencing wage|Collecting salary evidence)/i
+
+const RESEARCH_ACTIVITY_SUMMARY = 'Researching company and salary benchmarks…'
 
 function nowLabel() {
   const d = new Date()
-  return [d.getHours(), d.getMinutes(), d.getSeconds()]
+  const hms = [d.getHours(), d.getMinutes(), d.getSeconds()]
     .map((n) => String(n).padStart(2, '0'))
     .join(':')
+  const tenths = Math.floor(d.getMilliseconds() / 100)
+  return `${hms}.${tenths}`
+}
+
+function classifyPipelineLog(text) {
+  if (PIPELINE_MILESTONE_RE.test(text)) return 'milestone'
+  if (text.startsWith('Reading company website')) return 'fetch'
+  if (SEARCH_POOL_RE.test(text)) return 'search-pool'
+  return 'other'
 }
 
 function makeJobRef() {
@@ -74,15 +75,24 @@ function makeJobRef() {
 
 export default function ReportLoadingScreen({
   generationLog,
+  sseEvents = [],
   viewState = 'generating',
 }) {
   const [phaseIndex, setPhaseIndex] = useState(0)
   const [logs, setLogs] = useState([])
   const [elapsed, setElapsed] = useState(0)
   const logId = useRef(0)
-  const logCursor = useRef(0)
   const jobRef = useRef(makeJobRef())
   const startTime = useRef(new Date())
+  const lastProcessedSseIndex = useRef(0)
+  const lastLogAppendAt = useRef(0)
+
+  useEffect(() => {
+    if (sseEvents.length === 0) {
+      lastProcessedSseIndex.current = 0
+      lastLogAppendAt.current = 0
+    }
+  }, [sseEvents.length])
 
   // eslint-disable-next-line security/detect-object-injection
   const activePhase = PHASES[phaseIndex]
@@ -90,28 +100,93 @@ export default function ReportLoadingScreen({
   const isComplete = viewState === 'complete'
   const isDoneOrFinalising = isFinalising || isComplete
 
-  // Phase auto-advance
+  // Phase auto-advance — idle fallback only; real pipeline_log drives phases first
   useEffect(() => {
-    if (isDoneOrFinalising) return () => {}
+    if (isDoneOrFinalising || sseEvents.length > 0) return () => {}
     if (phaseIndex >= PHASES.length - 1) return () => {}
     const t = setTimeout(() => {
       setPhaseIndex((i) => Math.min(i + 1, PHASES.length - 1))
-      logCursor.current = 0
-    }, PHASE_DURATION_MS)
+    }, PHASE_IDLE_ADVANCE_MS)
     return () => clearTimeout(t)
-  }, [phaseIndex, isDoneOrFinalising])
+  }, [phaseIndex, isDoneOrFinalising, sseEvents.length])
 
-  // Drive phase from real generation log events
+  // Drive phase from real pipeline_log / tool milestones (falls back to generationLog)
   useEffect(() => {
-    if (!generationLog || isDoneOrFinalising) return
-    if (generationLog.includes('financial model') && phaseIndex < 1) {
-      setPhaseIndex(1)
-      logCursor.current = 0
-    } else if (generationLog.includes('report copy') && phaseIndex < 2) {
+    if (isDoneOrFinalising) return
+    const signal = [...sseEvents.map((e) => e.text), generationLog]
+      .join('\n')
+      .toLowerCase()
+    if (!signal.trim()) return
+    if (
+      (signal.includes('writing profit') ||
+        signal.includes('rendering financial') ||
+        signal.includes('executive summary')) &&
+      phaseIndex < 2
+    ) {
       setPhaseIndex(2)
-      logCursor.current = 0
+    } else if (
+      (signal.includes('roi model') ||
+        signal.includes('financial projection') ||
+        signal.includes('model assumption') ||
+        signal.includes('calibrating roi')) &&
+      phaseIndex < 1
+    ) {
+      setPhaseIndex(1)
     }
-  }, [generationLog, phaseIndex, isDoneOrFinalising])
+  }, [generationLog, sseEvents, phaseIndex, isDoneOrFinalising])
+
+  // Process new pipeline_log events — parallel tool calls burst in the same second
+  useEffect(() => {
+    if (!sseEvents.length || isDoneOrFinalising) return
+
+    const pending = sseEvents.slice(lastProcessedSseIndex.current)
+    if (!pending.length) return
+    lastProcessedSseIndex.current = sseEvents.length
+
+    setLogs((prev) => {
+      const seen = new Set(prev.map((entry) => entry.text))
+      let next = prev
+      let lastAppendAt = lastLogAppendAt.current
+      const now = Date.now()
+
+      pending.forEach((event) => {
+        const kind = classifyPipelineLog(event.text)
+        let displayText = event.text
+
+        if (kind === 'search-pool') {
+          if (seen.has(RESEARCH_ACTIVITY_SUMMARY)) return
+          displayText = RESEARCH_ACTIVITY_SUMMARY
+        } else if (seen.has(displayText)) {
+          return
+        }
+
+        // Milestones always pass; non-milestones get spaced by MIN_LOG_GAP_MS
+        // even within the same batch so parallel bursts don't drop messages.
+        if (kind !== 'milestone') {
+          const earliestAllowed = lastAppendAt + MIN_LOG_GAP_MS
+          if (now < earliestAllowed && lastAppendAt !== 0) return
+          lastAppendAt = Math.max(now, lastAppendAt + MIN_LOG_GAP_MS)
+        } else {
+          lastAppendAt = now
+        }
+
+        logId.current += 1
+        next = [
+          ...next,
+          {
+            id: logId.current,
+            phase: activePhase.id,
+            text: displayText,
+            time: nowLabel(),
+          },
+        ].slice(-MAX_LOG_LINES)
+        seen.add(displayText)
+      })
+
+      lastLogAppendAt.current = lastAppendAt
+      return next
+    })
+  }, [sseEvents, activePhase, isDoneOrFinalising])
 
   // Elapsed timer
   useEffect(() => {
@@ -123,12 +198,11 @@ export default function ReportLoadingScreen({
     return () => clearInterval(t)
   }, [])
 
-  // Log streaming — stops when finalising/complete and appends completion line
+  // Idle placeholder — one line until real pipeline_log arrives; no cycling
   useEffect(() => {
     if (isDoneOrFinalising) {
       logId.current += 1
       setLogs((prev) => {
-        // Only append the completion line if it's not already there
         if (prev.length > 0 && prev[prev.length - 1].phase === 'finalising') {
           return prev
         }
@@ -140,45 +214,35 @@ export default function ReportLoadingScreen({
             text: '✓ Report assembled successfully',
             time: nowLabel(),
           },
-        ].slice(-14)
+        ].slice(-MAX_LOG_LINES)
       })
       return () => {}
     }
 
-    const seed = activePhase.logs[0]
-    if (seed) {
+    if (sseEvents.length > 0) return () => {}
+
+    const rawSeed = activePhase.logs[0]
+    if (!rawSeed) return () => {}
+    const seed =
+      classifyPipelineLog(rawSeed) === 'search-pool'
+        ? RESEARCH_ACTIVITY_SUMMARY
+        : rawSeed
+
+    setLogs((prev) => {
+      if (prev.some((entry) => entry.text === seed)) return prev
       logId.current += 1
-      setLogs((prev) =>
-        [
-          ...prev,
-          {
-            id: logId.current,
-            phase: activePhase.id,
-            text: seed,
-            time: nowLabel(),
-          },
-        ].slice(-14),
-      )
-      logCursor.current = 1
-    }
-    const t = setInterval(() => {
-      const next = activePhase.logs[logCursor.current % activePhase.logs.length]
-      logCursor.current += 1
-      logId.current += 1
-      setLogs((prev) =>
-        [
-          ...prev,
-          {
-            id: logId.current,
-            phase: activePhase.id,
-            text: next,
-            time: nowLabel(),
-          },
-        ].slice(-14),
-      )
-    }, LOG_INTERVAL_MS)
-    return () => clearInterval(t)
-  }, [activePhase, isDoneOrFinalising])
+      return [
+        ...prev,
+        {
+          id: logId.current,
+          phase: activePhase.id,
+          text: seed,
+          time: nowLabel(),
+        },
+      ].slice(-MAX_LOG_LINES)
+    })
+    return undefined
+  }, [activePhase, isDoneOrFinalising, sseEvents.length])
 
   const timeLabel = useMemo(() => {
     const m = String(Math.floor(elapsed / 60)).padStart(2, '0')
@@ -196,15 +260,22 @@ export default function ReportLoadingScreen({
   // When finalising or complete, all pipeline stages show as complete
   const pipelinePhaseIndex = isDoneOrFinalising ? PHASES.length : phaseIndex
 
-  let displayHeading = activePhase.heading
-  let displaySubLabel = activePhase.subLabel
-  if (isComplete) {
-    displayHeading = 'ROI report ready'
-    displaySubLabel = 'Opening report…'
-  } else if (isFinalising) {
-    displayHeading = 'Finalising report'
-    displaySubLabel = 'Preparing deliverable'
-  }
+  const { displayHeading, displaySubLabel } = useMemo(() => {
+    if (isComplete)
+      return {
+        displayHeading: 'ROI report ready',
+        displaySubLabel: 'Opening report…',
+      }
+    if (isFinalising)
+      return {
+        displayHeading: 'Finalising report',
+        displaySubLabel: 'Preparing deliverable',
+      }
+    return {
+      displayHeading: activePhase.heading,
+      displaySubLabel: activePhase.subLabel,
+    }
+  }, [isComplete, isFinalising, activePhase])
 
   return (
     <div className="relative min-h-screen w-full bg-gray-50">
@@ -217,23 +288,14 @@ export default function ReportLoadingScreen({
       <header className="border-b border-gray-100 bg-white">
         <div className="mx-auto flex max-w-5xl items-center justify-between px-6 py-3">
           <div className="flex items-center gap-2.5">
-            <div
-              className="grid h-6 w-6 place-items-center rounded-md bg-navy text-white"
-              style={{ fontFamily: 'Space Grotesk' }}
-            >
+            <div className="font-display grid h-6 w-6 place-items-center rounded-md bg-navy text-white">
               <span className="text-[11px] font-bold leading-none">L</span>
             </div>
-            <span
-              className="text-[13px] font-semibold tracking-tight text-navy"
-              style={{ fontFamily: 'Space Grotesk' }}
-            >
+            <span className="font-display text-[13px] font-semibold tracking-tight text-navy">
               LyRise
             </span>
             <span className="ml-1 text-gray-300">/</span>
-            <span
-              className="text-[12.5px] font-normal text-gray-500"
-              style={{ fontFamily: 'Poppins' }}
-            >
+            <span className="font-poppins text-[12.5px] font-normal text-gray-500">
               ROI Report
             </span>
           </div>
@@ -248,10 +310,7 @@ export default function ReportLoadingScreen({
                   <span className="relative inline-flex h-1.5 w-1.5 rounded-full bg-primary" />
                 </span>
               )}
-              <span
-                className="text-[11.5px] font-medium text-gray-500"
-                style={{ fontFamily: 'Poppins' }}
-              >
+              <span className="font-poppins text-[11.5px] font-medium text-gray-500">
                 {isComplete
                   ? 'Complete'
                   : isFinalising
@@ -293,8 +352,7 @@ export default function ReportLoadingScreen({
                   animate={{ opacity: 1, y: 0 }}
                   exit={{ opacity: 0, y: -4 }}
                   transition={{ duration: 0.28, ease: [0.22, 1, 0.36, 1] }}
-                  className="absolute inset-x-0 text-[17px] font-medium leading-tight tracking-tight text-navy"
-                  style={{ fontFamily: 'Space Grotesk' }}
+                  className="font-display absolute inset-x-0 text-[17px] font-medium leading-tight tracking-tight text-navy"
                 >
                   {displayHeading}
                 </motion.h1>
@@ -319,8 +377,7 @@ export default function ReportLoadingScreen({
               animate={{ opacity: 1 }}
               exit={{ opacity: 0 }}
               transition={{ duration: 0.25 }}
-              className="mt-1 text-[12px] text-gray-400"
-              style={{ fontFamily: 'Poppins' }}
+              className="font-poppins mt-1 text-[12px] text-gray-400"
             >
               {displaySubLabel}
             </motion.p>
@@ -337,10 +394,7 @@ export default function ReportLoadingScreen({
           </div>
 
           {/* Footer note */}
-          <p
-            className="mt-1.5 text-[10px] text-gray-400 opacity-50"
-            style={{ fontFamily: 'Poppins' }}
-          >
+          <p className="font-poppins mt-1.5 text-[10px] text-gray-400 opacity-50">
             Your data is encrypted in transit and at rest.
           </p>
         </div>
@@ -362,14 +416,13 @@ function PhasePipeline({ phaseIndex }) {
                 <PhaseDot state={state} />
                 <span
                   className={
-                    'text-[11.5px] font-medium tracking-tight ' +
+                    'font-display text-[11.5px] font-medium tracking-tight ' +
                     (state === 'done'
                       ? 'text-gray-400'
                       : state === 'active'
                       ? 'text-navy'
                       : 'text-gray-300')
                   }
-                  style={{ fontFamily: 'Space Grotesk' }}
                 >
                   {p.label}
                 </span>
