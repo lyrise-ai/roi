@@ -198,40 +198,32 @@ export default function ReportViewer({
     }
   }, [isShareLink, shareToken, reportId])
 
+  const TOUR_JOURNEY = ['Your Report', 'Full Analysis', 'Export & Share', 'Refine with AI']
+
   const TOUR_STEPS = [
     {
-      title: 'Executive Summary',
-      body: 'Concise snapshot — share this version with execs and decision-makers. If anything here feels unclear or you want the reasoning behind a number, switch to the Full Report for the detail behind every section.',
+      title: 'Your Executive Summary',
+      body: 'This single-page view is built for decision-makers — total hours returned, Operational Dividend, and Total Financial Gain, all sourced from live research about your company. Share it directly with leadership.',
       placement: 'bottom-start',
       targetRef: execTabRef,
     },
     {
-      title: 'Full Report',
-      body: 'Multi-page deep dive — workflows, projections, case studies, data provenance, and the full financial model.',
+      title: 'The complete business case',
+      body: 'Switch to the Full Report for the deep dive: every workflow modelled line by line, the source behind each billing rate, a 10-week implementation roadmap, resilience positioning, and risk mitigations.',
       placement: 'bottom-start',
       targetRef: fullTabRef,
     },
     {
-      title: 'Download as PDF',
-      body: 'Save the report you’re viewing as a PDF you can share, attach, or print.',
+      title: 'Take it with you',
+      body: isShareLink
+        ? 'Download as PDF to share with your team or attach to a board deck — it renders exactly as you see it here.'
+        : "Download as PDF for your leadership team, or resend to your inbox after you've refined it with the AI assistant.",
       placement: 'bottom-end',
-      targetRef: downloadRef,
+      targetRef: isShareLink ? downloadRef : resendEmailRef,
     },
-    // Re-send Email button is hidden for share-link visitors (they
-    // shouldn't be triggering resends to themselves), so omit its step.
-    ...(isShareLink
-      ? []
-      : [
-          {
-            title: 'Re-send Email',
-            body: 'You should already have the initial version of this report in your inbox — it was sent automatically as soon as the report finished generating. After you refine anything with the AI assistant, click here to email yourself the updated version.',
-            placement: 'bottom-end',
-            targetRef: resendEmailRef,
-          },
-        ]),
     {
-      title: 'Refine with AI',
-      body: 'Ask the assistant to adjust numbers, change currency, swap workflows, or rewrite copy. The report updates live.',
+      title: 'The report is a conversation',
+      body: 'Ask the assistant to change the currency, add a workflow, adjust an assumption, or rewrite any section. The report updates in real time — every edit is tracked so you can resend the latest version.',
       placement: 'left',
       targetRef: chatPanelRef,
     },
@@ -1446,16 +1438,39 @@ export default function ReportViewer({
             >
               {TOUR_STEPS[tourStep].body}
             </div>
+            {/* Named journey progress bar */}
+            <div style={{ display: 'flex', gap: 4, marginBottom: 5 }}>
+              {TOUR_JOURNEY.map((label, i) => (
+                <div
+                  key={label}
+                  title={label}
+                  style={{
+                    flex: 1,
+                    height: 3,
+                    borderRadius: 2,
+                    background: i <= tourStep ? '#2957FF' : '#e2e8f0',
+                    transition: 'background 0.2s',
+                  }}
+                />
+              ))}
+            </div>
+            <div
+              style={{
+                fontSize: 11,
+                color: '#94a3b8',
+                marginBottom: 12,
+                fontWeight: 500,
+              }}
+            >
+              {TOUR_JOURNEY[tourStep]}
+            </div>
             <div
               style={{
                 display: 'flex',
                 alignItems: 'center',
-                justifyContent: 'space-between',
+                justifyContent: 'flex-end',
               }}
             >
-              <span style={{ fontSize: 12, color: '#64748b' }}>
-                Step {tourStep + 1} of {TOUR_STEPS.length}
-              </span>
               <button
                 type="button"
                 onClick={advanceTour}
