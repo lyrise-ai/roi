@@ -377,6 +377,7 @@ function Dashboard({ data }) {
                 <TableCell />
                 <TableCell>When</TableCell>
                 <TableCell>Company</TableCell>
+                <TableCell>Requested By</TableCell>
                 <TableCell>Mode</TableCell>
                 <TableCell align="right">Cost</TableCell>
                 <TableCell align="right">Duration</TableCell>
@@ -571,6 +572,7 @@ function ReportRow({ row }) {
         </TableCell>
         <TableCell>{new Date(row.created_at).toLocaleString()}</TableCell>
         <TableCell>{row.company || '—'}</TableCell>
+        <TableCell>{row.requester_email || '—'}</TableCell>
         <TableCell>{row.mode}</TableCell>
         <TableCell align="right">{usd(row.cost_usd)}</TableCell>
         <TableCell align="right">{secs(row.duration_ms)}</TableCell>
@@ -580,7 +582,7 @@ function ReportRow({ row }) {
         </TableCell>
       </TableRow>
       <TableRow>
-        <TableCell sx={{ py: 0, border: 0 }} colSpan={8}>
+        <TableCell sx={{ py: 0, border: 0 }} colSpan={9}>
           <Collapse in={open} timeout="auto" unmountOnExit>
             <Box sx={{ my: 1, ml: 5 }}>
               <Table size="small">
