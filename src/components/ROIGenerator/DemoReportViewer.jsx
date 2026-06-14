@@ -41,13 +41,15 @@ function getSessionId() {
 }
 
 function renderMarkdown(text) {
-  return text.split(/(\*\*[^*]+\*\*)/).map((part, i) =>
-    part.startsWith('**') && part.endsWith('**') ? (
-      <strong key={i}>{part.slice(2, -2)}</strong>
-    ) : (
-      part
-    ),
-  )
+  return text
+    .split(/(\*\*[^*]+\*\*)/)
+    .map((part, i) =>
+      part.startsWith('**') && part.endsWith('**') ? (
+        <strong key={i}>{part.slice(2, -2)}</strong>
+      ) : (
+        part
+      ),
+    )
 }
 
 function popoverPositionFor(placement, rect) {
@@ -70,12 +72,20 @@ function popoverPositionFor(placement, rect) {
   }
   // Popover inside the spotlight area, top-right corner — used for large targets
   if (placement === 'inside-top-right') {
-    return { top: rect.top + 20, left: Math.max(8, rect.left + rect.width - w - 20) }
+    return {
+      top: rect.top + 20,
+      left: Math.max(8, rect.left + rect.width - w - 20),
+    }
   }
   return { top: rect.top + rect.height + gap, left: rect.left }
 }
 
-export default function DemoReportViewer({ email, companyName, onFinish, onSkip }) {
+export default function DemoReportViewer({
+  email,
+  companyName,
+  onFinish,
+  onSkip,
+}) {
   const [execHtml, setExecHtml] = useState(null)
   const [fullHtml, setFullHtml] = useState(null)
   const [execHtmlAlt, setExecHtmlAlt] = useState(null)
@@ -93,10 +103,12 @@ export default function DemoReportViewer({ email, companyName, onFinish, onSkip 
   const execTabRef = useRef(null)
   const fullTabRef = useRef(null)
   const iframeContainerRef = useRef(null)
+  const iframeRef = useRef(null)
   const chatPanelRef = useRef(null)
   const actionButtonsRef = useRef(null)
   const ctaRef = useRef(null)
   const messagesEndRef = useRef(null)
+  const pendingHighlightRef = useRef(null)
 
   const trackEvent = useCallback(
     (eventType, extra = {}) => {
@@ -118,25 +130,25 @@ export default function DemoReportViewer({ email, companyName, onFinish, onSkip 
   const TOUR_STEPS = [
     {
       title: 'Welcome to your ROI report',
-      body: "This is exactly what your report will look like — built with the same AI pipeline from live research about your company. Meridian Consulting Group is our sample; your report will use your actual workflows, billing rates, and industry data.",
+      body: 'This is exactly what your report will look like — built with the same AI pipeline from live research about your company. Meridian Consulting Group is our sample; your report will use your actual workflows, billing rates, and industry data.',
       placement: 'bottom-start',
       targetRef: execTabRef,
     },
     {
       title: 'Your financial impact, quantified',
-      body: "The Executive Summary shows your total hours returned, Operational Dividend (direct labor value recaptured), and Total Financial Gain. Every number comes from modelling real workflow volumes against grounded billing rate data.",
+      body: 'The Executive Summary shows your total hours returned, Operational Dividend (direct labor value recaptured), and Total Financial Gain. Every number comes from modelling real workflow volumes against grounded billing rate data.',
       placement: 'inside-top-right',
       targetRef: iframeContainerRef,
     },
     {
       title: 'Every assumption, explained',
-      body: "The Full Report reveals the complete analysis: each workflow modelled line by line, the source behind every billing rate, a 10-week implementation roadmap, resilience positioning, and risk mitigations.",
+      body: 'The Full Report reveals the complete analysis: each workflow modelled line by line, the source behind every billing rate, a 10-week implementation roadmap, resilience positioning, and risk mitigations.',
       placement: 'bottom-start',
       targetRef: fullTabRef,
     },
     {
       title: 'Your report is a conversation',
-      body: "The AI assistant edits any part of the report in real time — change the currency, add a workflow, adjust an assumption, or ask a strategic question. Try the suggestion chip below to see it in action.",
+      body: 'The AI assistant edits any part of the report in real time — change the currency, add a workflow, adjust an assumption, or ask a strategic question. Try the suggestion chip below to see it in action.',
       placement: 'left',
       targetRef: chatPanelRef,
     },
@@ -206,7 +218,12 @@ export default function DemoReportViewer({ email, companyName, onFinish, onSkip 
         return
       }
       const r = el.getBoundingClientRect()
-      setTourRect({ top: r.top, left: r.left, width: r.width, height: r.height })
+      setTourRect({
+        top: r.top,
+        left: r.left,
+        width: r.width,
+        height: r.height,
+      })
     }
     recompute()
     window.addEventListener('resize', recompute)
@@ -241,6 +258,18 @@ export default function DemoReportViewer({ email, companyName, onFinish, onSkip 
     onSkip?.()
   }, [onSkip, trackEvent])
 
+  const drainHighlight = useCallback(() => {
+    const section = pendingHighlightRef.current
+    if (!section) return
+    const doc = iframeRef.current?.contentDocument
+    if (!doc) return
+    const els = doc.querySelectorAll(`[data-section="${section}"]`)
+    if (!els.length) return
+    els.forEach((el) => el.classList.add('section-highlighted'))
+    els[0].scrollIntoView({ behavior: 'smooth', block: 'start' })
+    pendingHighlightRef.current = null
+  }, [])
+
   const handleChipClick = useCallback(() => {
     if (chipUsed || chipLoading) return
     setChipUsed(true)
@@ -252,6 +281,7 @@ export default function DemoReportViewer({ email, companyName, onFinish, onSkip 
         ...prev,
         { role: 'assistant', content: CHIP_REPLY },
       ])
+      pendingHighlightRef.current = 'workflows'
       setVariant('alt')
       setChipLoading(false)
     }, 1800)
@@ -263,10 +293,11 @@ export default function DemoReportViewer({ email, companyName, onFinish, onSkip 
         ? execHtmlAlt
         : fullHtmlAlt
       : activeTab === 'exec'
-      ? execHtml
-      : fullHtml
+        ? execHtml
+        : fullHtml
 
-  const isTourOpen = tourStep >= 0 && tourStep < TOUR_LENGTH && tourRect !== null
+  const isTourOpen =
+    tourStep >= 0 && tourStep < TOUR_LENGTH && tourRect !== null
   const isLastStep = tourStep === TOUR_LENGTH - 1
 
   const bubbleUser = {
@@ -501,7 +532,9 @@ export default function DemoReportViewer({ email, companyName, onFinish, onSkip 
             </div>
           )}
           <iframe
+            ref={iframeRef}
             srcDoc={activeHtml ?? ''}
+            onLoad={drainHighlight}
             style={{
               width: '100%',
               height: '100%',
