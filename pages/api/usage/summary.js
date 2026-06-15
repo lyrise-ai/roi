@@ -49,7 +49,7 @@ export default async function handler(req, res) {
   const { data: rows, error } = await admin
     .from('roi_usage')
     .select(
-      'id, report_id, created_at, company, mode, duration_ms, input_tokens, output_tokens, total_tokens, cost_usd, calls',
+      'id, report_id, user_id, created_at, company, mode, duration_ms, input_tokens, output_tokens, total_tokens, cost_usd, calls',
     )
     .gte('created_at', since)
     .order('created_at', { ascending: false })
@@ -122,14 +122,61 @@ export default async function handler(req, res) {
   })
   const perMode = [...modeMap.values()]
 
+  const recent = await withRequesterEmail(admin, safeRows.slice(0, 50))
+
   return res.status(200).json({
     ready: true,
     totals,
     perDay,
     perModel,
     perMode,
-    recent: safeRows.slice(0, 50),
+    recent,
   })
+}
+
+// Tags each row with the email of the user who requested the report — the
+// authenticated account that submitted the request, NOT the company contact
+// the report is addressed to (mirrors withRequester in pages/dashboard.jsx).
+// Older roi_usage rows may have a null user_id, so fall back to the parent
+// report's user_id before resolving emails via the users table.
+async function withRequesterEmail(admin, rows) {
+  if (!rows.length) return rows
+
+  const reportIdsMissingUser = rows
+    .filter((r) => !r.user_id && r.report_id)
+    .map((r) => r.report_id)
+
+  let reportUserById = {}
+  if (reportIdsMissingUser.length) {
+    const { data: reports } = await admin
+      .from('reports')
+      .select('id, user_id')
+      .in('id', reportIdsMissingUser)
+    reportUserById = (reports || []).reduce((acc, r) => {
+      acc[r.id] = r.user_id
+      return acc
+    }, {})
+  }
+
+  const userIdFor = (r) => r.user_id || reportUserById[r.report_id] || null
+  const userIds = [...new Set(rows.map(userIdFor).filter(Boolean))]
+
+  let emailByUserId = {}
+  if (userIds.length) {
+    const { data: users } = await admin
+      .from('users')
+      .select('id, email')
+      .in('id', userIds)
+    emailByUserId = (users || []).reduce((acc, u) => {
+      acc[u.id] = u.email
+      return acc
+    }, {})
+  }
+
+  return rows.map((r) => ({
+    ...r,
+    requester_email: emailByUserId[userIdFor(r)] || null,
+  }))
 }
 
 function emptyTotals() {
