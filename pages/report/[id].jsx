@@ -6,12 +6,14 @@ import ReportViewerWithBatch from '../../src/components/ROIGenerator/BulkUpload/
 import { buildStateFromReportRow } from '@/src/lib/roi/reportState'
 import { motion } from 'framer-motion'
 import { useRouter } from 'next/router'
+import { trackReportAccess } from '@/src/lib/roi/services/reportAccess'
 
 export async function getServerSideProps({ req, res, params, query }) {
   const supabase = createClient(req, res)
   const admin = createAdminClient()
 
   const token = typeof query?.t === 'string' ? query.t : null
+  const isAlpha = query?.alpha === 'true'
 
   // Always fetch the report once with its share fields so we can decide
   // whether to grant share-link access before requiring a Supabase session.
@@ -35,6 +37,7 @@ export async function getServerSideProps({ req, res, params, query }) {
 
   let isEmployee = false
   let viewerUserId = null
+  let viewerEmail = null
 
   if (!isShareLink) {
     const {
@@ -54,6 +57,7 @@ export async function getServerSideProps({ req, res, params, query }) {
     isEmployee =
       userData?.role === 'EMPLOYEE' || user.email?.endsWith('@lyrise.ai')
     viewerUserId = user.id
+    viewerEmail = user.email ?? null
 
     if (!isEmployee && report.user_id !== user.id) {
       return { redirect: { destination: '/dashboard', permanent: false } }
@@ -87,7 +91,7 @@ export async function getServerSideProps({ req, res, params, query }) {
 
   const [{ data: messages }, usageResult] = await Promise.all([
     msgQuery,
-    isShareLink || isEmployee
+    isShareLink
       ? Promise.resolve({ data: null })
       : admin
           .from('chat_usage')
@@ -104,6 +108,19 @@ export async function getServerSideProps({ req, res, params, query }) {
   const initialChatHistory = (messages ?? [])
     .filter((m) => m.role === 'user' || m.role === 'assistant')
     .filter((m) => m.content && m.content.trim() !== '')
+
+  await trackReportAccess({
+    admin,
+    req,
+    report,
+    reportId: report.id,
+    token: isShareLink ? token : null,
+    viewerEmail: isShareLink ? report.email : viewerEmail,
+    viewerUserId,
+    isShareLink,
+    isAlpha,
+    isEmployee,
+  })
 
   return {
     props: {
@@ -122,28 +139,51 @@ export async function getServerSideProps({ req, res, params, query }) {
 // ── Alpha terminology guide data ─────────────────────────────────────────────
 // Rendered in a toolbar dropdown when ?alpha=true is in the URL.
 const ALPHA_TERMS = [
-  { term: 'Hours Returned', def: 'Total hours/year your team gets back when AI handles repetitive tasks' },
-  { term: 'Operational Dividend', def: 'Dollar value of those freed hours at your blended rate. Measurable from day one.' },
-  { term: 'Profit Uplift', def: 'What freed hours produce when redirected to higher-value work.' },
-  { term: 'Total Financial Gain', def: 'Operational Dividend + Profit Uplift. Full annual value.' },
-  { term: 'Hypothesis-Driven Projection', def: 'Estimated from benchmarks, not your internal data. Needs validation.' },
+  {
+    term: 'Hours Returned',
+    def: 'Total hours/year your team gets back when AI handles repetitive tasks',
+  },
+  {
+    term: 'Operational Dividend',
+    def: 'Dollar value of those freed hours at your blended rate. Measurable from day one.',
+  },
+  {
+    term: 'Profit Uplift',
+    def: 'What freed hours produce when redirected to higher-value work.',
+  },
+  {
+    term: 'Total Financial Gain',
+    def: 'Operational Dividend + Profit Uplift. Full annual value.',
+  },
+  {
+    term: 'Hypothesis-Driven Projection',
+    def: 'Estimated from benchmarks, not your internal data. Needs validation.',
+  },
 ]
 
 function categorizeChatMessages(messages) {
   if (!messages || messages.length === 0) return []
   return messages
-    .map(m => {
+    .map((m) => {
       const content = String(m.content || '').trim()
       if (!content || content.length < 3) return null
       const lower = content.toLowerCase()
       let category = 'other'
-      if (lower.match(/what|why|how|explain|mean|means|understand|confused|unclear/)) {
+      if (
+        lower.match(
+          /what|why|how|explain|mean|means|understand|confused|unclear/,
+        )
+      ) {
         category = 'confusion'
-      } else if (lower.match(/change|update|modify|adjust|switch|convert|make it|set/)) {
+      } else if (
+        lower.match(/change|update|modify|adjust|switch|convert|make it|set/)
+      ) {
         category = 'modification'
       } else if (lower.match(/add|include|insert|append|more detail|expand/)) {
         category = 'content_request'
-      } else if (lower.match(/calculate|where|source|basis|assumption|number|figure/)) {
+      } else if (
+        lower.match(/calculate|where|source|basis|assumption|number|figure/)
+      ) {
         category = 'clarification'
       }
       return { content, category }
@@ -239,10 +279,17 @@ export default function ReportPage({
       if (!token) return
       createBrowserClient()
         .from('alpha_feedback')
-        .upsert({ alpha_token: token, step_generation_completed: true }, { onConflict: 'alpha_token' })
-        .then(({ error }) => { if (error) console.error('[alpha] generation page tracking:', error) })
-    } catch { /* non-critical */ }
-  // eslint-disable-next-line react-hooks/exhaustive-deps
+        .upsert(
+          { alpha_token: token, step_generation_completed: true },
+          { onConflict: 'alpha_token' },
+        )
+        .then(({ error }) => {
+          if (error) console.error('[alpha] generation page tracking:', error)
+        })
+    } catch {
+      /* non-critical */
+    }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [isAlpha])
 
   // Handler for the tour-exit modal submit
@@ -253,17 +300,15 @@ export default function ReportPage({
       const supabase = createBrowserClient()
 
       if (token) {
-        await supabase
-          .from('alpha_feedback')
-          .upsert(
-            {
-              alpha_token: token,
-              step_report_completed: true,
-              step3_report_clarity: reportClarity || null,
-              step4_chat_rating: chatRating || null,
-            },
-            { onConflict: 'alpha_token' },
-          )
+        await supabase.from('alpha_feedback').upsert(
+          {
+            alpha_token: token,
+            step_report_completed: true,
+            step3_report_clarity: reportClarity || null,
+            step4_chat_rating: chatRating || null,
+          },
+          { onConflict: 'alpha_token' },
+        )
       }
 
       // Extract keywords from this report's chat messages and save them to
@@ -278,13 +323,19 @@ export default function ReportPage({
         .limit(100)
 
       console.log('messages found:', messages?.length)
-      localStorage.setItem('alpha_chat_keywords',
-        JSON.stringify(categorizeChatMessages(messages || [])))
-    } catch { /* non-critical */ } finally {
+      localStorage.setItem(
+        'alpha_chat_keywords',
+        JSON.stringify(categorizeChatMessages(messages || [])),
+      )
+    } catch {
+      /* non-critical */
+    } finally {
       setTourExitSubmitting(false)
     }
     const alphaEmail = localStorage.getItem('alpha_email') || ''
-    push(`/alpha-survey?reportId=${reportId}&email=${encodeURIComponent(alphaEmail)}`)
+    push(
+      `/alpha-survey?reportId=${reportId}&email=${encodeURIComponent(alphaEmail)}`,
+    )
   }
 
   // Inject a short usage hint just above the chat textarea when alpha is active.
@@ -294,7 +345,9 @@ export default function ReportPage({
 
     const injectChatHint = () => {
       if (document.getElementById('alpha-chat-hint')) return
-      const textarea = document.querySelector('textarea[placeholder="Ask me to change anything in the report…"]')
+      const textarea = document.querySelector(
+        'textarea[placeholder="Ask me to change anything in the report…"]',
+      )
       if (!textarea) return
       const form = textarea.closest('form')
       if (!form) return
@@ -304,7 +357,8 @@ export default function ReportPage({
         'color:#2957FF;font-size:11px;padding:4px 14px 2px;',
         'line-height:1.5;font-family:inherit',
       ].join('')
-      hint.textContent = '💡 Try: change currency to EGP · adjust team size · rewrite a section'
+      hint.textContent =
+        '💡 Try: change currency to EGP · adjust team size · rewrite a section'
       form.parentNode.insertBefore(hint, form)
     }
 
@@ -323,6 +377,7 @@ export default function ReportPage({
         transition={{ duration: 0.3 }}
       >
         <ReportViewerWithBatch
+          key={reportId}
           initialState={initialState}
           email={email}
           reportId={reportId}
@@ -361,8 +416,12 @@ export default function ReportPage({
               <div className="px-4 py-3 space-y-4 max-h-80 overflow-y-auto">
                 {ALPHA_TERMS.map(({ term, def }) => (
                   <div key={term}>
-                    <p className="font-semibold text-slate-800 text-xs">{term}</p>
-                    <p className="text-slate-500 text-xs mt-0.5 leading-relaxed">{def}</p>
+                    <p className="font-semibold text-slate-800 text-xs">
+                      {term}
+                    </p>
+                    <p className="text-slate-500 text-xs mt-0.5 leading-relaxed">
+                      {def}
+                    </p>
                   </div>
                 ))}
               </div>
@@ -404,7 +463,15 @@ export default function ReportPage({
                       aria-label={`${s} star${s > 1 ? 's' : ''}`}
                       className="focus:outline-none transition-transform hover:scale-110"
                     >
-                      <svg viewBox="0 0 20 20" className="w-8 h-8" fill={s <= (clarityHover || reportClarity) ? '#fbbf24' : '#e2e8f0'}>
+                      <svg
+                        viewBox="0 0 20 20"
+                        className="w-8 h-8"
+                        fill={
+                          s <= (clarityHover || reportClarity)
+                            ? '#fbbf24'
+                            : '#e2e8f0'
+                        }
+                      >
                         <path d="M9.049 2.927c.3-.921 1.603-.921 1.902 0l1.07 3.292a1 1 0 00.95.69h3.462c.969 0 1.371 1.24.588 1.81l-2.8 2.034a1 1 0 00-.364 1.118l1.07 3.292c.3.921-.755 1.688-1.54 1.118l-2.8-2.034a1 1 0 00-1.175 0l-2.8 2.034c-.784.57-1.838-.197-1.539-1.118l1.07-3.292a1 1 0 00-.364-1.118L2.98 8.72c-.783-.57-.38-1.81.588-1.81h3.461a1 1 0 00.951-.69l1.07-3.292z" />
                       </svg>
                     </button>
@@ -429,7 +496,13 @@ export default function ReportPage({
                       aria-label={`${s} star${s > 1 ? 's' : ''}`}
                       className="focus:outline-none transition-transform hover:scale-110"
                     >
-                      <svg viewBox="0 0 20 20" className="w-8 h-8" fill={s <= (chatHover || chatRating) ? '#fbbf24' : '#e2e8f0'}>
+                      <svg
+                        viewBox="0 0 20 20"
+                        className="w-8 h-8"
+                        fill={
+                          s <= (chatHover || chatRating) ? '#fbbf24' : '#e2e8f0'
+                        }
+                      >
                         <path d="M9.049 2.927c.3-.921 1.603-.921 1.902 0l1.07 3.292a1 1 0 00.95.69h3.462c.969 0 1.371 1.24.588 1.81l-2.8 2.034a1 1 0 00-.364 1.118l1.07 3.292c.3.921-.755 1.688-1.54 1.118l-2.8-2.034a1 1 0 00-1.175 0l-2.8 2.034c-.784.57-1.838-.197-1.539-1.118l1.07-3.292a1 1 0 00-.364-1.118L2.98 8.72c-.783-.57-.38-1.81.588-1.81h3.461a1 1 0 00.951-.69l1.07-3.292z" />
                       </svg>
                     </button>

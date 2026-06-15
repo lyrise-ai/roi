@@ -29,6 +29,7 @@ import {
 } from '@/src/lib/roi/reportState'
 import { persistReportEvidence } from '@/src/lib/roi/reportEvidence'
 import { assessReportSpecificity } from '@/src/lib/roi/specificity'
+import { REPORT_CHAT_MESSAGE_LIMIT } from '@/src/lib/roi/constants'
 
 export const config = {
   maxDuration: 300,
@@ -144,7 +145,7 @@ export default async function handler(req, res) {
     return
   }
 
-  const CHAT_LIMIT = 5
+  const CHAT_LIMIT = REPORT_CHAT_MESSAGE_LIMIT
   let chatUserRole = 'CLIENT'
   const adminSupabase = createAdminClient()
   let persistedReport = null
@@ -208,36 +209,34 @@ export default async function handler(req, res) {
       .limit(20)
     if (!isEmployeeChat) msgQuery = msgQuery.eq('user_id', user.id)
     const { data: messages } = await msgQuery
-    chatUserRole = isEmployeeChat ? 'EMPLOYEE' : userData?.role ?? 'CLIENT'
+    chatUserRole = isEmployeeChat ? 'EMPLOYEE' : (userData?.role ?? 'CLIENT')
 
     if (!report || (report.user_id !== user.id && !isEmployeeChat)) {
       res.status(403).json({ error: 'Unauthorized' })
       return
     }
 
-    if (!isEmployeeChat) {
-      const { data: usage } = await adminSupabase
-        .from('chat_usage')
-        .select('id, message_count')
-        .eq('user_id', user.id)
-        .eq('report_id', reportId)
-        .single()
+    const { data: usage } = await adminSupabase
+      .from('chat_usage')
+      .select('id, message_count')
+      .eq('user_id', user.id)
+      .eq('report_id', reportId)
+      .single()
 
-      if (usage && usage.message_count >= CHAT_LIMIT) {
-        adminSupabase
-          .from('events')
-          .insert({
-            user_id: user.id,
-            report_id: reportId,
-            type: 'chat_limit_reached',
-          })
-          .then(({ error }) => {
-            if (error)
-              console.error('event insert failed (chat_limit_reached)', error)
-          })
-        res.status(403).json({ error: 'limit_reached' })
-        return
-      }
+    if (usage && usage.message_count >= CHAT_LIMIT) {
+      adminSupabase
+        .from('events')
+        .insert({
+          user_id: user.id,
+          report_id: reportId,
+          type: 'chat_limit_reached',
+        })
+        .then(({ error }) => {
+          if (error)
+            console.error('event insert failed (chat_limit_reached)', error)
+        })
+      res.status(403).json({ error: 'limit_reached' })
+      return
     }
 
     persistedReport = report
@@ -286,33 +285,6 @@ export default async function handler(req, res) {
       return
     }
     persistedReport.share_message_count = claimedCount
-  }
-
-  if (mode === 'generate') {
-    const { data: genUserData } = await adminSupabase
-      .from('users')
-      .select('role')
-      .eq('id', user.id)
-      .single()
-    // fall back to email domain if the users row is missing or has wrong role
-    const isEmployee =
-      genUserData?.role === 'EMPLOYEE' ||
-      user.email?.endsWith('@lyrise.ai') === true
-
-    if (!isEmployee) {
-      const { data: existingReport } = await supabase
-        .from('reports')
-        .select('id')
-        .eq('user_id', user.id)
-        .limit(1)
-        .maybeSingle()
-      if (existingReport) {
-        res
-          .status(409)
-          .json({ error: 'report_exists', report_id: existingReport.id })
-        return
-      }
-    }
   }
 
   res.setHeader('Content-Type', 'text/event-stream')
@@ -498,7 +470,7 @@ export default async function handler(req, res) {
       if (isShareLinkChat) {
         // Slot was already claimed atomically via claim_share_chat_slot
         // before the LLM ran, so no post-hoc increment is needed here.
-      } else if (userRole !== 'EMPLOYEE') {
+      } else {
         const { data: usage, error: usageReadErr } = await adminSupabase
           .from('chat_usage')
           .select('id, message_count')

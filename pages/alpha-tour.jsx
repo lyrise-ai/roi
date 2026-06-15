@@ -669,9 +669,7 @@ export default function AlphaTour() {
               if (existing.ok) {
                 const existingData = await existing.json()
                 if (existingData?.report?.rendered_html) {
-                  const { buildStateFromReportRow } = await import(
-                    '../src/lib/roi/reportState'
-                  )
+                  const { buildStateFromReportRow } = await import('../src/lib/roi/reportState')
                   const builtState = buildStateFromReportRow(existingData.report)
                   setReportId(data.report_id)
                   setReportState(builtState)

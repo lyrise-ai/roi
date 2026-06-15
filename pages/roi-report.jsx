@@ -9,6 +9,7 @@ import ReportViewer from '../src/components/ROIGenerator/ReportViewer'
 import GeneratingView from '../src/components/ROIGenerator/GeneratingView'
 import { drainSSE } from '../src/lib/drainSSE'
 import { PIPELINE_LOG_TOOL_NAMES } from '../src/lib/roi/constants'
+import { REPORT_CHAT_MESSAGE_LIMIT } from '../src/lib/roi/constants'
 import { useRouter } from 'next/router'
 import ErrorBoundary from '../src/components/shared/ErrorBoundary'
 
@@ -137,8 +138,8 @@ function Pill({ label, active, onClick, dimmed }) {
         active
           ? 'bg-gray-900 border-gray-900 text-white'
           : dimmed
-          ? 'border-gray-200 text-gray-400 opacity-40 cursor-not-allowed'
-          : 'border-gray-200 text-gray-500 hover:border-gray-400 hover:text-gray-900 cursor-pointer',
+            ? 'border-gray-200 text-gray-400 opacity-40 cursor-not-allowed'
+            : 'border-gray-200 text-gray-500 hover:border-gray-400 hover:text-gray-900 cursor-pointer',
       )}
     >
       {label}
@@ -459,6 +460,10 @@ function SuccessView({ email, reportId, isEmployee }) {
       .then((data) => {
         if (Array.isArray(data.messages) && data.messages.length > 0) {
           setMessages(data.messages)
+          setLimitReached(
+            data.messages.filter((msg) => msg.role === 'user').length >=
+              REPORT_CHAT_MESSAGE_LIMIT,
+          )
         }
       })
       .catch(() => {})
@@ -500,6 +505,9 @@ function SuccessView({ email, reportId, isEmployee }) {
         ...prev,
         { role: 'assistant', content: data.reply },
       ])
+      if (userSentCount + 1 >= REPORT_CHAT_MESSAGE_LIMIT) {
+        setLimitReached(true)
+      }
     } catch {
       setMessages((prev) => [
         ...prev,
@@ -548,15 +556,14 @@ function SuccessView({ email, reportId, isEmployee }) {
           <h3 className="text-sm font-semibold text-gray-900">
             Ask about your report
           </h3>
-          {!isEmployee && (
-            <span
-              className={`text-xs font-mono ${
-                limitReached ? 'text-amber-500 font-semibold' : 'text-gray-400'
-              }`}
-            >
-              {Math.min(userSentCount, 5)} / 5 messages used
-            </span>
-          )}
+          <span
+            className={`text-xs font-mono ${
+              limitReached ? 'text-amber-500 font-semibold' : 'text-gray-400'
+            }`}
+          >
+            {Math.min(userSentCount, REPORT_CHAT_MESSAGE_LIMIT)} /{' '}
+            {REPORT_CHAT_MESSAGE_LIMIT} messages used
+          </span>
         </div>
 
         {/* Message history */}
@@ -603,20 +610,30 @@ function SuccessView({ email, reportId, isEmployee }) {
         {limitReached ? (
           <div className="p-5 text-center border bg-amber-50 border-amber-200 rounded-xl">
             <p className="mb-2 font-mono text-xs font-semibold text-amber-500">
-              5 / 5 messages used
+              {REPORT_CHAT_MESSAGE_LIMIT} / {REPORT_CHAT_MESSAGE_LIMIT} messages
+              used
             </p>
             <p className="mb-1 text-sm font-semibold text-amber-800">
-              You&apos;ve used your 5 free messages.
+              You&apos;ve used your {REPORT_CHAT_MESSAGE_LIMIT} messages.
             </p>
-            <p className="mb-4 text-xs text-amber-600">
-              Want unlimited edits? Contact LyRise to refine your ROI strategy.
-            </p>
-            <a
-              href="https://api.leadconnectorhq.com/widget/bookings/strategy-call-with-lyrisesivto9"
-              className="inline-flex items-center gap-2 px-4 py-2 bg-amber-600 text-white text-xs font-semibold rounded-lg hover:bg-amber-700 transition-colors"
-            >
-              Contact Sales →
-            </a>
+            {isEmployee ? (
+              <p className="mb-0 text-xs text-amber-700">
+                This report is capped for the alpha release.
+              </p>
+            ) : (
+              <>
+                <p className="mb-4 text-xs text-amber-600">
+                  Want unlimited edits? Contact LyRise to refine your ROI
+                  strategy.
+                </p>
+                <a
+                  href="https://api.leadconnectorhq.com/widget/bookings/strategy-call-with-lyrisesivto9"
+                  className="inline-flex items-center gap-2 px-4 py-2 bg-amber-600 text-white text-xs font-semibold rounded-lg hover:bg-amber-700 transition-colors"
+                >
+                  Contact Sales →
+                </a>
+              </>
+            )}
           </div>
         ) : (
           <div className="flex gap-2">
@@ -652,9 +669,8 @@ function SuccessView({ email, reportId, isEmployee }) {
 // ── Main ──────────────────────────────────────────────────────────────────────
 
 export async function getServerSideProps({ req, res }) {
-  const { createClient, createAdminClient } = await import(
-    '../src/lib/supabase-server'
-  )
+  const { createClient, createAdminClient } =
+    await import('../src/lib/supabase-server')
   const supabase = createClient(req, res)
   const {
     data: { user },
@@ -742,8 +758,12 @@ function ROIReportInner({ isEmployee }) {
           headers: { 'Content-Type': 'application/json' },
           body: JSON.stringify({
             error: message,
-            context: { page: 'roi-report', company: s1.companyName || '(unknown)' },
-            url: typeof window !== 'undefined' ? window.location.href : undefined,
+            context: {
+              page: 'roi-report',
+              company: s1.companyName || '(unknown)',
+            },
+            url:
+              typeof window !== 'undefined' ? window.location.href : undefined,
           }),
         }).catch(() => {})
       }
@@ -811,19 +831,12 @@ function ROIReportInner({ isEmployee }) {
               const existing = await fetch('/api/roi-agent')
               if (!existing.ok) {
                 // eslint-disable-next-line no-console -- intentional 409 fallback diagnostics
-                console.warn(
-                  'GET /api/roi-agent failed during 409 fallback:',
-                  existing.status,
-                )
+                console.warn('GET /api/roi-agent failed during 409 fallback:', existing.status)
               } else {
                 const existingData = await existing.json()
                 if (existingData?.report?.rendered_html) {
-                  const { buildStateFromReportRow } = await import(
-                    '../src/lib/roi/reportState'
-                  )
-                  const builtState = buildStateFromReportRow(
-                    existingData.report,
-                  )
+                  const { buildStateFromReportRow } = await import('../src/lib/roi/reportState')
+                  const builtState = buildStateFromReportRow(existingData.report)
                   setReportId(data.report_id)
                   setReportState(builtState)
                   setIsGenerationComplete(true)
@@ -833,10 +846,7 @@ function ROIReportInner({ isEmployee }) {
               }
             } catch (err) {
               // eslint-disable-next-line no-console -- intentional 409 fallback diagnostics
-              console.warn(
-                'Failed to load existing report from 409 fallback:',
-                err,
-              )
+              console.warn('Failed to load existing report from 409 fallback:', err)
             }
             window.location.href = `/report/${data.report_id}`
           }
@@ -1139,7 +1149,6 @@ function ROIReportInner({ isEmployee }) {
             </div>
           </motion.div>
         </div>
-
       </div>
     </div>
   )
