@@ -4,6 +4,7 @@ import ReportViewerWithBatch from '../../src/components/ROIGenerator/BulkUpload/
 import { buildStateFromReportRow } from '@/src/lib/roi/reportState'
 import { motion } from 'framer-motion'
 import ErrorBoundary from '../../src/components/shared/ErrorBoundary'
+import { isEmployeeUser } from '@/src/lib/isEmployee'
 
 export async function getServerSideProps({ req, res, params, query }) {
   const supabase = createClient(req, res)
@@ -49,8 +50,7 @@ export async function getServerSideProps({ req, res, params, query }) {
       .eq('id', user.id)
       .single()
 
-    isEmployee =
-      userData?.role === 'EMPLOYEE' || user.email?.endsWith('@lyrise.ai')
+    isEmployee = isEmployeeUser(user, userData)
     viewerUserId = user.id
 
     if (!isEmployee && report.user_id !== user.id) {

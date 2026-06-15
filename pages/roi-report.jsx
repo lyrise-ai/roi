@@ -12,6 +12,7 @@ import { drainSSE } from '../src/lib/drainSSE'
 import { PIPELINE_LOG_TOOL_NAMES } from '../src/lib/roi/constants'
 import { useRouter } from 'next/router'
 import ErrorBoundary from '../src/components/shared/ErrorBoundary'
+import { isEmployeeUser } from '../src/lib/isEmployee'
 
 // ── Constants ─────────────────────────────────────────────────────────────────
 
@@ -488,8 +489,12 @@ function SuccessView({ email, reportId, isEmployee }) {
       })
 
       if (res.status === 403) {
-        setLimitReached(true)
-        return
+        const data = await res.json().catch(() => null)
+        if (data?.error === 'limit_reached') {
+          setLimitReached(true)
+          return
+        }
+        throw new Error('HTTP 403')
       }
       if (res.status === 429) {
         // Remove the optimistic user message we added
@@ -674,8 +679,29 @@ export async function getServerSideProps({ req, res }) {
     .eq('id', user.id)
     .single()
 
-  const isEmployee =
-    userData?.role === 'EMPLOYEE' || user.email?.endsWith('@lyrise.ai')
+  const isEmployee = isEmployeeUser(user, userData)
+
+  if (!isEmployee) {
+    const { data: existingReport } = await admin
+      .from('reports')
+      .select('id, status')
+      .eq('user_id', user.id)
+      .order('created_at', { ascending: false })
+      .limit(1)
+      .maybeSingle()
+
+    if (existingReport?.id) {
+      return {
+        redirect: {
+          destination:
+            existingReport.status === 'SUCCESS'
+              ? `/report/${existingReport.id}`
+              : '/dashboard',
+          permanent: false,
+        },
+      }
+    }
+  }
 
   return { props: { isEmployee } }
 }

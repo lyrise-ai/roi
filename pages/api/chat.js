@@ -1,6 +1,7 @@
 import { generateText } from 'ai'
 import { createAdminClient, createClient } from '../../src/lib/supabase-server'
 import { fastModel } from '@/src/lib/roi/llm'
+import { isEmployeeUser } from '@/src/lib/isEmployee'
 
 const CHAT_LIMIT = 5
 const MAX_MESSAGE_LENGTH = 1000
@@ -30,18 +31,21 @@ async function handleGet(req, res) {
     supabase.from('reports').select('user_id').eq('id', reportId).single(),
   ])
 
-  const userRole = userData?.role ?? 'CLIENT'
+  const isEmployee = isEmployeeUser(user, userData)
 
-  if (!report || (report.user_id !== user.id && userRole !== 'EMPLOYEE')) {
+  if (!report || (report.user_id !== user.id && !isEmployee)) {
     return res.status(403).json({ error: 'Unauthorized' })
   }
 
-  const { data: messages } = await supabase
+  let messagesQuery = supabase
     .from('chat_messages')
     .select('role, content')
     .eq('report_id', reportId)
-    .eq('user_id', user.id)
     .order('created_at', { ascending: true })
+
+  if (!isEmployee) messagesQuery = messagesQuery.eq('user_id', user.id)
+
+  const { data: messages } = await messagesQuery
 
   return res.status(200).json({ messages: messages ?? [] })
 }
@@ -81,13 +85,13 @@ async function handlePost(req, res) {
       .single(),
   ])
 
-  const userRole = userData?.role ?? 'CLIENT'
+  const isEmployee = isEmployeeUser(user, userData)
 
   if (!report) {
     return res.status(404).json({ error: 'Report not found' })
   }
   // Fix 3: only the report owner (or any employee) can chat about a report
-  if (report.user_id !== user.id && userRole !== 'EMPLOYEE') {
+  if (report.user_id !== user.id && !isEmployee) {
     return res.status(403).json({ error: 'Unauthorized' })
   }
 
@@ -112,7 +116,7 @@ async function handlePost(req, res) {
   }
 
   // ── Steps 2–5: enforce limit for non-employees ─────────────────────────────
-  if (userRole !== 'EMPLOYEE') {
+  if (!isEmployee) {
     const { data: usage } = await supabase
       .from('chat_usage')
       .select('id, message_count')

@@ -412,9 +412,13 @@ export default function ReportViewer({
         })
 
         if (res.status === 403) {
-          setLimitReached(true)
-          setIsAgentRunning(false)
-          return
+          const data = await res.json().catch(() => null)
+          if (data?.error === 'limit_reached') {
+            setLimitReached(true)
+            setIsAgentRunning(false)
+            return
+          }
+          throw new Error('HTTP 403')
         }
 
         const newCount = userSentCount + 1
