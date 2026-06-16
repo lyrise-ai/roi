@@ -582,6 +582,7 @@ export default async function handler(req, res) {
           rendered_full_html: renderedFullHtml,
           state_data: stateData,
           share_token: generatedShareToken,
+          is_alpha: Boolean(isAlpha),
         })
         .select('id')
         .single()
