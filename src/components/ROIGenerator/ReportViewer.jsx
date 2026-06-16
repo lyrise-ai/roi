@@ -1,6 +1,7 @@
 import React, { useState, useRef, useCallback, useEffect } from 'react'
 import Link from 'next/link'
 import { drainSSE } from '@/src/lib/drainSSE'
+import { REPORT_CHAT_MESSAGE_LIMIT } from '@/src/lib/roi/constants'
 import { trackShareEvent } from '@/src/lib/trackShareEvent'
 
 const SUGGEST_RE = /\[SUGGEST:\s*([^\]]+)\]$/
@@ -143,7 +144,9 @@ export default function ReportViewer({
   const [emailStatus, setEmailStatus] = useState('idle')
   const [activeTab, setActiveTab] = useState('exec')
   const [lastChangedSections, setLastChangedSections] = useState([])
-  const [limitReached, setLimitReached] = useState(initialMessagesUsed >= 5)
+  const [limitReached, setLimitReached] = useState(
+    initialMessagesUsed >= REPORT_CHAT_MESSAGE_LIMIT,
+  )
   const [userSentCount, setUserSentCount] = useState(initialMessagesUsed)
   const [showCallPrompt, setShowCallPrompt] = useState(false)
   const [downloadStatus, setDownloadStatus] = useState('idle')
@@ -375,8 +378,8 @@ export default function ReportViewer({
 
   const activeHtml =
     activeTab === 'exec'
-      ? reportState?.renderedHtml ?? initialState?.renderedHtml
-      : reportState?.renderedFullHtml ?? initialState?.renderedFullHtml
+      ? (reportState?.renderedHtml ?? initialState?.renderedHtml)
+      : (reportState?.renderedFullHtml ?? initialState?.renderedFullHtml)
   const company = reportState?.assembled?.roi_data?.company ?? ''
 
   const handleSend = useCallback(
@@ -451,7 +454,12 @@ export default function ReportViewer({
             if (nextMessages.length) {
               setChatHistory([...newHistory, ...nextMessages])
             }
-            if (!isEmployee && newCount === 5) setShowCallPrompt(true)
+            if (newCount >= REPORT_CHAT_MESSAGE_LIMIT) {
+              setLimitReached(true)
+            }
+            if (!isEmployee && newCount === REPORT_CHAT_MESSAGE_LIMIT) {
+              setShowCallPrompt(true)
+            }
             setStreamingText('')
             setIsAgentRunning(false)
             setActiveTool(null)
@@ -750,8 +758,8 @@ export default function ReportViewer({
             {downloadStatus === 'downloading'
               ? 'Generating PDF…'
               : downloadStatus === 'error'
-              ? 'Download failed — retry'
-              : 'Download PDF'}
+                ? 'Download failed — retry'
+                : 'Download PDF'}
           </button>
           <button
             type="button"
@@ -788,14 +796,14 @@ export default function ReportViewer({
                   emailStatus === 'sent'
                     ? '#dcfce7'
                     : emailStatus === 'error'
-                    ? '#fee2e2'
-                    : '#2957FF',
+                      ? '#fee2e2'
+                      : '#2957FF',
                 color:
                   emailStatus === 'sent'
                     ? '#166534'
                     : emailStatus === 'error'
-                    ? '#991b1b'
-                    : '#fff',
+                      ? '#991b1b'
+                      : '#fff',
                 cursor:
                   !reportId || emailStatus === 'sending'
                     ? 'not-allowed'
@@ -806,10 +814,10 @@ export default function ReportViewer({
               {emailStatus === 'sending'
                 ? 'Sending…'
                 : emailStatus === 'sent'
-                ? 'Email Sent!'
-                : emailStatus === 'error'
-                ? 'Send Failed'
-                : 'Re-send Email'}
+                  ? 'Email Sent!'
+                  : emailStatus === 'error'
+                    ? 'Send Failed'
+                    : 'Re-send Email'}
             </button>
           )}
           {batchContext &&
@@ -837,8 +845,8 @@ export default function ReportViewer({
                 {batchContext.isNextReady
                   ? 'Next file →'
                   : batchContext.isNextFailed
-                  ? 'Review next (failed)'
-                  : 'Next generating…'}
+                    ? 'Review next (failed)'
+                    : 'Next generating…'}
               </button>
             ) : (
               <button
@@ -1029,12 +1037,12 @@ export default function ReportViewer({
                 typeof msg.content === 'string'
                   ? msg.content
                   : Array.isArray(msg.content)
-                  ? msg.content
-                      .filter((p) => p.type === 'text')
-                      .map((p) => p.text)
-                      .join('')
-                      .trim()
-                  : ''
+                    ? msg.content
+                        .filter((p) => p.type === 'text')
+                        .map((p) => p.text)
+                        .join('')
+                        .trim()
+                    : ''
               if (!text) return null
               const isUser = msg.role === 'user'
               return (
@@ -1204,7 +1212,7 @@ export default function ReportViewer({
               borderTop: '1px solid #d0d0d0',
             }}
           >
-            {reportId && !isEmployee && (
+            {reportId && (
               <div
                 style={{
                   padding: '6px 14px 0',
@@ -1217,11 +1225,12 @@ export default function ReportViewer({
                     color: limitReached ? '#f59e0b' : '#94a3b8',
                   }}
                 >
-                  {Math.min(userSentCount, 5)} / 5 messages used
+                  {Math.min(userSentCount, REPORT_CHAT_MESSAGE_LIMIT)} /{' '}
+                  {REPORT_CHAT_MESSAGE_LIMIT} messages used
                 </span>
               </div>
             )}
-            {!isEmployee && limitReached ? (
+            {limitReached ? (
               <div
                 style={{
                   padding: '12px 14px',
@@ -1237,14 +1246,20 @@ export default function ReportViewer({
                     margin: '0 0 4px',
                   }}
                 >
-                  You&apos;ve used your 5 free messages.
+                  You&apos;ve used your {REPORT_CHAT_MESSAGE_LIMIT} messages.
                 </p>
-                <a
-                  href="https://api.leadconnectorhq.com/widget/bookings/strategy-call-with-lyrisesivto9"
-                  style={{ fontSize: 12, color: '#2957FF' }}
-                >
-                  Contact LyRise to continue →
-                </a>
+                {isEmployee ? (
+                  <p style={{ fontSize: 12, color: '#92400e', margin: 0 }}>
+                    This report is capped for the alpha release.
+                  </p>
+                ) : (
+                  <a
+                    href="https://api.leadconnectorhq.com/widget/bookings/strategy-call-with-lyrisesivto9"
+                    style={{ fontSize: 12, color: '#2957FF' }}
+                  >
+                    Contact LyRise to continue →
+                  </a>
+                )}
               </div>
             ) : (
               <div style={{ padding: '10px 14px 12px' }}>
