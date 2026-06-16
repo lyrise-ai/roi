@@ -45,6 +45,16 @@ function StatusBadge({ status }) {
   )
 }
 
+// Distinguishes alpha-tour runs from real client/employee reports. Purple so it
+// reads as a separate category from the green/blue status + role badges.
+function AlphaBadge() {
+  return (
+    <span className="inline-flex items-center px-2 py-0.5 rounded-full text-[10px] font-bold uppercase tracking-wide bg-purple-100 text-purple-700">
+      Alpha
+    </span>
+  )
+}
+
 function RoleBadge({ role }) {
   const isEmployee = role === 'EMPLOYEE'
   return (
@@ -161,7 +171,7 @@ export async function getServerSideProps({ req, res }) {
   let query = supabase
     .from('reports')
     .select(
-      'id, user_id, company_name, email, status, created_at, completed_at',
+      'id, user_id, company_name, email, status, created_at, completed_at, is_alpha',
     )
     .order('created_at', { ascending: false })
 
@@ -437,7 +447,10 @@ function DashboardInner({
                           } hover:bg-gray-50 transition-colors`}
                         >
                           <td className="font-outfit font-medium text-[#2C2C2C] px-6 py-4">
-                            {r.company_name || '—'}
+                            <span className="inline-flex items-center gap-2">
+                              {r.company_name || '—'}
+                              {r.is_alpha && <AlphaBadge />}
+                            </span>
                           </td>
                           <td className="px-6 py-4 text-gray-500 font-outfit">
                             {r.requester_email || '—'}

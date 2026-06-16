@@ -491,6 +491,27 @@ function EngagementPanel({ data }) {
   )
 }
 
+// Badges alpha-tour runs so they read as a separate category from real client
+// reports. Purple to stand apart from the blue "View" links and stat accents.
+function AlphaBadge() {
+  return (
+    <Chip
+      label="Alpha"
+      size="small"
+      sx={{
+        height: 18,
+        fontSize: 10,
+        fontWeight: 700,
+        textTransform: 'uppercase',
+        letterSpacing: 0.4,
+        bgcolor: '#f3e8ff',
+        color: '#7c3aed',
+        '& .MuiChip-label': { px: 0.75 },
+      }}
+    />
+  )
+}
+
 function StatCard({ label, value, accent }) {
   return (
     <Card sx={{ borderTop: `3px solid ${accent}` }}>
@@ -571,7 +592,15 @@ function ReportRow({ row }) {
           )}
         </TableCell>
         <TableCell>{new Date(row.created_at).toLocaleString()}</TableCell>
-        <TableCell>{row.company || '—'}</TableCell>
+        <TableCell>
+          <Box
+            component="span"
+            sx={{ display: 'inline-flex', alignItems: 'center', gap: 1 }}
+          >
+            {row.company || '—'}
+            {row.is_alpha && <AlphaBadge />}
+          </Box>
+        </TableCell>
         <TableCell>{row.requester_email || '—'}</TableCell>
         <TableCell>{row.mode}</TableCell>
         <TableCell align="right">{usd(row.cost_usd)}</TableCell>
