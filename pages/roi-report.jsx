@@ -957,6 +957,10 @@ function ROIReportInner({ isEmployee, isAlpha }) {
 
   const [isGenerationComplete, setIsGenerationComplete] = useState(false)
   const generationStartedAt = useRef(Date.now())
+  // Guards against re-entrant generation — the demo tour can fire onFinish from
+  // both the final step and the CTA, and a second run would 409 on the alpha
+  // one-report guard and flicker the UI back through the loader.
+  const generationInFlightRef = useRef(false)
   const [generationLog, setGenerationLog] = useState('')
   const [sseEvents, setSseEvents] = useState([])
   const [reportState, setReportState] = useState(null)
@@ -1028,6 +1032,8 @@ function ROIReportInner({ isEmployee, isAlpha }) {
 
   const runGeneration = useCallback(
     async ({ skipLLM = false, estimatesOnly = false } = {}) => {
+      if (generationInFlightRef.current) return
+      generationInFlightRef.current = true
       generationStartedAt.current = Date.now()
       setIsGenerationComplete(false)
       setViewState(VIEW_STATES.GENERATING)
@@ -1179,6 +1185,8 @@ function ROIReportInner({ isEmployee, isAlpha }) {
         handleGenerationError(
           err.message || 'Something went wrong. Please try again.',
         )
+      } finally {
+        generationInFlightRef.current = false
       }
     },
     [s1, s2, isAlpha, handleGenerationError],
