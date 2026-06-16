@@ -1182,11 +1182,14 @@ function ROIReportInner({ isEmployee, isAlpha }) {
           },
         )
       } catch (err) {
+        // Release the lock only on failure so the user can retry. On success
+        // (or a 409 that resolves to the existing report) the lock stays set —
+        // the page navigates to the report, and any late duplicate trigger
+        // (e.g. the demo firing onFinish twice) is ignored.
+        generationInFlightRef.current = false
         handleGenerationError(
           err.message || 'Something went wrong. Please try again.',
         )
-      } finally {
-        generationInFlightRef.current = false
       }
     },
     [s1, s2, isAlpha, handleGenerationError],
