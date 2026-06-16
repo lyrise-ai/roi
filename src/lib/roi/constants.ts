@@ -5,3 +5,5 @@ export const PIPELINE_LOG_TOOL_NAMES = [
   'run_financial_model',
   'set_report_copy',
 ] as const
+
+export const REPORT_CHAT_MESSAGE_LIMIT = 5

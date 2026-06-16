@@ -30,6 +30,8 @@ import {
 import { persistReportEvidence } from '@/src/lib/roi/reportEvidence'
 import { persistUsage } from '@/src/lib/roi/services/usageStore'
 import { assessReportSpecificity } from '@/src/lib/roi/specificity'
+import { isEmployeeUser } from '@/src/lib/isEmployee'
+import { REPORT_CHAT_MESSAGE_LIMIT } from '@/src/lib/roi/constants'
 
 export const config = {
   maxDuration: 300,
@@ -136,6 +138,7 @@ export default async function handler(req, res) {
     reportId,
     emailOverride,
     shareToken,
+    isAlpha,
   } = req.body
 
   if (!mode || !['generate', 'chat'].includes(mode)) {
@@ -145,7 +148,7 @@ export default async function handler(req, res) {
     return
   }
 
-  const CHAT_LIMIT = 5
+  const CHAT_LIMIT = REPORT_CHAT_MESSAGE_LIMIT
   let chatUserRole = 'CLIENT'
   const adminSupabase = createAdminClient()
   let persistedReport = null
@@ -196,9 +199,7 @@ export default async function handler(req, res) {
         .eq('id', reportId)
         .single(),
     ])
-    const isEmployeeChat =
-      userData?.role === 'EMPLOYEE' ||
-      user.email?.endsWith('@lyrise.ai') === true
+    const isEmployeeChat = isEmployeeUser(user, userData)
 
     // Employees see all messages on the report; clients see only their own
     let msgQuery = adminSupabase
@@ -209,13 +210,14 @@ export default async function handler(req, res) {
       .limit(20)
     if (!isEmployeeChat) msgQuery = msgQuery.eq('user_id', user.id)
     const { data: messages } = await msgQuery
-    chatUserRole = isEmployeeChat ? 'EMPLOYEE' : userData?.role ?? 'CLIENT'
+    chatUserRole = isEmployeeChat ? 'EMPLOYEE' : (userData?.role ?? 'CLIENT')
 
     if (!report || (report.user_id !== user.id && !isEmployeeChat)) {
       res.status(403).json({ error: 'Unauthorized' })
       return
     }
 
+    // Employees chat without limits; clients and alpha testers are capped.
     if (!isEmployeeChat) {
       const { data: usage } = await adminSupabase
         .from('chat_usage')
@@ -289,30 +291,20 @@ export default async function handler(req, res) {
     persistedReport.share_message_count = claimedCount
   }
 
-  if (mode === 'generate') {
-    const { data: genUserData } = await adminSupabase
-      .from('users')
-      .select('role')
-      .eq('id', user.id)
-      .single()
-    // fall back to email domain if the users row is missing or has wrong role
-    const isEmployee =
-      genUserData?.role === 'EMPLOYEE' ||
-      user.email?.endsWith('@lyrise.ai') === true
-
-    if (!isEmployee) {
-      const { data: existingReport } = await supabase
-        .from('reports')
-        .select('id')
-        .eq('user_id', user.id)
-        .limit(1)
-        .maybeSingle()
-      if (existingReport) {
-        res
-          .status(409)
-          .json({ error: 'report_exists', report_id: existingReport.id })
-        return
-      }
+  // Alpha testers get one report per account (keeps the guided tour to a single
+  // run). Normal clients and employees can generate freely.
+  if (mode === 'generate' && isAlpha && user) {
+    const { data: existingReport } = await supabase
+      .from('reports')
+      .select('id')
+      .eq('user_id', user.id)
+      .limit(1)
+      .maybeSingle()
+    if (existingReport) {
+      res
+        .status(409)
+        .json({ error: 'report_exists', report_id: existingReport.id })
+      return
     }
   }
 
