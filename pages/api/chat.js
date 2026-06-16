@@ -104,36 +104,16 @@ async function handlePost(req, res) {
     }
   }
 
-  const { data: usage } = await supabase
-    .from('chat_usage')
-    .select('id, message_count')
-    .eq('user_id', user.id)
-    .eq('report_id', reportId)
-    .single()
-
-  if (usage && usage.message_count >= CHAT_LIMIT) {
-    supabase
-      .from('events')
-      .insert({
-        user_id: user.id,
-        report_id: reportId,
-        type: 'chat_limit_reached',
-      })
-      .then(() => {})
-    return res.status(403).json({ error: 'limit_reached' })
-  }
-
-  if (usage) {
-    const { data: updated } = await supabase
+  // Employees chat without limits; clients and alpha testers are capped.
+  if (userRole !== 'EMPLOYEE') {
+    const { data: usage } = await supabase
       .from('chat_usage')
-      .update({ message_count: usage.message_count + 1 })
+      .select('id, message_count')
       .eq('user_id', user.id)
       .eq('report_id', reportId)
-      .lt('message_count', CHAT_LIMIT)
-      .select()
       .single()
 
-    if (!updated) {
+    if (usage && usage.message_count >= CHAT_LIMIT) {
       supabase
         .from('events')
         .insert({
@@ -144,13 +124,36 @@ async function handlePost(req, res) {
         .then(() => {})
       return res.status(403).json({ error: 'limit_reached' })
     }
-  } else {
-    await supabase
-      .from('chat_usage')
-      .upsert(
-        { user_id: user.id, report_id: reportId, message_count: 1 },
-        { onConflict: 'user_id,report_id' },
-      )
+
+    if (usage) {
+      const { data: updated } = await supabase
+        .from('chat_usage')
+        .update({ message_count: usage.message_count + 1 })
+        .eq('user_id', user.id)
+        .eq('report_id', reportId)
+        .lt('message_count', CHAT_LIMIT)
+        .select()
+        .single()
+
+      if (!updated) {
+        supabase
+          .from('events')
+          .insert({
+            user_id: user.id,
+            report_id: reportId,
+            type: 'chat_limit_reached',
+          })
+          .then(() => {})
+        return res.status(403).json({ error: 'limit_reached' })
+      }
+    } else {
+      await supabase
+        .from('chat_usage')
+        .upsert(
+          { user_id: user.id, report_id: reportId, message_count: 1 },
+          { onConflict: 'user_id,report_id' },
+        )
+    }
   }
 
   await supabase.from('chat_messages').insert({

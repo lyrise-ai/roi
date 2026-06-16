@@ -535,7 +535,6 @@ export default function ReportPage({
           )}
         </>
       )}
-    </>
     </ErrorBoundary>
   )
 }

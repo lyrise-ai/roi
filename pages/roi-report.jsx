@@ -946,7 +946,7 @@ export async function getServerSideProps({ req, res, query }) {
 
 // ── Main ──────────────────────────────────────────────────────────────────────
 
-export default function ROIReport({ isEmployee, isAlpha }) {
+function ROIReportInner({ isEmployee, isAlpha }) {
   const router = useRouter()
   const [step, setStep] = useState(1)
   const [viewState, setViewState] = useState(VIEW_STATES.FORM)
@@ -1003,8 +1003,12 @@ export default function ROIReport({ isEmployee, isAlpha }) {
           headers: { 'Content-Type': 'application/json' },
           body: JSON.stringify({
             error: message,
-            context: { page: 'roi-report', company: s1.companyName || '(unknown)' },
-            url: typeof window !== 'undefined' ? window.location.href : undefined,
+            context: {
+              page: 'roi-report',
+              company: s1.companyName || '(unknown)',
+            },
+            url:
+              typeof window !== 'undefined' ? window.location.href : undefined,
           }),
         }).catch(() => {})
       }
@@ -1082,6 +1086,7 @@ export default function ROIReport({ isEmployee, isAlpha }) {
             mode: 'generate',
             formData: payload,
             devOptions: { skipLLM, estimatesOnly },
+            isAlpha,
           }),
         })
 
@@ -1176,8 +1181,7 @@ export default function ROIReport({ isEmployee, isAlpha }) {
         )
       }
     },
-    [s1, s2, isAlpha],
-    [s1, s2, handleGenerationError],
+    [s1, s2, isAlpha, handleGenerationError],
   )
 
   // Enforce minimum loader visibility before transitioning to COMPLETE
@@ -1239,8 +1243,7 @@ export default function ROIReport({ isEmployee, isAlpha }) {
       )
     }, 8000)
     return () => clearTimeout(fallback)
-  }, [viewState, reportId, router, isAlpha])
-  }, [viewState, reportId, router, handleGenerationError])
+  }, [viewState, reportId, router, isAlpha, handleGenerationError])
 
   const next = useCallback(
     async ({ skipLLM = false } = {}) => {
@@ -1547,7 +1550,6 @@ export default function ROIReport({ isEmployee, isAlpha }) {
             </div>
           </motion.div>
         </div>
-
       </div>
     </div>
   )

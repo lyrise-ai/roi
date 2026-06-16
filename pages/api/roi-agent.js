@@ -137,6 +137,7 @@ export default async function handler(req, res) {
     reportId,
     emailOverride,
     shareToken,
+    isAlpha,
   } = req.body
 
   if (!mode || !['generate', 'chat'].includes(mode)) {
@@ -217,27 +218,30 @@ export default async function handler(req, res) {
       return
     }
 
-    const { data: usage } = await adminSupabase
-      .from('chat_usage')
-      .select('id, message_count')
-      .eq('user_id', user.id)
-      .eq('report_id', reportId)
-      .single()
+    // Employees chat without limits; clients and alpha testers are capped.
+    if (!isEmployeeChat) {
+      const { data: usage } = await adminSupabase
+        .from('chat_usage')
+        .select('id, message_count')
+        .eq('user_id', user.id)
+        .eq('report_id', reportId)
+        .single()
 
-    if (usage && usage.message_count >= CHAT_LIMIT) {
-      adminSupabase
-        .from('events')
-        .insert({
-          user_id: user.id,
-          report_id: reportId,
-          type: 'chat_limit_reached',
-        })
-        .then(({ error }) => {
-          if (error)
-            console.error('event insert failed (chat_limit_reached)', error)
-        })
-      res.status(403).json({ error: 'limit_reached' })
-      return
+      if (usage && usage.message_count >= CHAT_LIMIT) {
+        adminSupabase
+          .from('events')
+          .insert({
+            user_id: user.id,
+            report_id: reportId,
+            type: 'chat_limit_reached',
+          })
+          .then(({ error }) => {
+            if (error)
+              console.error('event insert failed (chat_limit_reached)', error)
+          })
+        res.status(403).json({ error: 'limit_reached' })
+        return
+      }
     }
 
     persistedReport = report
@@ -286,6 +290,23 @@ export default async function handler(req, res) {
       return
     }
     persistedReport.share_message_count = claimedCount
+  }
+
+  // Alpha testers get one report per account (keeps the guided tour to a single
+  // run). Normal clients and employees can generate freely.
+  if (mode === 'generate' && isAlpha && user) {
+    const { data: existingReport } = await supabase
+      .from('reports')
+      .select('id')
+      .eq('user_id', user.id)
+      .limit(1)
+      .maybeSingle()
+    if (existingReport) {
+      res
+        .status(409)
+        .json({ error: 'report_exists', report_id: existingReport.id })
+      return
+    }
   }
 
   res.setHeader('Content-Type', 'text/event-stream')
@@ -495,7 +516,7 @@ export default async function handler(req, res) {
       if (isShareLinkChat) {
         // Slot was already claimed atomically via claim_share_chat_slot
         // before the LLM ran, so no post-hoc increment is needed here.
-      } else {
+      } else if (userRole !== 'EMPLOYEE') {
         const { data: usage, error: usageReadErr } = await adminSupabase
           .from('chat_usage')
           .select('id, message_count')
