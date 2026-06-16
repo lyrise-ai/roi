@@ -30,6 +30,7 @@ import {
 import { persistReportEvidence } from '@/src/lib/roi/reportEvidence'
 import { persistUsage } from '@/src/lib/roi/services/usageStore'
 import { assessReportSpecificity } from '@/src/lib/roi/specificity'
+import { isEmployeeUser } from '@/src/lib/isEmployee'
 import { REPORT_CHAT_MESSAGE_LIMIT } from '@/src/lib/roi/constants'
 
 export const config = {
@@ -198,9 +199,7 @@ export default async function handler(req, res) {
         .eq('id', reportId)
         .single(),
     ])
-    const isEmployeeChat =
-      userData?.role === 'EMPLOYEE' ||
-      user.email?.endsWith('@lyrise.ai') === true
+    const isEmployeeChat = isEmployeeUser(user, userData)
 
     // Employees see all messages on the report; clients see only their own
     let msgQuery = adminSupabase

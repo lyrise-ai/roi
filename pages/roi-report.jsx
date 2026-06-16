@@ -13,6 +13,7 @@ import { PIPELINE_LOG_TOOL_NAMES } from '../src/lib/roi/constants'
 import { useRouter } from 'next/router'
 import { createClient as createBrowserClient } from '../src/lib/supabase-browser'
 import ErrorBoundary from '../src/components/shared/ErrorBoundary'
+import { isEmployeeUser } from '../src/lib/isEmployee'
 
 // ── Constants ─────────────────────────────────────────────────────────────────
 
@@ -727,8 +728,12 @@ function SuccessView({ email, reportId, isEmployee }) {
       })
 
       if (res.status === 403) {
-        setLimitReached(true)
-        return
+        const data = await res.json().catch(() => null)
+        if (data?.error === 'limit_reached') {
+          setLimitReached(true)
+          return
+        }
+        throw new Error('HTTP 403')
       }
       if (res.status === 429) {
         setMessages((prev) => prev.slice(0, -1))
@@ -938,8 +943,14 @@ export async function getServerSideProps({ req, res, query }) {
     .eq('id', user.id)
     .single()
 
-  const isEmployee =
-    userData?.role === 'EMPLOYEE' || user.email?.endsWith('@lyrise.ai')
+  const isEmployee = isEmployeeUser(user, userData)
+
+  // The one-report-per-client cap applies only to alpha users, which are handled
+  // above via ?alpha. Normal clients generate reports through the lyrise.ai
+  // marketing site and have no cap, so send them back to the home page.
+  if (!isEmployee) {
+    return { redirect: { destination: 'https://lyrise.ai', permanent: false } }
+  }
 
   return { props: { isEmployee, isAlpha: false } }
 }
