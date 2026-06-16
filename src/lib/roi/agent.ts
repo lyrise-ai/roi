@@ -2031,7 +2031,10 @@ ${
   } catch {
     /* usage not available — skip */
   }
-  tracker.flush()
+  // Hand the usage summary to the caller, which persists it once the report
+  // row (report_id) exists. In generate mode the report is saved AFTER the
+  // agent runs, so the agent itself has no report_id to write.
+  callbacks.onUsage?.(tracker.flush())
 
   if (mode === 'generate' && !state.assembled) {
     const done =

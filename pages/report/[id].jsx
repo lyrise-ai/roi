@@ -7,6 +7,7 @@ import { buildStateFromReportRow } from '@/src/lib/roi/reportState'
 import { motion } from 'framer-motion'
 import { useRouter } from 'next/router'
 import { trackReportAccess } from '@/src/lib/roi/services/reportAccess'
+import ErrorBoundary from '../../src/components/shared/ErrorBoundary'
 
 export async function getServerSideProps({ req, res, params, query }) {
   const supabase = createClient(req, res)
@@ -367,7 +368,10 @@ export default function ReportPage({
   }, [isAlpha])
 
   return (
-    <>
+    <ErrorBoundary
+      isEmployee={isEmployee}
+      pageContext={{ page: 'report', reportId }}
+    >
       <Head>
         <title>ROI Report | LyRise</title>
       </Head>
@@ -532,5 +536,6 @@ export default function ReportPage({
         </>
       )}
     </>
+    </ErrorBoundary>
   )
 }

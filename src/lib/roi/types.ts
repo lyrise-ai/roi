@@ -388,6 +388,9 @@ export interface AgentCallbacks {
   onReportUpdate(state: ReportState, changedSections?: string[]): void
   onDone(newMessages: import('ai').ModelMessage[]): void
   onError(err: Error): void
+  // Fired once with the per-run LLM usage summary. The caller persists it to
+  // roi_usage once a report_id is available (see usageStore.persistUsage).
+  onUsage?(summary: import('./services/usageTracker').UsageSummary): void
 }
 
 // ── SSE event types ──────────────────────────────────────────────────────────

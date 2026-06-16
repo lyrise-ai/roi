@@ -105,6 +105,37 @@ export async function sendReportEmail(
         content: pdfBase64,
       },
     ],
+  const res = await fetch('https://api.resend.com/emails', {
+    method: 'POST',
+    headers: {
+      'Content-Type': 'application/json',
+      Authorization: `Bearer ${apiKey}`,
+    },
+    body: JSON.stringify({
+      from: `LyRise AI <${fromEmail}>`,
+      to: [recipientEmail],
+      bcc, // CRM-tracking copy; filtered to avoid duplicates with `to`
+      subject: `Your AI Automation ROI Report — ${companyName}`,
+      html: `
+        <p>Hi,</p>
+        <p>Please find attached your personalised AI Automation ROI Analysis for <strong>${companyName}</strong>,
+        prepared by LyRise AI.</p>
+        <p>This report models the financial impact of deploying targeted AI workflows across your operations.
+        All figures are conservative estimates and should be validated with your actual volumes and rates.</p>
+        ${chatCta}
+        <p>Ready to explore next steps?
+        <a href="https://api.leadconnectorhq.com/widget/bookings/strategy-call-with-lyrisesivto9">Book a 30-minute discovery call</a>.</p>
+        <br>
+        <p>Best,<br>LyRise Team<br>LyRise AI — <a href="https://lyrise.ai">lyrise.ai</a></p>
+      `.trim(),
+      attachments: [
+        {
+          filename,
+          content: pdfBase64, // Resend accepts base64 content directly
+        },
+      ],
+    }),
+    signal: AbortSignal.timeout(30_000),
   })
 }
 

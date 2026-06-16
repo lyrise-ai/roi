@@ -11,6 +11,7 @@ import { createClient as createBrowserClient } from '../src/lib/supabase-browser
 import MainHeader from '../src/layout/MainHeader/index'
 import { getRoleForUser } from '../src/lib/authHelpers'
 import AlphaDashboardPanel from '../src/components/AlphaDashboardPanel'
+import ErrorBoundary from '../src/components/shared/ErrorBoundary'
 
 const STATUS_STYLES = {
   SUCCESS: { bg: 'bg-green-50', text: 'text-green-700', label: 'Done' },
@@ -76,18 +77,51 @@ function withRequester(reports, requesterEmailFor) {
   })
 }
 
+// Some Supabase columns (e.g. reports.created_at) are stored as `timestamp`
+// WITHOUT a timezone, so the API returns them with no offset (e.g.
+// "2026-06-10T15:59:39"). `new Date()` would then parse them as LOCAL time and
+// render the wrong hour — the value is actually UTC. Normalize a naive
+// timestamp to UTC by appending "Z" before parsing. Values that already carry a
+// zone ("Z" or "+00:00") are left untouched.
+function parseTimestamp(iso) {
+  if (!iso) return null
+  const hasZone = /[zZ]$|[+-]\d{2}:?\d{2}$/.test(iso)
+  return new Date(hasZone ? iso : `${iso}Z`)
+}
+
 function formatDate(iso) {
-  if (!iso) return '—'
-  return new Date(iso).toLocaleDateString('en-GB', {
+  const d = parseTimestamp(iso)
+  if (!d) return '—'
+  return d.toLocaleDateString('en-GB', {
     day: 'numeric',
     month: 'short',
     year: 'numeric',
   })
 }
 
+// Full timestamp (date + time) with 12-hour clock, matching the usage
+// dashboard's "When" column (e.g. "10 Jun 2026, 6:59:40 PM"). en-GB keeps the
+// day-month-year ordering; we uppercase the am/pm so it reads "PM" not "pm".
+function formatDateTime(iso) {
+  const d = parseTimestamp(iso)
+  if (!d) return '—'
+  return d
+    .toLocaleString('en-GB', {
+      day: 'numeric',
+      month: 'short',
+      year: 'numeric',
+      hour: 'numeric',
+      minute: '2-digit',
+      second: '2-digit',
+      hour12: true,
+    })
+    .replace(/\b(am|pm)\b/i, (m) => m.toUpperCase())
+}
+
 function timeAgo(iso) {
-  if (!iso) return '—'
-  const diff = Date.now() - new Date(iso).getTime()
+  const d = parseTimestamp(iso)
+  if (!d) return '—'
+  const diff = Date.now() - d.getTime()
   const mins = Math.floor(diff / 60000)
   if (mins < 1) return 'just now'
   if (mins < 60) return `${mins}m ago`
@@ -144,6 +178,13 @@ export async function getServerSideProps({ req, res }) {
     (r) => r.created_at >= oneWeekAgoIso,
   ).length
 
+  const todayStartIso = new Date(
+    new Date().setUTCHours(0, 0, 0, 0),
+  ).toISOString()
+  const reportsToday = (reports ?? []).filter(
+    (r) => r.created_at >= todayStartIso,
+  ).length
+
   if (!isEmployee) {
     return {
       props: {
@@ -154,6 +195,7 @@ export async function getServerSideProps({ req, res }) {
         isEmployee,
         reports: withRequester(reports, () => user.email),
         reportsThisWeek,
+        reportsToday,
         users: [],
         recentEvents: [],
       },
@@ -207,18 +249,20 @@ export async function getServerSideProps({ req, res }) {
       userId: user.id,
       reports: withRequester(reports, (r) => userEmailById[r.user_id]),
       reportsThisWeek,
+      reportsToday,
       users: usersWithStats,
       recentEvents,
     },
   }
 }
 
-export default function Dashboard({
+function DashboardInner({
   user,
   reports: initialReports,
   isEmployee,
   userId,
   reportsThisWeek,
+  reportsToday,
   users,
   recentEvents,
 }) {
@@ -277,6 +321,14 @@ export default function Dashboard({
           <div className="flex items-center gap-3">
             {isEmployee && (
               <Link
+                href="/dashboard/usage"
+                className="font-outfit text-sm font-semibold text-[#2C2C2C] hover:bg-gray-50 transition-colors border border-gray-300 rounded-full px-5 py-2.5"
+              >
+                Usage
+              </Link>
+            )}
+            {isEmployee && (
+              <Link
                 href="/roi-report/bulk"
                 className="font-outfit text-[#2C2C2C] hover:bg-gray-50 transition-colors border border-gray-300 rounded-full px-5 py-1.5 flex flex-col items-center leading-tight"
               >
@@ -300,10 +352,11 @@ export default function Dashboard({
         {/* Employee: stats + tabs */}
         {isEmployee && (
           <>
-            <div className="grid grid-cols-3 gap-4 mb-6">
+            <div className="grid grid-cols-4 gap-4 mb-6">
               <StatCard label="Total Users" value={users.length} />
               <StatCard label="Total Reports" value={reports.length} />
               <StatCard label="Reports This Week" value={reportsThisWeek} />
+              <StatCard label="Reports Today" value={reportsToday} />
             </div>
 
             <div className="flex gap-1 p-1 mb-6 bg-gray-100 rounded-xl w-fit">
@@ -362,7 +415,7 @@ export default function Dashboard({
                       Status
                     </th>
                     <th className="font-outfit font-semibold text-[11px] uppercase tracking-wider text-gray-400 text-left px-6 py-3.5">
-                      Date
+                      When
                     </th>
                     <th className="px-6 py-3.5" />
                   </tr>
@@ -395,8 +448,8 @@ export default function Dashboard({
                           <td className="px-6 py-4">
                             <StatusBadge status={r.status} />
                           </td>
-                          <td className="px-6 py-4 text-gray-400 font-outfit">
-                            {formatDate(r.created_at)}
+                          <td className="px-6 py-4 text-gray-400 font-outfit whitespace-nowrap">
+                            {formatDateTime(r.created_at)}
                           </td>
                           <td className="px-6 py-4 text-right">
                             <div className="flex items-center justify-end gap-3">
@@ -574,5 +627,14 @@ export default function Dashboard({
         {isEmployee && activeTab === 'Alpha' && <AlphaDashboardPanel />}
       </div>
     </div>
+  )
+}
+
+export default function Dashboard(props) {
+  const { isEmployee } = props
+  return (
+    <ErrorBoundary isEmployee={isEmployee} pageContext={{ page: 'dashboard' }}>
+      <DashboardInner {...props} />
+    </ErrorBoundary>
   )
 }
