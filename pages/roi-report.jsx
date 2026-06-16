@@ -1,7 +1,7 @@
 import React, { useState, useCallback, useEffect, useRef } from 'react'
 import Head from 'next/head'
 import { motion, AnimatePresence } from 'framer-motion'
-import { FaCheckCircle } from 'react-icons/fa'
+import { FaCheckCircle, FaStar } from 'react-icons/fa'
 import clsx from 'clsx'
 import MainHeader from '../src/layout/MainHeader'
 import ReportLoadingScreen from '../src/components/ROIGenerator/ReportLoadingScreen'
@@ -11,6 +11,7 @@ import GeneratingView from '../src/components/ROIGenerator/GeneratingView'
 import { drainSSE } from '../src/lib/drainSSE'
 import { PIPELINE_LOG_TOOL_NAMES } from '../src/lib/roi/constants'
 import { useRouter } from 'next/router'
+import { createClient as createBrowserClient } from '../src/lib/supabase-browser'
 import ErrorBoundary from '../src/components/shared/ErrorBoundary'
 
 // ── Constants ─────────────────────────────────────────────────────────────────
@@ -43,9 +44,6 @@ const CURRENCIES = [
   'NGN – Nigerian Naira (NGN)',
   'ZAR – South African Rand (ZAR)',
 ]
-// Aligned with the regions handled in roiCalculator.ts → toRegion(): UAE,
-// Saudi, Qatar/Kuwait/Bahrain/Oman (GCC peers), US, UK, Egypt. Anything else
-// falls through to the DEFAULT band.
 const COUNTRY_OPTS = [
   'Egypt',
   'United Arab Emirates',
@@ -76,11 +74,12 @@ const REVENUE_OPTS = [
   '$200M+',
   'Prefer not to say',
 ]
+
 const TOTAL_STEPS = 2
 const IS_DEV = process.env.NODE_ENV === 'development'
-// Minimum time the loader stays visible (ms). Override via NEXT_PUBLIC_ROI_MIN_LOADER_MS.
 const MIN_VISIBLE_DURATION =
   Number(process.env.NEXT_PUBLIC_ROI_MIN_LOADER_MS) || 3500
+
 const VIEW_STATES = {
   FORM: 'form',
   LOADING: 'loading',
@@ -92,6 +91,7 @@ const VIEW_STATES = {
   SUCCESS: 'success',
   ERROR: 'error',
 }
+
 const DEV_STEP1_PRESET = {
   companyName: 'LyRise',
   website: 'lyrise.ai',
@@ -108,9 +108,189 @@ const DEV_STEP2_PRESET = {
   currency: 'SAR – Saudi Riyal (SAR)',
 }
 
+// ── Typewriter hook (alpha splash) ────────────────────────────────────────────
+
+function useTypewriter(text, speed = 35, startDelay = 0) {
+  const [displayed, setDisplayed] = useState('')
+  useEffect(() => {
+    let timeout
+    let interval
+    timeout = setTimeout(() => {
+      let i = 0
+      interval = setInterval(() => {
+        setDisplayed(text.slice(0, i + 1))
+        i++
+        if (i >= text.length) clearInterval(interval)
+      }, speed)
+    }, startDelay)
+    return () => {
+      clearTimeout(timeout)
+      clearInterval(interval)
+    }
+  }, [text, speed, startDelay])
+  return displayed
+}
+
+// ── Tooltip (alpha form fields) ───────────────────────────────────────────────
+
+function Tooltip({ text, openLeft = false }) {
+  const [visible, setVisible] = useState(false)
+  return (
+    <span className="relative inline-flex items-center ml-1.5">
+      <button
+        type="button"
+        aria-label="More info"
+        onMouseEnter={() => setVisible(true)}
+        onMouseLeave={() => setVisible(false)}
+        onFocus={() => setVisible(true)}
+        onBlur={() => setVisible(false)}
+        className="w-4 h-4 rounded-full bg-slate-200 text-slate-500 text-[10px] font-bold flex items-center justify-center hover:bg-slate-300 transition-colors focus:outline-none"
+      >
+        ?
+      </button>
+      {visible && (
+        <span
+          role="tooltip"
+          className={clsx(
+            'absolute z-50 w-52 rounded-lg border border-slate-200 bg-white px-3 py-2 text-xs text-slate-600 shadow-lg leading-relaxed',
+            openLeft ? 'top-6 right-0' : 'top-6 left-0',
+          )}
+        >
+          {text}
+        </span>
+      )}
+    </span>
+  )
+}
+
+// ── Splash screen (alpha only) ────────────────────────────────────────────────
+
+function SplashScreen({ onExitComplete }) {
+  const [exiting, setExiting] = useState(false)
+  const line1 = useTypewriter(
+    'Welcome to The Alpha Tour! You are among the first to experience this.',
+    30,
+    1200,
+  )
+  const line2 = useTypewriter(
+    'This report is customised for you and will be sent to your email.',
+    30,
+    4100,
+  )
+
+  useEffect(() => {
+    const t = setTimeout(() => setExiting(true), 8050)
+    return () => clearTimeout(t)
+  }, [])
+
+  return (
+    <AnimatePresence onExitComplete={onExitComplete}>
+      {!exiting && (
+        <motion.div
+          key="splash"
+          initial={{ opacity: 1 }}
+          exit={{ opacity: 0 }}
+          transition={{ duration: 0.5 }}
+          className="fixed inset-0 flex flex-col items-center justify-center"
+          style={{ background: '#0f1729' }}
+        >
+          <button
+            type="button"
+            onClick={() => setExiting(true)}
+            className="absolute text-xs top-4 right-4"
+            style={{ color: 'rgba(255,255,255,0.3)' }}
+          >
+            Skip →
+          </button>
+
+          <div className="relative flex items-center justify-center mb-6">
+            <motion.div
+              className="absolute w-64 h-16 rounded-full blur-3xl opacity-20"
+              style={{ background: '#378ADD', zIndex: -1 }}
+              animate={{ opacity: [0.1, 0.25, 0.1] }}
+              transition={{ duration: 3, repeat: Infinity }}
+            />
+            <motion.div
+              initial={{ opacity: 0, scale: 0.8, y: 10 }}
+              animate={{ opacity: 1, scale: 1, y: 0 }}
+              transition={{ duration: 0.7, ease: 'easeOut' }}
+            >
+              <svg
+                width="152"
+                height="51"
+                viewBox="0 0 101 34"
+                fill="none"
+                xmlns="http://www.w3.org/2000/svg"
+                style={{
+                  filter: 'drop-shadow(0 0 20px rgba(55,138,221,0.3))',
+                }}
+              >
+                <path
+                  d="M100.717 11.1115V9.2424L99.9451 11.1115H99.8304L99.0609 9.2424V11.1115H98.7783V8.84229H99.184L99.8863 10.5491L100.594 8.84229H101V11.1115H100.717Z"
+                  fill="white"
+                />
+                <path
+                  d="M97.3945 11.1115V9.09411H96.6782V8.84229H98.399V9.09411H97.6771V11.1115H97.3945Z"
+                  fill="white"
+                />
+                <path
+                  fillRule="evenodd"
+                  clipRule="evenodd"
+                  d="M53.8583 22.3198L44.7675 13.3606H48.3742C52.0564 13.3522 55.0391 10.3639 55.0391 6.68168C55.0391 2.99668 52.0564 0.00839404 48.3742 0H38.1922C33.1277 0.00559598 29.023 4.1103 29.0174 9.17752V15.8645C28.8649 19.049 26.238 21.584 23.0171 21.5894C21.05 21.5866 19.458 19.9946 19.4552 18.0275V8.71572H16.1451V18.0275C16.1479 21.8217 19.2229 24.8967 23.0171 24.8995C25.2133 24.8967 27.3369 24.1182 29.0174 22.7033V24.6917C28.9072 26.9568 27.5002 28.9683 25.3898 29.8436C23.1877 30.7558 20.6555 30.2521 18.9711 28.5677L18.6465 28.2431L16.3046 30.5851L16.6292 30.9097C19.2621 33.5398 23.2185 34.326 26.6545 32.9018C30.0933 31.4777 32.3345 28.1256 32.3345 24.4042V9.1774H32.3275C32.3332 5.94014 34.9549 3.31566 38.1922 3.31286H48.3742C50.2293 3.31846 51.7318 4.82379 51.7318 6.68168C51.7318 8.53677 50.2293 10.0421 48.3742 10.0477H39.0735V24.8325H42.3864V15.6633L51.6926 24.8353H53.8583V22.3198ZM0 1.19776H3.86407V21.5198H14.9023V24.8327H0V1.19776ZM75.1536 16.3685L75.1704 16.3797C76.4603 17.3478 77.1122 18.5901 77.1122 20.0731C77.1122 23.1537 74.5464 25.2242 70.7243 25.2242C67.9907 25.2242 65.8894 24.1582 64.4763 22.0569L64.2217 21.6763L66.8407 19.8856L67.1009 20.2745C68.0186 21.6707 69.205 22.3479 70.7243 22.3479C72.5934 22.3479 73.8217 21.528 73.8469 20.2577C73.8693 19.27 73.2985 18.6461 70.1088 17.9801C66.6896 17.317 64.952 15.7529 64.952 13.327C64.952 10.3052 67.4031 8.27378 71.0489 8.27378C73.7378 8.27378 75.5873 9.28107 76.547 11.2705L76.7205 11.6342L74.0288 13.411L73.7966 12.9465C73.1922 11.7377 72.2521 11.1474 70.9174 11.1474C69.2778 11.1474 68.2173 11.8637 68.2173 12.9689C68.2173 13.7607 68.4551 14.463 71.3707 15.059C73.1922 15.4591 74.4653 15.8984 75.1536 16.3685ZM61.4048 8.66538H58.3325V24.8324H61.4048V8.66538ZM94.6751 16.6846C94.6751 14.0629 93.9392 11.9812 92.4898 10.4982C91.0488 9.02086 89.163 8.27378 86.8826 8.27378C84.591 8.27378 82.6492 9.08801 81.1103 10.6969C79.5546 12.3197 78.7655 14.3567 78.7655 16.749C78.7655 19.1329 79.5658 21.1587 81.141 22.7678C82.7023 24.3988 84.7113 25.2242 87.112 25.2242C89.8849 25.2242 92.2072 24.0798 94.0175 21.8274L94.3029 21.4721L91.8855 19.4827L91.6085 19.9248C90.6208 21.4469 88.9251 22.3618 87.112 22.3479C85.8081 22.3618 84.5574 21.8414 83.6453 20.9097C82.7723 20.0842 82.2043 18.9846 82.0336 17.7955H94.6751V16.6846ZM82.07 15.115C82.2043 14.1077 82.6967 13.2375 83.5697 12.468C84.4819 11.6258 85.6738 11.1558 86.9162 11.1474C89.4847 11.1474 91.1999 12.6891 91.3902 15.115H82.07Z"
+                  fill="white"
+                />
+                <path
+                  d="M60.6771 1.43803C59.9356 1.11346 59.071 1.26456 58.4806 1.82136C58.0805 2.1907 57.8511 2.71114 57.8511 3.25955C57.8511 3.80516 58.0777 4.3284 58.4806 4.69773C58.8528 5.05868 59.3536 5.26014 59.874 5.25734C60.151 5.25734 60.4281 5.20138 60.6855 5.09226C61.4214 4.78168 61.8998 4.05978 61.897 3.26235C61.897 2.46211 61.413 1.74302 60.6771 1.43803Z"
+                  fill="white"
+                />
+              </svg>
+            </motion.div>
+          </div>
+
+          <motion.div
+            initial={{ width: 0 }}
+            animate={{ width: '120px' }}
+            transition={{ duration: 0.6, delay: 0.8 }}
+            style={{
+              height: '1px',
+              background: '#378ADD',
+              marginBottom: '1rem',
+            }}
+          />
+
+          <motion.p
+            initial={{ opacity: 0 }}
+            animate={{ opacity: 1 }}
+            transition={{ duration: 0.5, delay: 1.2 }}
+            className="mb-3 text-sm tracking-widest uppercase"
+            style={{ color: 'rgba(255,255,255,0.5)' }}
+          >
+            AI ROI Report · Alpha
+          </motion.p>
+
+          <div className="text-center space-y-2 min-h-[48px]">
+            <p className="text-sm font-light text-white/70">
+              {line1}
+              {line1.length > 0 && line1.length < 70 && (
+                <span className="animate-pulse ml-0.5">|</span>
+              )}
+            </p>
+            <p className="text-xs text-white/40">
+              {line2}
+              {line2.length > 0 && line2.length < 65 && (
+                <span className="animate-pulse ml-0.5">|</span>
+              )}
+            </p>
+          </div>
+        </motion.div>
+      )}
+    </AnimatePresence>
+  )
+}
+
 // ── Helpers ───────────────────────────────────────────────────────────────────
 
-function validateStep(step, s1, s2) {
+function validateStep(step, s1, s2, isAlpha = false) {
   const errors = {}
   if (
     step === 1 &&
@@ -123,6 +303,9 @@ function validateStep(step, s1, s2) {
       errors.email = 'Please enter a valid work email'
     }
     if (!s2.currency) errors.currency = 'Please select a currency'
+    if (isAlpha && !s2.recipientName.trim()) {
+      errors.recipientName = 'Please enter your name'
+    }
   }
   return errors
 }
@@ -140,8 +323,8 @@ function Pill({ label, active, onClick, dimmed }) {
         active
           ? 'bg-gray-900 border-gray-900 text-white'
           : dimmed
-          ? 'border-gray-200 text-gray-400 opacity-40 cursor-not-allowed'
-          : 'border-gray-200 text-gray-500 hover:border-gray-400 hover:text-gray-900 cursor-pointer',
+            ? 'border-gray-200 text-gray-400 opacity-40 cursor-not-allowed'
+            : 'border-gray-200 text-gray-500 hover:border-gray-400 hover:text-gray-900 cursor-pointer',
       )}
     >
       {label}
@@ -207,7 +390,7 @@ function TextInput({
 
 // ── Step 1 ────────────────────────────────────────────────────────────────────
 
-function Step1({ data, onChange, errors }) {
+function Step1({ data, onChange, errors, isAlpha }) {
   return (
     <div className="space-y-5">
       <div>
@@ -274,11 +457,14 @@ function Step1({ data, onChange, errors }) {
         />
       </div>
       <div className="space-y-2">
-        <label className="text-[12.5px] font-semibold text-gray-800">
+        <label className="text-[12.5px] font-semibold text-gray-800 flex items-center">
           Team size{' '}
-          <span className="font-normal text-gray-400">
+          <span className="ml-1 font-normal text-gray-400">
             — drives realistic workflow volumes
           </span>
+          {isAlpha && (
+            <Tooltip text="Larger teams have more repetitive work to automate. This sizes the opportunity accurately." />
+          )}
         </label>
         <PillGroup
           options={TEAM_SIZE_OPTS}
@@ -287,11 +473,17 @@ function Step1({ data, onChange, errors }) {
         />
       </div>
       <div className="space-y-2">
-        <label className="text-[12.5px] font-semibold text-gray-800">
+        <label className="text-[12.5px] font-semibold text-gray-800 flex items-center">
           Estimated annual revenue{' '}
-          <span className="font-normal text-gray-400">
+          <span className="ml-1 font-normal text-gray-400">
             — sets the 5–20% Total Financial Gain band
           </span>
+          {isAlpha && (
+            <Tooltip
+              text="Used to estimate scale only — not shared externally. Pick the closest band."
+              openLeft
+            />
+          )}
         </label>
         <PillGroup
           options={REVENUE_OPTS}
@@ -305,7 +497,16 @@ function Step1({ data, onChange, errors }) {
 
 // ── Step 2 ────────────────────────────────────────────────────────────────────
 
-function Step2({ data, onChange, errors, isDev }) {
+function Step2({
+  data,
+  onChange,
+  errors,
+  isDev,
+  isAlpha,
+  intakeRating,
+  onIntakeRatingChange,
+}) {
+  const [intakeHovered, setIntakeHovered] = useState(0)
   return (
     <div className="space-y-5">
       <div>
@@ -316,7 +517,9 @@ function Step2({ data, onChange, errors, isDev }) {
           Where should we send your report?
         </h2>
         <p className="text-sm text-gray-500">
-          Your report is generated and emailed — usually ready in 60 seconds.
+          {isAlpha
+            ? 'Your report is generated and displayed here — usually ready in 60 seconds.'
+            : 'Your report is generated and emailed — usually ready in 60 seconds.'}
         </p>
         {isDev && (
           <p className="mt-2 text-xs text-amber-600">
@@ -341,8 +544,9 @@ function Step2({ data, onChange, errors, isDev }) {
         value={data.recipientName}
         onChange={(v) => onChange('recipientName', v)}
         placeholder="e.g. Sarah Al-Rashid"
-        optional
+        optional={!isAlpha}
         autoComplete="name"
+        error={errors.recipientName}
       />
       <TextInput
         id="recipientTitle"
@@ -353,8 +557,11 @@ function Step2({ data, onChange, errors, isDev }) {
         optional
       />
       <div className="space-y-2">
-        <label className="text-[12.5px] font-semibold text-gray-800">
-          Operating currency <span className="text-red-500">*</span>
+        <label className="text-[12.5px] font-semibold text-gray-800 flex items-center">
+          Operating currency <span className="ml-1 text-red-500">*</span>
+          {isAlpha && (
+            <Tooltip text="Every figure in your report will display in this currency." />
+          )}
         </label>
         <PillGroup
           options={CURRENCIES}
@@ -363,11 +570,42 @@ function Step2({ data, onChange, errors, isDev }) {
           error={errors.currency}
         />
       </div>
+
+      {/* Alpha only: intake clarity star rating */}
+      {isAlpha && (
+        <div className="pt-4 border-t border-gray-100">
+          <p className="mb-2 text-xs text-gray-400">
+            Optional — How clear was this form?
+          </p>
+          <div className="flex gap-1.5">
+            {[1, 2, 3, 4, 5].map((star) => (
+              <button
+                key={star}
+                type="button"
+                onClick={() => onIntakeRatingChange(star)}
+                onMouseEnter={() => setIntakeHovered(star)}
+                onMouseLeave={() => setIntakeHovered(0)}
+                aria-label={`${star} star${star > 1 ? 's' : ''}`}
+                className="transition-transform focus:outline-none hover:scale-110"
+              >
+                <FaStar
+                  className={clsx(
+                    'w-5 h-5 transition-colors',
+                    star <= (intakeHovered || intakeRating)
+                      ? 'text-amber-400'
+                      : 'text-slate-200',
+                  )}
+                />
+              </button>
+            ))}
+          </div>
+        </div>
+      )}
     </div>
   )
 }
 
-// ── Generating & Success views ────────────────────────────────────────────────
+// ── Error view ────────────────────────────────────────────────────────────────
 
 function ErrorView({ message, onRetry, onUseEstimates, isEmployee }) {
   const isResearchFailure =
@@ -445,6 +683,8 @@ function ErrorView({ message, onRetry, onUseEstimates, isEmployee }) {
   )
 }
 
+// ── Success view ──────────────────────────────────────────────────────────────
+
 function SuccessView({ email, reportId, isEmployee }) {
   const [messages, setMessages] = useState([])
   const [inputValue, setInputValue] = useState('')
@@ -454,7 +694,6 @@ function SuccessView({ email, reportId, isEmployee }) {
 
   const userSentCount = messages.filter((m) => m.role === 'user').length
 
-  // Load existing conversation from DB when reportId is set
   useEffect(() => {
     if (!reportId) return
     fetch(`/api/chat?reportId=${reportId}`)
@@ -492,7 +731,6 @@ function SuccessView({ email, reportId, isEmployee }) {
         return
       }
       if (res.status === 429) {
-        // Remove the optimistic user message we added
         setMessages((prev) => prev.slice(0, -1))
         setInputValue(trimmed)
         return
@@ -518,7 +756,6 @@ function SuccessView({ email, reportId, isEmployee }) {
 
   return (
     <div className="p-8">
-      {/* ── Success header ── */}
       <div className="pb-8 text-center border-b border-gray-100">
         <div className="flex items-center justify-center mx-auto mb-6 border border-green-100 rounded-full w-14 h-14 bg-green-50">
           <FaCheckCircle className="text-3xl text-green-500" />
@@ -545,7 +782,6 @@ function SuccessView({ email, reportId, isEmployee }) {
         </a>
       </div>
 
-      {/* ── Chat ── */}
       <div className="pt-6">
         <div className="flex items-center justify-between mb-3">
           <h3 className="text-sm font-semibold text-gray-900">
@@ -562,7 +798,6 @@ function SuccessView({ email, reportId, isEmployee }) {
           )}
         </div>
 
-        {/* Message history */}
         {messages.length > 0 && (
           <div className="pr-1 mb-4 space-y-3 overflow-y-auto max-h-72">
             {messages.map((msg, i) => (
@@ -602,7 +837,6 @@ function SuccessView({ email, reportId, isEmployee }) {
           </div>
         )}
 
-        {/* Limit reached banner */}
         {limitReached ? (
           <div className="p-5 text-center border bg-amber-50 border-amber-200 rounded-xl">
             <p className="mb-2 font-mono text-xs font-semibold text-amber-500">
@@ -616,7 +850,7 @@ function SuccessView({ email, reportId, isEmployee }) {
             </p>
             <a
               href="https://api.leadconnectorhq.com/widget/bookings/strategy-call-with-lyrisesivto9"
-              className="inline-flex items-center gap-2 px-4 py-2 bg-amber-600 text-white text-xs font-semibold rounded-lg hover:bg-amber-700 transition-colors"
+              className="inline-flex items-center gap-2 px-4 py-2 text-xs font-semibold text-white transition-colors rounded-lg bg-amber-600 hover:bg-amber-700"
             >
               Contact Sales →
             </a>
@@ -652,12 +886,42 @@ function SuccessView({ email, reportId, isEmployee }) {
   )
 }
 
-// ── Main ──────────────────────────────────────────────────────────────────────
+// ── SSE log mapper ────────────────────────────────────────────────────────────
 
-export async function getServerSideProps({ req, res }) {
-  const { createClient, createAdminClient } = await import(
-    '../src/lib/supabase-server'
-  )
+const PIPELINE_LOG_TOOLS = new Set(PIPELINE_LOG_TOOL_NAMES)
+
+function sseEventToLogLine(event) {
+  if (event.type !== 'tool_start') return null
+  if (PIPELINE_LOG_TOOLS.has(event.tool)) return null
+  const labels = {
+    search_evidence: 'Searching evidence base…',
+    update_copy: 'Updating report section…',
+    update_workflow: 'Updating workflow assumptions…',
+    add_workflow: 'Adding workflow…',
+    remove_workflow: 'Removing workflow…',
+    scale_rates: 'Adjusting salary rates…',
+    set_currency: 'Setting currency…',
+    update_globals: 'Updating global inputs…',
+  }
+  return labels[event.tool] ?? `[${event.tool}]`
+}
+
+// ── Server-side auth / alpha detection ───────────────────────────────────────
+
+export async function getServerSideProps({ req, res, query }) {
+  // Alpha mode: ?alpha=<ALPHA_TOUR_TOKEN> bypasses login and activates the alpha UX.
+  // If ALPHA_TOUR_TOKEN is set, the value must match exactly; otherwise any non-empty
+  // value works (useful in dev when the env var isn't configured).
+  if (query.alpha) {
+    const validToken = process.env.ALPHA_TOUR_TOKEN
+    if (validToken && query.alpha !== validToken) {
+      return { redirect: { destination: '/auth/login', permanent: false } }
+    }
+    return { props: { isEmployee: false, isAlpha: true } }
+  }
+
+  const { createClient, createAdminClient } =
+    await import('../src/lib/supabase-server')
   const supabase = createClient(req, res)
   const {
     data: { user },
@@ -677,34 +941,19 @@ export async function getServerSideProps({ req, res }) {
   const isEmployee =
     userData?.role === 'EMPLOYEE' || user.email?.endsWith('@lyrise.ai')
 
-  return { props: { isEmployee } }
+  return { props: { isEmployee, isAlpha: false } }
 }
 
-// Tools with pipeline_log coverage emit their own messages from the server-side
-// execute function. Returning null here prevents a duplicate tool_start entry
-// from flooding the log before the classified pipeline_log message arrives.
-const PIPELINE_LOG_TOOLS = new Set(PIPELINE_LOG_TOOL_NAMES)
+// ── Main ──────────────────────────────────────────────────────────────────────
 
-function sseEventToLogLine(event) {
-  if (event.type !== 'tool_start') return null
-  if (PIPELINE_LOG_TOOLS.has(event.tool)) return null
-  const labels = {
-    search_evidence: 'Searching evidence base…',
-    update_copy: 'Updating report section…',
-    update_workflow: 'Updating workflow assumptions…',
-    add_workflow: 'Adding workflow…',
-    remove_workflow: 'Removing workflow…',
-    scale_rates: 'Adjusting salary rates…',
-    set_currency: 'Setting currency…',
-    update_globals: 'Updating global inputs…',
-  }
-  return labels[event.tool] ?? `[${event.tool}]`
-}
-
-function ROIReportInner({ isEmployee }) {
+function ROIReportInner({ isEmployee, isAlpha }) {
   const router = useRouter()
   const [step, setStep] = useState(1)
   const [viewState, setViewState] = useState(VIEW_STATES.FORM)
+
+  // Alpha-specific UI state
+  const [showSplash, setShowSplash] = useState(isAlpha)
+  const [intakeRating, setIntakeRating] = useState(0)
 
   const [isGenerationComplete, setIsGenerationComplete] = useState(false)
   const generationStartedAt = useRef(Date.now())
@@ -713,7 +962,6 @@ function ROIReportInner({ isEmployee }) {
   const [reportState, setReportState] = useState(null)
   const [errorMessage, setErrorMessage] = useState('')
   const [reportId, setReportId] = useState(null)
-  const [initialMessagesUsed, setInitialMessagesUsed] = useState(0)
 
   const [s1, setS1] = useState(
     IS_DEV
@@ -735,6 +983,16 @@ function ROIReportInner({ isEmployee }) {
   )
   const [errors, setErrors] = useState({})
 
+  // Generate a unique per-session alpha token (used as alpha_feedback PK)
+  useEffect(() => {
+    if (!isAlpha) return
+    if (!localStorage.getItem('alpha_token')) {
+      localStorage.setItem(
+        'alpha_token',
+        `alpha_${Date.now()}_${Math.random().toString(36).slice(2, 8)}`,
+      )
+    }
+  }, [isAlpha])
   const handleGenerationError = useCallback(
     (message) => {
       setErrorMessage(message)
@@ -745,8 +1003,12 @@ function ROIReportInner({ isEmployee }) {
           headers: { 'Content-Type': 'application/json' },
           body: JSON.stringify({
             error: message,
-            context: { page: 'roi-report', company: s1.companyName || '(unknown)' },
-            url: typeof window !== 'undefined' ? window.location.href : undefined,
+            context: {
+              page: 'roi-report',
+              company: s1.companyName || '(unknown)',
+            },
+            url:
+              typeof window !== 'undefined' ? window.location.href : undefined,
           }),
         }).catch(() => {})
       }
@@ -774,6 +1036,31 @@ function ROIReportInner({ isEmployee }) {
       setReportState(null)
       setErrorMessage('')
 
+      // Alpha: mark intake step as complete
+      if (isAlpha) {
+        try {
+          const token = localStorage.getItem('alpha_token')
+          if (token) {
+            createBrowserClient()
+              .from('alpha_feedback')
+              .upsert(
+                {
+                  alpha_token: token,
+                  step_intake_completed: true,
+                  user_name: s2.recipientName.trim() || null,
+                  user_email: s2.email.trim() || null,
+                },
+                { onConflict: 'alpha_token' },
+              )
+              .then(({ error }) => {
+                if (error) console.error('[alpha] intake tracking:', error)
+              })
+          }
+        } catch {
+          /* non-critical */
+        }
+      }
+
       const payload = {
         'Company Name': s1.companyName.trim(),
         'Company Website URL': s1.website.trim(),
@@ -799,6 +1086,7 @@ function ROIReportInner({ isEmployee }) {
             mode: 'generate',
             formData: payload,
             devOptions: { skipLLM, estimatesOnly },
+            isAlpha,
           }),
         })
 
@@ -813,7 +1101,7 @@ function ROIReportInner({ isEmployee }) {
             try {
               const existing = await fetch('/api/roi-agent')
               if (!existing.ok) {
-                // eslint-disable-next-line no-console -- intentional 409 fallback diagnostics
+                // eslint-disable-next-line no-console
                 console.warn(
                   'GET /api/roi-agent failed during 409 fallback:',
                   existing.status,
@@ -821,9 +1109,8 @@ function ROIReportInner({ isEmployee }) {
               } else {
                 const existingData = await existing.json()
                 if (existingData?.report?.rendered_html) {
-                  const { buildStateFromReportRow } = await import(
-                    '../src/lib/roi/reportState'
-                  )
+                  const { buildStateFromReportRow } =
+                    await import('../src/lib/roi/reportState')
                   const builtState = buildStateFromReportRow(
                     existingData.report,
                   )
@@ -835,13 +1122,15 @@ function ROIReportInner({ isEmployee }) {
                 }
               }
             } catch (err) {
-              // eslint-disable-next-line no-console -- intentional 409 fallback diagnostics
+              // eslint-disable-next-line no-console
               console.warn(
                 'Failed to load existing report from 409 fallback:',
                 err,
               )
             }
-            window.location.href = `/report/${data.report_id}`
+            window.location.href = isAlpha
+              ? `/report/${data.report_id}?alpha=true`
+              : `/report/${data.report_id}`
           }
           return
         }
@@ -892,21 +1181,18 @@ function ROIReportInner({ isEmployee }) {
         )
       }
     },
-    [s1, s2, handleGenerationError],
+    [s1, s2, isAlpha, handleGenerationError],
   )
 
-  // Finalisation lifecycle: enforce minimum visible loader duration, then
-  // transition to COMPLETE once FINALISING and renderedHtml are available.
+  // Enforce minimum loader visibility before transitioning to COMPLETE
   useEffect(() => {
     if (viewState !== VIEW_STATES.FINALISING) return () => {}
     if (!reportState?.renderedHtml) return () => {}
 
     let timeout
-
     const elapsed = Date.now() - generationStartedAt.current
     const remaining = Math.max(0, MIN_VISIBLE_DURATION - elapsed)
 
-    // Force a paint cycle so the FINALISING state visually mounts
     const rafId = requestAnimationFrame(() => {
       timeout = setTimeout(() => {
         setViewState(VIEW_STATES.COMPLETE)
@@ -919,28 +1205,49 @@ function ROIReportInner({ isEmployee }) {
     }
   }, [viewState, reportState])
 
-  // COMPLETE lifecycle: brief beat, then navigate to the persisted report.
-  // If reportId hasn't arrived within 8s of COMPLETE, show an error — the
-  // report save likely failed server-side (check server logs).
+  // COMPLETE: track generation (alpha), then navigate to report
   useEffect(() => {
     if (viewState !== VIEW_STATES.COMPLETE) return () => {}
+
+    if (isAlpha) {
+      try {
+        const token = localStorage.getItem('alpha_token')
+        if (token) {
+          createBrowserClient()
+            .from('alpha_feedback')
+            .upsert(
+              { alpha_token: token, step_generation_completed: true },
+              { onConflict: 'alpha_token' },
+            )
+            .then(({ error }) => {
+              if (error) console.error('[alpha] generation tracking:', error)
+            })
+        }
+      } catch {
+        /* non-critical */
+      }
+    }
+
     if (reportId) {
       const timeout = setTimeout(() => {
-        router.push(`/report/${reportId}`)
+        router.push(
+          isAlpha ? `/report/${reportId}?alpha=true` : `/report/${reportId}`,
+        )
       }, 400)
       return () => clearTimeout(timeout)
     }
+
     const fallback = setTimeout(() => {
       handleGenerationError(
         'Report was generated but could not be saved. Please try again or check server logs.',
       )
     }, 8000)
     return () => clearTimeout(fallback)
-  }, [viewState, reportId, router, handleGenerationError])
+  }, [viewState, reportId, router, isAlpha, handleGenerationError])
 
   const next = useCallback(
     async ({ skipLLM = false } = {}) => {
-      const currentErrors = validateStep(step, s1, s2)
+      const currentErrors = validateStep(step, s1, s2, isAlpha)
       setErrors(currentErrors)
       if (Object.keys(currentErrors).length) return
       if (step < TOTAL_STEPS) {
@@ -972,7 +1279,13 @@ function ROIReportInner({ isEmployee }) {
     setErrors({})
   }, [])
 
-  // Non-form views
+  // ── Renders ───────────────────────────────────────────────────────────────
+
+  // Alpha splash — shown until animation completes
+  if (isAlpha && showSplash) {
+    return <SplashScreen onExitComplete={() => setShowSplash(false)} />
+  }
+
   if (viewState === VIEW_STATES.LOADING) {
     return (
       <div className="rebranding-landing-page -mt-[12px]">
@@ -984,7 +1297,6 @@ function ROIReportInner({ isEmployee }) {
     )
   }
 
-  // Loader state animates out smoothly on completion, before navigation
   if (
     viewState === VIEW_STATES.GENERATING ||
     viewState === VIEW_STATES.FINALISING ||
@@ -1044,6 +1356,7 @@ function ROIReportInner({ isEmployee }) {
     )
   }
 
+  // ── Form ──────────────────────────────────────────────────────────────────
   if (viewState === VIEW_STATES.DEMO) {
     return (
       <DemoReportViewer
@@ -1110,9 +1423,23 @@ function ROIReportInner({ isEmployee }) {
           name="description"
           content="Discover how much time and money AI can save your business."
         />
+        {isAlpha && <meta name="robots" content="noindex,nofollow" />}
       </Head>
 
-      <div className="flex flex-col items-center justify-center min-h-screen p-4 font-sans text-gray-900">
+      {/* Alpha testing banner */}
+      {isAlpha && (
+        <div className="fixed top-0 left-0 right-0 z-50 flex items-center justify-center gap-2 py-1 text-xs font-semibold bg-amber-400 text-amber-900">
+          <span>🧪</span>
+          <span>Alpha testing — your feedback shapes this product</span>
+        </div>
+      )}
+
+      <div
+        className={clsx(
+          'flex flex-col items-center justify-center min-h-screen p-4 font-sans text-gray-900',
+          isAlpha && 'pt-10',
+        )}
+      >
         <div className="w-full max-w-xl">
           <motion.div
             initial={{ opacity: 0, y: 20 }}
@@ -1152,7 +1479,12 @@ function ROIReportInner({ isEmployee }) {
                   transition={{ duration: 0.18 }}
                 >
                   {step === 1 && (
-                    <Step1 data={s1} onChange={changeS1} errors={errors} />
+                    <Step1
+                      data={s1}
+                      onChange={changeS1}
+                      errors={errors}
+                      isAlpha={isAlpha}
+                    />
                   )}
                   {step === 2 && (
                     <Step2
@@ -1160,13 +1492,19 @@ function ROIReportInner({ isEmployee }) {
                       onChange={changeS2}
                       errors={errors}
                       isDev={IS_DEV}
+                      isAlpha={isAlpha}
+                      intakeRating={intakeRating}
+                      onIntakeRatingChange={(v) => {
+                        setIntakeRating(v)
+                        localStorage.setItem('alpha_intake_rating', String(v))
+                      }}
                     />
                   )}
                 </motion.div>
               </AnimatePresence>
             </div>
 
-            {/* Nav */}
+            {/* Navigation footer */}
             <div className="flex items-center justify-between py-5 mt-4 border-t border-gray-100 px-7">
               <button
                 type="button"
@@ -1212,7 +1550,6 @@ function ROIReportInner({ isEmployee }) {
             </div>
           </motion.div>
         </div>
-
       </div>
     </div>
   )

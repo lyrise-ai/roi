@@ -10,6 +10,7 @@ import {
 import { createClient as createBrowserClient } from '../src/lib/supabase-browser'
 import MainHeader from '../src/layout/MainHeader/index'
 import { getRoleForUser } from '../src/lib/authHelpers'
+import AlphaDashboardPanel from '../src/components/AlphaDashboardPanel'
 import ErrorBoundary from '../src/components/shared/ErrorBoundary'
 
 const STATUS_STYLES = {
@@ -148,7 +149,7 @@ export async function getServerSideProps({ req, res }) {
   } = await supabase.auth.getUser()
 
   if (!user) {
-    return { redirect: { destination: 'auth/login', permanent: false } }
+    return { redirect: { destination: '/auth/login', permanent: false } }
   }
 
   const { role, error: roleError } = await getRoleForUser(user.id)
@@ -359,20 +360,22 @@ function DashboardInner({
             </div>
 
             <div className="flex gap-1 p-1 mb-6 bg-gray-100 rounded-xl w-fit">
-              {['Reports', 'My Reports', 'Users', 'Activity'].map((tab) => (
-                <button
-                  key={tab}
-                  type="button"
-                  onClick={() => setActiveTab(tab)}
-                  className={`font-outfit text-sm font-medium px-4 py-1.5 rounded-lg transition-colors ${
-                    activeTab === tab
-                      ? 'bg-white text-[#2C2C2C] shadow-sm'
-                      : 'text-gray-500 hover:text-gray-700'
-                  }`}
-                >
-                  {tab}
-                </button>
-              ))}
+              {['Reports', 'My Reports', 'Users', 'Activity', 'Alpha'].map(
+                (tab) => (
+                  <button
+                    key={tab}
+                    type="button"
+                    onClick={() => setActiveTab(tab)}
+                    className={`font-outfit text-sm font-medium px-4 py-1.5 rounded-lg transition-colors ${
+                      activeTab === tab
+                        ? 'bg-white text-[#2C2C2C] shadow-sm'
+                        : 'text-gray-500 hover:text-gray-700'
+                    }`}
+                  >
+                    {tab}
+                  </button>
+                ),
+              )}
             </div>
           </>
         )}
@@ -619,6 +622,9 @@ function DashboardInner({
             )}
           </div>
         )}
+
+        {/* Alpha tab */}
+        {isEmployee && activeTab === 'Alpha' && <AlphaDashboardPanel />}
       </div>
     </div>
   )
