@@ -945,26 +945,11 @@ export async function getServerSideProps({ req, res, query }) {
 
   const isEmployee = isEmployeeUser(user, userData)
 
+  // The one-report-per-client cap applies only to alpha users, which are handled
+  // above via ?alpha. Normal clients generate reports through the lyrise.ai
+  // marketing site and have no cap, so send them back to the home page.
   if (!isEmployee) {
-    const { data: existingReport } = await admin
-      .from('reports')
-      .select('id, status')
-      .eq('user_id', user.id)
-      .order('created_at', { ascending: false })
-      .limit(1)
-      .maybeSingle()
-
-    if (existingReport?.id) {
-      return {
-        redirect: {
-          destination:
-            existingReport.status === 'SUCCESS'
-              ? `/report/${existingReport.id}`
-              : '/dashboard',
-          permanent: false,
-        },
-      }
-    }
+    return { redirect: { destination: 'https://lyrise.ai', permanent: false } }
   }
 
   return { props: { isEmployee, isAlpha: false } }

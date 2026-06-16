@@ -85,7 +85,7 @@ async function handlePost(req, res) {
   if (!report) {
     return res.status(404).json({ error: 'Report not found' })
   }
-  if (report.user_id !== user.id && userRole !== 'EMPLOYEE') {
+  if (report.user_id !== user.id && !isEmployee) {
     return res.status(403).json({ error: 'Unauthorized' })
   }
 
@@ -109,7 +109,7 @@ async function handlePost(req, res) {
   }
 
   // Employees chat without limits; clients and alpha testers are capped.
-  if (userRole !== 'EMPLOYEE') {
+  if (!isEmployee) {
     const { data: usage } = await supabase
       .from('chat_usage')
       .select('id, message_count')
