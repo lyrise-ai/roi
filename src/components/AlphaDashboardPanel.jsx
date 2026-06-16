@@ -12,7 +12,8 @@ const fmtDate = (iso) => {
   })
 }
 
-const isValidText = (val) => val != null && val.length >= 3 && !/^[^\w\s]$/.test(val)
+const isValidText = (val) =>
+  val != null && val.length >= 3 && !/^[^\w\s]$/.test(val)
 
 const disappointmentColor = (val) => {
   if (val === 'Very disappointed') return 'text-emerald-600 bg-emerald-50'
@@ -31,18 +32,111 @@ function Stars({ value }) {
   )
 }
 
-function getWordFrequency(responses, field, { extraStopWords = [], limit = 15 } = {}) {
+function getWordFrequency(
+  responses,
+  field,
+  { extraStopWords = [], limit = 15 } = {},
+) {
   const stopWords = new Set([
-    'the','a','an','and','or','but','in','on','at','to','for','of','with',
-    'is','it','this','that','was','are','be','as','by','from','have','has',
-    'i','my','we','our','you','your','they','their','not','no','so','if',
-    'its','will','can','do','all','more','about','would','there','what',
-    'which','when','how','who','been','were','had','did','get','got','just',
-    'also','very','really','good','great','nice','like','think','know',
-    'use','need',
-    'too','much','many','most','some','any','each','few','those','these',
-    'than','then','them','into','out','up','down','over','under','again',
-    'further','once','here','where','why','both','same','other','such','own',
+    'the',
+    'a',
+    'an',
+    'and',
+    'or',
+    'but',
+    'in',
+    'on',
+    'at',
+    'to',
+    'for',
+    'of',
+    'with',
+    'is',
+    'it',
+    'this',
+    'that',
+    'was',
+    'are',
+    'be',
+    'as',
+    'by',
+    'from',
+    'have',
+    'has',
+    'i',
+    'my',
+    'we',
+    'our',
+    'you',
+    'your',
+    'they',
+    'their',
+    'not',
+    'no',
+    'so',
+    'if',
+    'its',
+    'will',
+    'can',
+    'do',
+    'all',
+    'more',
+    'about',
+    'would',
+    'there',
+    'what',
+    'which',
+    'when',
+    'how',
+    'who',
+    'been',
+    'were',
+    'had',
+    'did',
+    'get',
+    'got',
+    'just',
+    'also',
+    'very',
+    'really',
+    'good',
+    'great',
+    'nice',
+    'like',
+    'think',
+    'know',
+    'use',
+    'need',
+    'too',
+    'much',
+    'many',
+    'most',
+    'some',
+    'any',
+    'each',
+    'few',
+    'those',
+    'these',
+    'than',
+    'then',
+    'them',
+    'into',
+    'out',
+    'up',
+    'down',
+    'over',
+    'under',
+    'again',
+    'further',
+    'once',
+    'here',
+    'where',
+    'why',
+    'both',
+    'same',
+    'other',
+    'such',
+    'own',
     ...extraStopWords,
   ])
   const freq = {}
@@ -52,7 +146,9 @@ function getWordFrequency(responses, field, { extraStopWords = [], limit = 15 } 
     .replace(/[^a-z\s]/g, '')
     .split(/\s+/)
     .filter((w) => w.length >= 3 && !stopWords.has(w))
-    .forEach((w) => { freq[w] = (freq[w] || 0) + 1 })
+    .forEach((w) => {
+      freq[w] = (freq[w] || 0) + 1
+    })
   return Object.entries(freq)
     .sort(([, a], [, b]) => b - a)
     .slice(0, limit)
@@ -70,7 +166,13 @@ function InfoIcon({ text }) {
   )
 }
 
-function MetricCard({ title, value, subtitle, valueColor = 'text-slate-900', tooltip }) {
+function MetricCard({
+  title,
+  value,
+  subtitle,
+  valueColor = 'text-slate-900',
+  tooltip,
+}) {
   return (
     <div className="bg-white border border-slate-200 rounded-2xl p-6 shadow-sm">
       <p className="text-xs font-semibold uppercase tracking-wider text-slate-400 mb-2 flex items-center">
@@ -97,7 +199,9 @@ function DualPmfCard({ rawScore, segScore, segColor, total, tooltip }) {
       <p className="text-base font-semibold text-slate-400 leading-none">
         {total === 0 ? '—' : `${rawScore}%`}
       </p>
-      <p className="text-[10px] text-slate-400 mt-0.5">Raw PMF · target: 40%+</p>
+      <p className="text-[10px] text-slate-400 mt-0.5">
+        Raw PMF · target: 40%+
+      </p>
     </div>
   )
 }
@@ -136,7 +240,9 @@ function FunnelRow({ label, count, baseline }) {
         />
       </div>
       <div className="w-24 text-right shrink-0">
-        <span className="text-sm font-semibold text-slate-700 tabular-nums">{count}</span>
+        <span className="text-sm font-semibold text-slate-700 tabular-nums">
+          {count}
+        </span>
         <span className="text-xs text-slate-400 ml-1">({pct}%)</span>
       </div>
     </div>
@@ -146,7 +252,11 @@ function FunnelRow({ label, count, baseline }) {
 function PlaybookModal({ onClose }) {
   return (
     <div className="fixed inset-0 z-50 flex items-center justify-center p-4">
-      <div className="absolute inset-0 bg-black/50" onClick={onClose} aria-hidden="true" />
+      <div
+        className="absolute inset-0 bg-black/50"
+        onClick={onClose}
+        aria-hidden="true"
+      />
       <div className="relative bg-white rounded-2xl shadow-2xl max-w-3xl w-full max-h-[80vh] overflow-y-auto p-8">
         <button
           type="button"
@@ -156,93 +266,146 @@ function PlaybookModal({ onClose }) {
         >
           ×
         </button>
-        <h2 className="text-xl font-bold text-slate-900 mb-1">📖 The Playbook</h2>
-        <p className="text-sm text-slate-500 mb-8">How to read this dashboard and the logic behind it</p>
+        <h2 className="text-xl font-bold text-slate-900 mb-1">
+          📖 The Playbook
+        </h2>
+        <p className="text-sm text-slate-500 mb-8">
+          How to read this dashboard and the logic behind it
+        </p>
         <div className="space-y-8 text-slate-700">
           <div>
-            <h3 className="text-sm font-bold text-slate-900 mb-2">The One Number That Matters</h3>
+            <h3 className="text-sm font-bold text-slate-900 mb-2">
+              The One Number That Matters
+            </h3>
             <p className="text-sm leading-relaxed">
-              The PMF Score measures what % of your users would be 'very disappointed' if they
-              could no longer use the product. This metric was pioneered by Rahul Vohra at
-              Superhuman. The magic number is 40% — companies above this threshold have strong
-              product-market fit. Below 40% means you have work to do.
+              The PMF Score measures what % of your users would be 'very
+              disappointed' if they could no longer use the product. This metric
+              was pioneered by Rahul Vohra at Superhuman. The magic number is
+              40% — companies above this threshold have strong product-market
+              fit. Below 40% means you have work to do.
             </p>
           </div>
           <div>
-            <h3 className="text-sm font-bold text-slate-900 mb-2">Why We Show Two PMF Scores</h3>
+            <h3 className="text-sm font-bold text-slate-900 mb-2">
+              Why We Show Two PMF Scores
+            </h3>
             <p className="text-sm leading-relaxed">
-              The Raw PMF score includes everyone. The Segmented PMF score focuses only on your
-              core persona — the people who most resemble your 'very disappointed' users. Vohra
-              found that segmenting to your true target market often raises the score
-              significantly, revealing where the product genuinely resonates.
+              The Raw PMF score includes everyone. The Segmented PMF score
+              focuses only on your core persona — the people who most resemble
+              your 'very disappointed' users. Vohra found that segmenting to
+              your true target market often raises the score significantly,
+              revealing where the product genuinely resonates.
             </p>
           </div>
           <div>
-            <h3 className="text-sm font-bold text-slate-900 mb-2">The Four Steps of Vohra's Engine</h3>
+            <h3 className="text-sm font-bold text-slate-900 mb-2">
+              The Four Steps of Vohra's Engine
+            </h3>
             <ol className="space-y-3 text-sm leading-relaxed list-none">
               <li className="flex gap-3">
-                <span className="shrink-0 w-6 h-6 rounded-full bg-slate-100 text-slate-600 text-xs font-bold flex items-center justify-center">1</span>
-                <span><strong>Segment:</strong> Identify your 'very disappointed' users. These are your biggest fans and they define your target market.</span>
+                <span className="shrink-0 w-6 h-6 rounded-full bg-slate-100 text-slate-600 text-xs font-bold flex items-center justify-center">
+                  1
+                </span>
+                <span>
+                  <strong>Segment:</strong> Identify your 'very disappointed'
+                  users. These are your biggest fans and they define your target
+                  market.
+                </span>
               </li>
               <li className="flex gap-3">
-                <span className="shrink-0 w-6 h-6 rounded-full bg-slate-100 text-slate-600 text-xs font-bold flex items-center justify-center">2</span>
-                <span><strong>Build the persona:</strong> Ask very disappointed users who they think benefits most. They almost always describe themselves. Their words become your customer persona.</span>
+                <span className="shrink-0 w-6 h-6 rounded-full bg-slate-100 text-slate-600 text-xs font-bold flex items-center justify-center">
+                  2
+                </span>
+                <span>
+                  <strong>Build the persona:</strong> Ask very disappointed
+                  users who they think benefits most. They almost always
+                  describe themselves. Their words become your customer persona.
+                </span>
               </li>
               <li className="flex gap-3">
-                <span className="shrink-0 w-6 h-6 rounded-full bg-slate-100 text-slate-600 text-xs font-bold flex items-center justify-center">3</span>
-                <span><strong>Find what they love:</strong> Look at what very disappointed users say is the main benefit. This is what to DOUBLE DOWN on.</span>
+                <span className="shrink-0 w-6 h-6 rounded-full bg-slate-100 text-slate-600 text-xs font-bold flex items-center justify-center">
+                  3
+                </span>
+                <span>
+                  <strong>Find what they love:</strong> Look at what very
+                  disappointed users say is the main benefit. This is what to
+                  DOUBLE DOWN on.
+                </span>
               </li>
               <li className="flex gap-3">
-                <span className="shrink-0 w-6 h-6 rounded-full bg-slate-100 text-slate-600 text-xs font-bold flex items-center justify-center">4</span>
-                <span><strong>Find what holds others back:</strong> From somewhat disappointed users who share the same main benefit as your fans, look at what they want improved. This is what to FIX NEXT.</span>
+                <span className="shrink-0 w-6 h-6 rounded-full bg-slate-100 text-slate-600 text-xs font-bold flex items-center justify-center">
+                  4
+                </span>
+                <span>
+                  <strong>Find what holds others back:</strong> From somewhat
+                  disappointed users who share the same main benefit as your
+                  fans, look at what they want improved. This is what to FIX
+                  NEXT.
+                </span>
               </li>
             </ol>
           </div>
           <div>
-            <h3 className="text-sm font-bold text-slate-900 mb-2">The 50/50 Roadmap Rule</h3>
+            <h3 className="text-sm font-bold text-slate-900 mb-2">
+              The 50/50 Roadmap Rule
+            </h3>
             <p className="text-sm leading-relaxed">
-              Vohra's key insight: spend exactly half your product roadmap doubling down on what
-              your biggest fans love, and the other half fixing what holds almost-fans back. If
-              you only do one or the other, the score won't move.
+              Vohra's key insight: spend exactly half your product roadmap
+              doubling down on what your biggest fans love, and the other half
+              fixing what holds almost-fans back. If you only do one or the
+              other, the score won't move.
             </p>
           </div>
           <div>
-            <h3 className="text-sm font-bold text-slate-900 mb-2">The Somewhat Disappointed Filter</h3>
+            <h3 className="text-sm font-bold text-slate-900 mb-2">
+              The Somewhat Disappointed Filter
+            </h3>
             <p className="text-sm leading-relaxed">
-              Not all feedback from somewhat disappointed users is useful. We only show
-              improvement feedback from somewhat disappointed users whose main benefit matches
-              what very disappointed users love. If a somewhat disappointed user likes something
-              completely different about the product, their improvement requests would take you
-              in the wrong direction.
+              Not all feedback from somewhat disappointed users is useful. We
+              only show improvement feedback from somewhat disappointed users
+              whose main benefit matches what very disappointed users love. If a
+              somewhat disappointed user likes something completely different
+              about the product, their improvement requests would take you in
+              the wrong direction.
             </p>
           </div>
           <div>
-            <h3 className="text-sm font-bold text-slate-900 mb-2">The Virality Score — Our Addition</h3>
+            <h3 className="text-sm font-bold text-slate-900 mb-2">
+              The Virality Score — Our Addition
+            </h3>
             <p className="text-sm leading-relaxed">
-              Vohra's original framework has 4 questions. We added a 5th: how likely are you to
-              share this report with a decision-maker? For LyRise, the ROI Report is a B2B sales
-              tool — a user who would share it with their CFO is a stronger signal than one who
-              just found it useful.
+              Vohra's original framework has 4 questions. We added a 5th: how
+              likely are you to share this report with a decision-maker? For
+              LyRise, the ROI Report is a B2B sales tool — a user who would
+              share it with their CFO is a stronger signal than one who just
+              found it useful.
             </p>
           </div>
           <div>
-            <h3 className="text-sm font-bold text-slate-900 mb-2">Never Survey the Same Person Twice</h3>
+            <h3 className="text-sm font-bold text-slate-900 mb-2">
+              Never Survey the Same Person Twice
+            </h3>
             <p className="text-sm leading-relaxed">
-              This is critical. If you survey the same person multiple times, the 40% benchmark
-              becomes meaningless. Each alpha tester gets a unique token. Once they submit, their
-              token is marked used and they cannot submit again.
+              This is critical. If you survey the same person multiple times,
+              the 40% benchmark becomes meaningless. Each alpha tester gets a
+              unique token. Once they submit, their token is marked used and
+              they cannot submit again.
             </p>
           </div>
           <div>
-            <h3 className="text-sm font-bold text-slate-900 mb-2">The Drop-off Funnel</h3>
+            <h3 className="text-sm font-bold text-slate-900 mb-2">
+              The Drop-off Funnel
+            </h3>
             <p className="text-sm leading-relaxed">
-              The funnel shows where users abandon the alpha tour. The step with the biggest drop
-              between two rows is your biggest UX problem. Fix that step first before worrying
-              about anything else.
+              The funnel shows where users abandon the alpha tour. The step with
+              the biggest drop between two rows is your biggest UX problem. Fix
+              that step first before worrying about anything else.
             </p>
           </div>
           <div>
-            <h3 className="text-sm font-bold text-slate-900 mb-2">Further Reading</h3>
+            <h3 className="text-sm font-bold text-slate-900 mb-2">
+              Further Reading
+            </h3>
             <a
               href="https://review.firstround.com/how-superhuman-built-an-engine-to-find-product-market-fit/"
               target="_blank"
@@ -282,24 +445,36 @@ export default function AlphaDashboardPanel() {
     }
   }, [])
 
-  useEffect(() => { fetchData() }, [fetchData])
+  useEffect(() => {
+    fetchData()
+  }, [fetchData])
 
   const chatSentences = useMemo(() => {
     return (rows ?? [])
-      .filter(r => r.chat_keywords && r.chat_keywords.length > 0)
-      .flatMap(r => r.chat_keywords)
-      .filter(m => m && typeof m === 'object' && m.content)
+      .filter((r) => r.chat_keywords && r.chat_keywords.length > 0)
+      .flatMap((r) => r.chat_keywords)
+      .filter((m) => m && typeof m === 'object' && m.content)
   }, [rows])
 
-  const confusionCount = chatSentences.filter(m => m.category === 'confusion').length
-  const modificationCount = chatSentences.filter(m => m.category === 'modification').length
-  const contentCount = chatSentences.filter(m => m.category === 'content_request').length
-  const clarificationCount = chatSentences.filter(m => m.category === 'clarification').length
+  const confusionCount = chatSentences.filter(
+    (m) => m.category === 'confusion',
+  ).length
+  const modificationCount = chatSentences.filter(
+    (m) => m.category === 'modification',
+  ).length
+  const contentCount = chatSentences.filter(
+    (m) => m.category === 'content_request',
+  ).length
+  const clarificationCount = chatSentences.filter(
+    (m) => m.category === 'clarification',
+  ).length
 
   if (rows === null && !error) {
     return (
       <div className="flex items-center justify-center py-24">
-        <p className="text-slate-400 text-sm animate-pulse">Loading dashboard…</p>
+        <p className="text-slate-400 text-sm animate-pulse">
+          Loading dashboard…
+        </p>
       </div>
     )
   }
@@ -321,46 +496,74 @@ export default function AlphaDashboardPanel() {
 
   const total = rows.length
 
-  const veryDisappointed = rows.filter((r) => r.pmf_disappointed === 'Very disappointed').length
+  const veryDisappointed = rows.filter(
+    (r) => r.pmf_disappointed === 'Very disappointed',
+  ).length
   const pmfScore = total > 0 ? Math.round((veryDisappointed / total) * 100) : 0
 
   const completedCount = rows.filter((r) => r.tour_completed).length
-  const completionRate = total > 0 ? Math.round((completedCount / total) * 100) : 0
+  const completionRate =
+    total > 0 ? Math.round((completedCount / total) * 100) : 0
 
   const viralityRows = rows.filter((r) => r.pmf_virality != null)
   const avgVirality =
     viralityRows.length > 0
-      ? round1(viralityRows.reduce((sum, r) => sum + r.pmf_virality, 0) / viralityRows.length)
+      ? round1(
+          viralityRows.reduce((sum, r) => sum + r.pmf_virality, 0) /
+            viralityRows.length,
+        )
       : null
 
   const pmfCounts = {
     very: rows.filter((r) => r.pmf_disappointed === 'Very disappointed').length,
-    somewhat: rows.filter((r) => r.pmf_disappointed === 'Somewhat disappointed').length,
+    somewhat: rows.filter((r) => r.pmf_disappointed === 'Somewhat disappointed')
+      .length,
     not: rows.filter((r) => r.pmf_disappointed === 'Not disappointed').length,
   }
 
   const funnelBaseline = total
   const funnelSteps = [
-    { label: 'Intake form completed', count: rows.filter((r) => r.step_intake_completed).length },
-    { label: 'Report generated', count: rows.filter((r) => r.step_generation_completed).length },
-    { label: 'Report explored', count: rows.filter((r) => r.step_report_completed).length },
-    { label: 'Survey submitted', count: rows.filter((r) => r.step_survey_completed).length },
+    {
+      label: 'Intake form completed',
+      count: rows.filter((r) => r.step_intake_completed).length,
+    },
+    {
+      label: 'Report generated',
+      count: rows.filter((r) => r.step_generation_completed).length,
+    },
+    {
+      label: 'Report explored',
+      count: rows.filter((r) => r.step_report_completed).length,
+    },
+    {
+      label: 'Survey submitted',
+      count: rows.filter((r) => r.step_survey_completed).length,
+    },
   ]
 
   const benefitFeedback = rows.filter((r) => isValidText(r.pmf_main_benefit))
 
   const veryDisRows = rows.filter(
-    (r) => r.pmf_disappointed === 'Very disappointed' && isValidText(r.pmf_main_benefit),
+    (r) =>
+      r.pmf_disappointed === 'Very disappointed' &&
+      isValidText(r.pmf_main_benefit),
   )
   const somewhatDisRows = rows.filter(
-    (r) => r.pmf_disappointed === 'Somewhat disappointed' && isValidText(r.pmf_improvement),
+    (r) =>
+      r.pmf_disappointed === 'Somewhat disappointed' &&
+      isValidText(r.pmf_improvement),
   )
   const veryBenefitWords = getWordFrequency(veryDisRows, 'pmf_main_benefit')
-  const somewhatImprovementWords = getWordFrequency(somewhatDisRows, 'pmf_improvement')
+  const somewhatImprovementWords = getWordFrequency(
+    somewhatDisRows,
+    'pmf_improvement',
+  )
 
   const getMostCommon = (arr, field) => {
     const freq = {}
-    arr.forEach((r) => { if (r[field]) freq[r[field]] = (freq[r[field]] || 0) + 1 })
+    arr.forEach((r) => {
+      if (r[field]) freq[r[field]] = (freq[r[field]] || 0) + 1
+    })
     const sorted = Object.entries(freq).sort(([, a], [, b]) => b - a)
     return sorted.length > 0 ? sorted[0][0] : null
   }
@@ -368,7 +571,9 @@ export default function AlphaDashboardPanel() {
   const vohraFixNext = getMostCommon(somewhatDisRows, 'pmf_improvement')
 
   const veryDisPersonaRows = rows.filter(
-    (r) => r.pmf_disappointed === 'Very disappointed' && isValidText(r.pmf_who_benefits),
+    (r) =>
+      r.pmf_disappointed === 'Very disappointed' &&
+      isValidText(r.pmf_who_benefits),
   )
   const personaWords = getWordFrequency(veryDisPersonaRows, 'pmf_who_benefits')
 
@@ -379,21 +584,27 @@ export default function AlphaDashboardPanel() {
           (r) =>
             isValidText(r.pmf_who_benefits) &&
             top3PersonaWords.some((w) =>
-              String(r.pmf_who_benefits ?? '').toLowerCase().includes(w),
+              String(r.pmf_who_benefits ?? '')
+                .toLowerCase()
+                .includes(w),
             ),
         )
       : []
-  const segmentedVery = segmentedRows.filter((r) => r.pmf_disappointed === 'Very disappointed').length
+  const segmentedVery = segmentedRows.filter(
+    (r) => r.pmf_disappointed === 'Very disappointed',
+  ).length
   const segmentedPmfScore =
-    segmentedRows.length > 0 ? Math.round((segmentedVery / segmentedRows.length) * 100) : null
+    segmentedRows.length > 0
+      ? Math.round((segmentedVery / segmentedRows.length) * 100)
+      : null
   const segmentedPmfColor =
     segmentedPmfScore == null
       ? 'text-slate-400'
       : segmentedPmfScore >= 40
-      ? 'text-emerald-600'
-      : segmentedPmfScore >= 20
-      ? 'text-amber-500'
-      : 'text-red-500'
+        ? 'text-emerald-600'
+        : segmentedPmfScore >= 20
+          ? 'text-amber-500'
+          : 'text-red-500'
 
   const veryBenefitTop3 = veryBenefitWords.slice(0, 3).map(({ word }) => word)
   const filteredImprovementFeedback = rows.filter(
@@ -403,12 +614,16 @@ export default function AlphaDashboardPanel() {
       isValidText(r.pmf_main_benefit) &&
       veryBenefitTop3.length > 0 &&
       veryBenefitTop3.some((w) =>
-        String(r.pmf_main_benefit ?? '').toLowerCase().includes(w),
+        String(r.pmf_main_benefit ?? '')
+          .toLowerCase()
+          .includes(w),
       ),
   )
 
   const veryDisImprovementFeedback = rows.filter(
-    (r) => r.pmf_disappointed === 'Very disappointed' && isValidText(r.pmf_improvement),
+    (r) =>
+      r.pmf_disappointed === 'Very disappointed' &&
+      isValidText(r.pmf_improvement),
   )
 
   const recentRows = rows.slice(0, 10)
@@ -490,9 +705,24 @@ export default function AlphaDashboardPanel() {
             {total} total response{total !== 1 ? 's' : ''}
           </p>
           <div className="space-y-4">
-            <BarRow label="Very disappointed" count={pmfCounts.very} total={total} color="bg-emerald-500" />
-            <BarRow label="Somewhat disappointed" count={pmfCounts.somewhat} total={total} color="bg-blue-500" />
-            <BarRow label="Not disappointed" count={pmfCounts.not} total={total} color="bg-slate-400" />
+            <BarRow
+              label="Very disappointed"
+              count={pmfCounts.very}
+              total={total}
+              color="bg-emerald-500"
+            />
+            <BarRow
+              label="Somewhat disappointed"
+              count={pmfCounts.somewhat}
+              total={total}
+              color="bg-blue-500"
+            />
+            <BarRow
+              label="Not disappointed"
+              count={pmfCounts.not}
+              total={total}
+              color="bg-slate-400"
+            />
           </div>
           <div className="mt-6 bg-blue-50 border border-blue-200 rounded-xl p-4">
             <p className="text-xs font-bold text-blue-800 mb-3 flex items-center">
@@ -501,12 +731,20 @@ export default function AlphaDashboardPanel() {
             </p>
             <div className="grid grid-cols-2 gap-4">
               <div className="bg-white rounded-lg p-3 border border-green-200">
-                <p className="text-[10px] font-semibold uppercase tracking-wider text-green-600 mb-1">Double down on →</p>
-                <p className="text-sm text-slate-700 leading-snug">{vohraDoubleDown ?? 'Collect more responses'}</p>
+                <p className="text-[10px] font-semibold uppercase tracking-wider text-green-600 mb-1">
+                  Double down on →
+                </p>
+                <p className="text-sm text-slate-700 leading-snug">
+                  {vohraDoubleDown ?? 'Collect more responses'}
+                </p>
               </div>
               <div className="bg-white rounded-lg p-3 border border-amber-200">
-                <p className="text-[10px] font-semibold uppercase tracking-wider text-amber-600 mb-1">Fix next →</p>
-                <p className="text-sm text-slate-700 leading-snug">{vohraFixNext ?? 'Collect more responses'}</p>
+                <p className="text-[10px] font-semibold uppercase tracking-wider text-amber-600 mb-1">
+                  Fix next →
+                </p>
+                <p className="text-sm text-slate-700 leading-snug">
+                  {vohraFixNext ?? 'Collect more responses'}
+                </p>
               </div>
             </div>
           </div>
@@ -522,7 +760,9 @@ export default function AlphaDashboardPanel() {
             Based on Q2 responses from 'Very disappointed' users only
           </p>
           {veryDisPersonaRows.length < 3 ? (
-            <p className="text-xs text-slate-400">Not enough responses yet to build a persona profile.</p>
+            <p className="text-xs text-slate-400">
+              Not enough responses yet to build a persona profile.
+            </p>
           ) : (
             <>
               <div className="flex flex-wrap gap-2">
@@ -530,7 +770,11 @@ export default function AlphaDashboardPanel() {
                   <span
                     key={word}
                     className={`inline-flex items-center gap-1 bg-blue-100 text-blue-800 px-3 py-1.5 rounded-full ${
-                      count >= 3 ? 'text-2xl font-semibold' : count >= 2 ? 'text-lg font-medium' : 'text-base font-normal'
+                      count >= 3
+                        ? 'text-2xl font-semibold'
+                        : count >= 2
+                          ? 'text-lg font-medium'
+                          : 'text-base font-normal'
                     }`}
                   >
                     {word}
@@ -539,7 +783,8 @@ export default function AlphaDashboardPanel() {
                 ))}
               </div>
               <p className="text-xs text-slate-400 mt-4">
-                These users are describing themselves — this is your core customer persona
+                These users are describing themselves — this is your core
+                customer persona
               </p>
             </>
           )}
@@ -556,7 +801,12 @@ export default function AlphaDashboardPanel() {
           </p>
           <div className="space-y-4">
             {funnelSteps.map(({ label, count }) => (
-              <FunnelRow key={label} label={label} count={count} baseline={funnelBaseline} />
+              <FunnelRow
+                key={label}
+                label={label}
+                count={count}
+                baseline={funnelBaseline}
+              />
             ))}
           </div>
         </section>
@@ -564,16 +814,22 @@ export default function AlphaDashboardPanel() {
         {/* Section 4: Open feedback */}
         <section className="grid grid-cols-2 gap-6">
           <div className="bg-white border border-slate-200 rounded-2xl p-6 shadow-sm">
-            <h2 className="text-sm font-bold text-slate-900 mb-4">What users value most</h2>
+            <h2 className="text-sm font-bold text-slate-900 mb-4">
+              What users value most
+            </h2>
             {benefitFeedback.length === 0 ? (
               <p className="text-xs text-slate-400">No responses yet.</p>
             ) : (
               <div className="space-y-3">
                 {benefitFeedback.map((r, i) => (
                   <div key={i} className="bg-slate-50 rounded-xl p-3">
-                    <p className="text-sm text-slate-700 leading-relaxed mb-2">{r.pmf_main_benefit}</p>
+                    <p className="text-sm text-slate-700 leading-relaxed mb-2">
+                      {r.pmf_main_benefit}
+                    </p>
                     {r.pmf_disappointed && (
-                      <span className={`text-[10px] font-semibold px-2 py-0.5 rounded-full ${disappointmentColor(r.pmf_disappointed)}`}>
+                      <span
+                        className={`text-[10px] font-semibold px-2 py-0.5 rounded-full ${disappointmentColor(r.pmf_disappointed)}`}
+                      >
                         {r.pmf_disappointed}
                       </span>
                     )}
@@ -584,19 +840,31 @@ export default function AlphaDashboardPanel() {
           </div>
 
           <div className="bg-white border border-slate-200 rounded-2xl p-6 shadow-sm space-y-6">
-            <h2 className="text-sm font-bold text-slate-900">What would improve this</h2>
+            <h2 className="text-sm font-bold text-slate-900">
+              What would improve this
+            </h2>
             <div>
-              <p className="text-xs font-semibold text-slate-700 mb-0.5">From somewhat disappointed users</p>
-              <p className="text-xs text-slate-400 mb-3">Who share our main benefit — highest priority fixes</p>
+              <p className="text-xs font-semibold text-slate-700 mb-0.5">
+                From somewhat disappointed users
+              </p>
+              <p className="text-xs text-slate-400 mb-3">
+                Who share our main benefit — highest priority fixes
+              </p>
               {filteredImprovementFeedback.length === 0 ? (
-                <p className="text-xs text-slate-400">No matching responses yet.</p>
+                <p className="text-xs text-slate-400">
+                  No matching responses yet.
+                </p>
               ) : (
                 <div className="space-y-3">
                   {filteredImprovementFeedback.map((r, i) => (
                     <div key={i} className="bg-slate-50 rounded-xl p-3">
-                      <p className="text-sm text-slate-700 leading-relaxed mb-2">{r.pmf_improvement}</p>
+                      <p className="text-sm text-slate-700 leading-relaxed mb-2">
+                        {r.pmf_improvement}
+                      </p>
                       {r.pmf_disappointed && (
-                        <span className={`text-[10px] font-semibold px-2 py-0.5 rounded-full ${disappointmentColor(r.pmf_disappointed)}`}>
+                        <span
+                          className={`text-[10px] font-semibold px-2 py-0.5 rounded-full ${disappointmentColor(r.pmf_disappointed)}`}
+                        >
                           {r.pmf_disappointed}
                         </span>
                       )}
@@ -606,17 +874,28 @@ export default function AlphaDashboardPanel() {
               )}
             </div>
             <div>
-              <p className="text-xs font-semibold text-slate-700 mb-0.5">From very disappointed users</p>
-              <p className="text-xs text-slate-400 mb-3">Our biggest fans still have suggestions</p>
+              <p className="text-xs font-semibold text-slate-700 mb-0.5">
+                From very disappointed users
+              </p>
+              <p className="text-xs text-slate-400 mb-3">
+                Our biggest fans still have suggestions
+              </p>
               {veryDisImprovementFeedback.length === 0 ? (
                 <p className="text-xs text-slate-400">No responses yet.</p>
               ) : (
                 <div className="space-y-3">
                   {veryDisImprovementFeedback.map((r, i) => (
-                    <div key={i} className="bg-green-50 border border-green-100 rounded-xl p-3">
-                      <p className="text-sm text-slate-700 leading-relaxed mb-2">{r.pmf_improvement}</p>
+                    <div
+                      key={i}
+                      className="bg-green-50 border border-green-100 rounded-xl p-3"
+                    >
+                      <p className="text-sm text-slate-700 leading-relaxed mb-2">
+                        {r.pmf_improvement}
+                      </p>
                       {r.pmf_disappointed && (
-                        <span className={`text-[10px] font-semibold px-2 py-0.5 rounded-full ${disappointmentColor(r.pmf_disappointed)}`}>
+                        <span
+                          className={`text-[10px] font-semibold px-2 py-0.5 rounded-full ${disappointmentColor(r.pmf_disappointed)}`}
+                        >
                           {r.pmf_disappointed}
                         </span>
                       )}
@@ -634,19 +913,30 @@ export default function AlphaDashboardPanel() {
             Most mentioned words
             <InfoIcon text="Vohra Step 2 — word frequency analysis of open text responses. Left cloud = what to double down on. Right cloud = what to fix next." />
           </h2>
-          <p className="text-xs text-slate-400 mb-6">Extracted from open-ended responses</p>
+          <p className="text-xs text-slate-400 mb-6">
+            Extracted from open-ended responses
+          </p>
           <div className="grid grid-cols-2 gap-6">
             <div>
-              <p className="text-xs font-semibold text-slate-600 mb-3">What very disappointed users value</p>
+              <p className="text-xs font-semibold text-slate-600 mb-3">
+                What very disappointed users value
+              </p>
               {veryDisRows.length < 3 ? (
-                <p className="text-xs text-slate-400">Not enough responses yet to show word patterns. Check back after more testers complete the tour.</p>
+                <p className="text-xs text-slate-400">
+                  Not enough responses yet to show word patterns. Check back
+                  after more testers complete the tour.
+                </p>
               ) : (
                 <div className="flex flex-wrap gap-2">
                   {veryBenefitWords.map(({ word, count }) => (
                     <span
                       key={word}
                       className={`inline-flex items-center gap-1 bg-blue-100 text-blue-800 px-3 py-1 rounded-full ${
-                        count >= 3 ? 'text-lg font-semibold' : count >= 2 ? 'text-base font-medium' : 'text-sm font-normal'
+                        count >= 3
+                          ? 'text-lg font-semibold'
+                          : count >= 2
+                            ? 'text-base font-medium'
+                            : 'text-sm font-normal'
                       }`}
                     >
                       {word}
@@ -657,16 +947,25 @@ export default function AlphaDashboardPanel() {
               )}
             </div>
             <div>
-              <p className="text-xs font-semibold text-slate-600 mb-3">What somewhat disappointed users want improved</p>
+              <p className="text-xs font-semibold text-slate-600 mb-3">
+                What somewhat disappointed users want improved
+              </p>
               {somewhatDisRows.length < 3 ? (
-                <p className="text-xs text-slate-400">Not enough responses yet to show word patterns. Check back after more testers complete the tour.</p>
+                <p className="text-xs text-slate-400">
+                  Not enough responses yet to show word patterns. Check back
+                  after more testers complete the tour.
+                </p>
               ) : (
                 <div className="flex flex-wrap gap-2">
                   {somewhatImprovementWords.map(({ word, count }) => (
                     <span
                       key={word}
                       className={`inline-flex items-center gap-1 bg-amber-100 text-amber-800 px-3 py-1 rounded-full ${
-                        count >= 3 ? 'text-lg font-semibold' : count >= 2 ? 'text-base font-medium' : 'text-sm font-normal'
+                        count >= 3
+                          ? 'text-lg font-semibold'
+                          : count >= 2
+                            ? 'text-base font-medium'
+                            : 'text-sm font-normal'
                       }`}
                     >
                       {word}
@@ -689,63 +988,100 @@ export default function AlphaDashboardPanel() {
             Categorized by intent — confusion signals are most actionable
           </p>
           {chatSentences.length === 0 ? (
-            <p className="text-xs text-slate-400">No chat sessions recorded yet.</p>
+            <p className="text-xs text-slate-400">
+              No chat sessions recorded yet.
+            </p>
           ) : (
             <>
               <div className="grid grid-cols-2 gap-3 mb-4">
                 <div className="bg-red-50 border border-red-200 rounded-xl p-4">
-                  <p className="text-xs font-semibold text-red-800 mb-1">🤔 Confusion signals</p>
-                  <p className="text-2xl font-bold text-red-800">{confusionCount}</p>
+                  <p className="text-xs font-semibold text-red-800 mb-1">
+                    🤔 Confusion signals
+                  </p>
+                  <p className="text-2xl font-bold text-red-800">
+                    {confusionCount}
+                  </p>
                 </div>
                 <div className="bg-blue-50 border border-blue-200 rounded-xl p-4">
-                  <p className="text-xs font-semibold text-blue-800 mb-1">✏️ Modifications</p>
-                  <p className="text-2xl font-bold text-blue-800">{modificationCount}</p>
+                  <p className="text-xs font-semibold text-blue-800 mb-1">
+                    ✏️ Modifications
+                  </p>
+                  <p className="text-2xl font-bold text-blue-800">
+                    {modificationCount}
+                  </p>
                 </div>
                 <div className="bg-amber-50 border border-amber-200 rounded-xl p-4">
-                  <p className="text-xs font-semibold text-amber-800 mb-1">❓ Clarifications</p>
-                  <p className="text-2xl font-bold text-amber-800">{clarificationCount}</p>
+                  <p className="text-xs font-semibold text-amber-800 mb-1">
+                    ❓ Clarifications
+                  </p>
+                  <p className="text-2xl font-bold text-amber-800">
+                    {clarificationCount}
+                  </p>
                 </div>
                 <div className="bg-green-50 border border-green-200 rounded-xl p-4">
-                  <p className="text-xs font-semibold text-green-800 mb-1">➕ Content requests</p>
-                  <p className="text-2xl font-bold text-green-800">{contentCount}</p>
+                  <p className="text-xs font-semibold text-green-800 mb-1">
+                    ➕ Content requests
+                  </p>
+                  <p className="text-2xl font-bold text-green-800">
+                    {contentCount}
+                  </p>
                 </div>
               </div>
               <button
                 type="button"
-                onClick={() => setShowAllChat(v => !v)}
+                onClick={() => setShowAllChat((v) => !v)}
                 className="text-xs font-medium text-slate-500 hover:text-slate-700 transition-colors"
               >
                 {showAllChat ? 'Hide messages ▲' : 'See all messages ▼'}
               </button>
-              {showAllChat && (() => {
-                const sorted = [...chatSentences].sort((a, b) => {
-                  const order = { confusion: 0, clarification: 1, modification: 2, content_request: 3, other: 4 }
-                  return (order[a.category] ?? 4) - (order[b.category] ?? 4)
-                })
-                const catStyle = {
-                  confusion: 'bg-red-50 border-red-200 text-red-700',
-                  modification: 'bg-blue-50 border-blue-200 text-blue-700',
-                  content_request: 'bg-green-50 border-green-200 text-green-700',
-                  clarification: 'bg-amber-50 border-amber-200 text-amber-700',
-                  other: 'bg-slate-50 border-slate-200 text-slate-500',
-                }
-                const catLabel = {
-                  confusion: 'Confusion', modification: 'Modification',
-                  content_request: 'Content request', clarification: 'Clarification', other: 'Other',
-                }
-                return (
-                  <div className="mt-4 space-y-2 max-h-96 overflow-y-auto">
-                    {sorted.map((m, i) => (
-                      <div key={i} className="bg-slate-50 rounded-xl p-3 flex items-start justify-between gap-3">
-                        <p className="text-sm text-slate-700 leading-relaxed flex-1">{m.content}</p>
-                        <span className={`text-[10px] font-semibold px-2 py-0.5 rounded-full border shrink-0 ${catStyle[m.category] ?? catStyle.other}`}>
-                          {catLabel[m.category] ?? m.category}
-                        </span>
-                      </div>
-                    ))}
-                  </div>
-                )
-              })()}
+              {showAllChat &&
+                (() => {
+                  const sorted = [...chatSentences].sort((a, b) => {
+                    const order = {
+                      confusion: 0,
+                      clarification: 1,
+                      modification: 2,
+                      content_request: 3,
+                      other: 4,
+                    }
+                    return (order[a.category] ?? 4) - (order[b.category] ?? 4)
+                  })
+                  const catStyle = {
+                    confusion: 'bg-red-50 border-red-200 text-red-700',
+                    modification: 'bg-blue-50 border-blue-200 text-blue-700',
+                    content_request:
+                      'bg-green-50 border-green-200 text-green-700',
+                    clarification:
+                      'bg-amber-50 border-amber-200 text-amber-700',
+                    other: 'bg-slate-50 border-slate-200 text-slate-500',
+                  }
+                  const catLabel = {
+                    confusion: 'Confusion',
+                    modification: 'Modification',
+                    content_request: 'Content request',
+                    clarification: 'Clarification',
+                    other: 'Other',
+                  }
+                  return (
+                    <div className="mt-4 space-y-2 max-h-96 overflow-y-auto">
+                      {sorted.map((m, i) => (
+                        <div
+                          key={i}
+                          className="bg-slate-50 rounded-xl p-3 flex items-start justify-between gap-3"
+                        >
+                          <p className="text-sm text-slate-700 leading-relaxed flex-1">
+                            {m.content}
+                          </p>
+                          <span
+                            className={`text-[10px] font-semibold px-2 py-0.5 rounded-full border shrink-0 ${catStyle[m.category] ?? catStyle.other}`}
+                          >
+                            {catLabel[m.category] ?? m.category}
+                          </span>
+                        </div>
+                      ))}
+                    </div>
+                  )
+                })()}
             </>
           )}
         </section>
@@ -753,16 +1089,29 @@ export default function AlphaDashboardPanel() {
         {/* Section 7: Recent submissions */}
         <section className="bg-white border border-slate-200 rounded-2xl shadow-sm overflow-hidden">
           <div className="px-6 py-4 border-b border-slate-100">
-            <h2 className="text-sm font-bold text-slate-900">Recent responses</h2>
-            <p className="text-xs text-slate-400">Last {recentRows.length} submissions</p>
+            <h2 className="text-sm font-bold text-slate-900">
+              Recent responses
+            </h2>
+            <p className="text-xs text-slate-400">
+              Last {recentRows.length} submissions
+            </p>
           </div>
           {recentRows.length === 0 ? (
-            <p className="text-xs text-slate-400 px-6 py-8 text-center">No submissions yet.</p>
+            <p className="text-xs text-slate-400 px-6 py-8 text-center">
+              No submissions yet.
+            </p>
           ) : (
             <table className="w-full text-sm">
               <thead className="bg-slate-50 border-b border-slate-100">
                 <tr>
-                  {['Date', 'Feeling', 'Virality', 'Completed'].map((col) => (
+                  {[
+                    'Date',
+                    'Name',
+                    'Email',
+                    'Feeling',
+                    'Virality',
+                    'Completed',
+                  ].map((col) => (
                     <th
                       key={col}
                       className="px-6 py-3 text-left text-xs font-semibold uppercase tracking-wider text-slate-400"
@@ -778,9 +1127,21 @@ export default function AlphaDashboardPanel() {
                     <td className="px-6 py-3 text-slate-600 tabular-nums whitespace-nowrap">
                       {fmtDate(r.created_at)}
                     </td>
+                    <td className="px-6 py-3 text-slate-700 font-medium whitespace-nowrap">
+                      {r.user_name || (
+                        <span className="text-slate-300 text-xs">—</span>
+                      )}
+                    </td>
+                    <td className="px-6 py-3 text-slate-500 text-xs whitespace-nowrap">
+                      {r.user_email || (
+                        <span className="text-slate-300">—</span>
+                      )}
+                    </td>
                     <td className="px-6 py-3">
                       {r.pmf_disappointed ? (
-                        <span className={`text-xs font-semibold px-2.5 py-1 rounded-full ${disappointmentColor(r.pmf_disappointed)}`}>
+                        <span
+                          className={`text-xs font-semibold px-2.5 py-1 rounded-full ${disappointmentColor(r.pmf_disappointed)}`}
+                        >
                           {r.pmf_disappointed}
                         </span>
                       ) : (
