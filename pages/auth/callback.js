@@ -8,14 +8,15 @@ import { supabaseAdmin } from '../../src/lib/supabaseAdmin'
 
 export async function getServerSideProps({ req, res, query }) {
   const { code } = query
+  const next =
+    query.next && query.next.startsWith('/') ? query.next : '/dashboard'
   if (!code) {
     return { redirect: { destination: '/auth/login', permanent: false } }
   }
 
   const supabase = createRouteClient(req, res)
-  const { error: exchangeError } = await supabase.auth.exchangeCodeForSession(
-    code,
-  )
+  const { error: exchangeError } =
+    await supabase.auth.exchangeCodeForSession(code)
   if (exchangeError) {
     return { redirect: { destination: '/auth/login', permanent: false } }
   }
@@ -55,9 +56,7 @@ export async function getServerSideProps({ req, res, query }) {
     role = newRole
   }
 
-  // const destination = role === 'EMPLOYEE' ? '/dashboard' : '/roi-report'
-  const destination = '/dashboard'
-  return { redirect: { destination, permanent: false } }
+  return { redirect: { destination: next, permanent: false } }
 }
 
 export default function Callback() {
