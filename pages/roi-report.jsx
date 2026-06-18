@@ -13,6 +13,7 @@ import { PIPELINE_LOG_TOOL_NAMES } from '../src/lib/roi/constants'
 import { useRouter } from 'next/router'
 import { createClient as createBrowserClient } from '../src/lib/supabase-browser'
 import ErrorBoundary from '../src/components/shared/ErrorBoundary'
+import { isEmployeeUser } from '../src/lib/isEmployee'
 
 // ── Constants ─────────────────────────────────────────────────────────────────
 
@@ -727,8 +728,12 @@ function SuccessView({ email, reportId, isEmployee }) {
       })
 
       if (res.status === 403) {
-        setLimitReached(true)
-        return
+        const data = await res.json().catch(() => null)
+        if (data?.error === 'limit_reached') {
+          setLimitReached(true)
+          return
+        }
+        throw new Error('HTTP 403')
       }
       if (res.status === 429) {
         setMessages((prev) => prev.slice(0, -1))
@@ -951,8 +956,14 @@ export async function getServerSideProps({ req, res, query }) {
     .eq('id', user.id)
     .single()
 
-  const isEmployee =
-    userData?.role === 'EMPLOYEE' || user.email?.endsWith('@lyrise.ai')
+  const isEmployee = isEmployeeUser(user, userData)
+
+  // The one-report-per-client cap applies only to alpha users, which are handled
+  // above via ?alpha. Normal clients generate reports through the lyrise.ai
+  // marketing site and have no cap, so send them back to the home page.
+  if (!isEmployee) {
+    return { redirect: { destination: 'https://lyrise.ai', permanent: false } }
+  }
 
   return { props: { isEmployee, isAlpha: false } }
 }
@@ -970,6 +981,10 @@ function ROIReportInner({ isEmployee, isAlpha }) {
 
   const [isGenerationComplete, setIsGenerationComplete] = useState(false)
   const generationStartedAt = useRef(Date.now())
+  // Guards against re-entrant generation — the demo tour can fire onFinish from
+  // both the final step and the CTA, and a second run would 409 on the alpha
+  // one-report guard and flicker the UI back through the loader.
+  const generationInFlightRef = useRef(false)
   const [generationLog, setGenerationLog] = useState('')
   const [sseEvents, setSseEvents] = useState([])
   const [reportState, setReportState] = useState(null)
@@ -1041,6 +1056,8 @@ function ROIReportInner({ isEmployee, isAlpha }) {
 
   const runGeneration = useCallback(
     async ({ skipLLM = false, estimatesOnly = false } = {}) => {
+      if (generationInFlightRef.current) return
+      generationInFlightRef.current = true
       generationStartedAt.current = Date.now()
       setIsGenerationComplete(false)
       setViewState(VIEW_STATES.GENERATING)
@@ -1189,6 +1206,11 @@ function ROIReportInner({ isEmployee, isAlpha }) {
           },
         )
       } catch (err) {
+        // Release the lock only on failure so the user can retry. On success
+        // (or a 409 that resolves to the existing report) the lock stays set —
+        // the page navigates to the report, and any late duplicate trigger
+        // (e.g. the demo firing onFinish twice) is ignored.
+        generationInFlightRef.current = false
         handleGenerationError(
           err.message || 'Something went wrong. Please try again.',
         )

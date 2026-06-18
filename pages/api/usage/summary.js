@@ -136,29 +136,28 @@ export default async function handler(req, res) {
 
 // Tags each row with the email of the user who requested the report — the
 // authenticated account that submitted the request, NOT the company contact
-// the report is addressed to (mirrors withRequester in pages/dashboard.jsx).
-// Older roi_usage rows may have a null user_id, so fall back to the parent
-// report's user_id before resolving emails via the users table.
+// the report is addressed to (mirrors withRequester in pages/dashboard.jsx) —
+// and with is_alpha so the dashboard can badge alpha-tour runs separately.
+// Both come from the parent report: roi_usage has no alpha flag, and older
+// rows may have a null user_id, so we resolve via reports.report_id.
 async function withRequesterEmail(admin, rows) {
   if (!rows.length) return rows
 
-  const reportIdsMissingUser = rows
-    .filter((r) => !r.user_id && r.report_id)
-    .map((r) => r.report_id)
+  const reportIds = [...new Set(rows.map((r) => r.report_id).filter(Boolean))]
 
-  let reportUserById = {}
-  if (reportIdsMissingUser.length) {
+  let reportById = {}
+  if (reportIds.length) {
     const { data: reports } = await admin
       .from('reports')
-      .select('id, user_id')
-      .in('id', reportIdsMissingUser)
-    reportUserById = (reports || []).reduce((acc, r) => {
-      acc[r.id] = r.user_id
+      .select('id, user_id, is_alpha')
+      .in('id', reportIds)
+    reportById = (reports || []).reduce((acc, r) => {
+      acc[r.id] = r
       return acc
     }, {})
   }
 
-  const userIdFor = (r) => r.user_id || reportUserById[r.report_id] || null
+  const userIdFor = (r) => r.user_id || reportById[r.report_id]?.user_id || null
   const userIds = [...new Set(rows.map(userIdFor).filter(Boolean))]
 
   let emailByUserId = {}
@@ -176,6 +175,7 @@ async function withRequesterEmail(admin, rows) {
   return rows.map((r) => ({
     ...r,
     requester_email: emailByUserId[userIdFor(r)] || null,
+    is_alpha: Boolean(reportById[r.report_id]?.is_alpha),
   }))
 }
 

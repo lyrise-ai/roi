@@ -8,6 +8,7 @@ import { motion } from 'framer-motion'
 import { useRouter } from 'next/router'
 import { trackReportAccess } from '@/src/lib/roi/services/reportAccess'
 import ErrorBoundary from '../../src/components/shared/ErrorBoundary'
+import { isEmployeeUser } from '@/src/lib/isEmployee'
 
 export async function getServerSideProps({ req, res, params, query }) {
   const supabase = createClient(req, res)
@@ -55,8 +56,7 @@ export async function getServerSideProps({ req, res, params, query }) {
       .eq('id', user.id)
       .single()
 
-    isEmployee =
-      userData?.role === 'EMPLOYEE' || user.email?.endsWith('@lyrise.ai')
+    isEmployee = isEmployeeUser(user, userData)
     viewerUserId = user.id
     viewerEmail = user.email ?? null
 

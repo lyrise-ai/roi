@@ -66,8 +66,8 @@ function ProgressDots({ total, current }) {
             i === current
               ? 'w-5 bg-slate-900'
               : i < current
-              ? 'w-1.5 bg-slate-400'
-              : 'w-1.5 bg-slate-200',
+                ? 'w-1.5 bg-slate-400'
+                : 'w-1.5 bg-slate-200',
           )}
         />
       ))}
@@ -139,7 +139,7 @@ export default function AlphaSurvey() {
   const totalQuestions = q1Answer
     ? isDisappointed
       ? 1 + FOLLOW_UP_QUESTIONS.length // 5 total
-      : 2                               // Q1 + alt
+      : 2 // Q1 + alt
     : 1
 
   const activeQuestion = questions[currentQ]
@@ -153,7 +153,7 @@ export default function AlphaSurvey() {
     } else {
       setCurrentValue(existing || '')
     }
-  // eslint-disable-next-line react-hooks/exhaustive-deps
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [currentQ, activeQuestion?.id])
 
   // ── Navigation helpers ────────────────────────────────────────────────────
@@ -161,8 +161,7 @@ export default function AlphaSurvey() {
   // Commit current answer and return it
   const commitAnswer = () => {
     if (!activeQuestion) return null
-    const value =
-      activeQuestion.type === 'stars' ? currentStars : currentValue
+    const value = activeQuestion.type === 'stars' ? currentStars : currentValue
     setAnswers((prev) => ({ ...prev, [activeQuestion.id]: value }))
     return value
   }
@@ -219,7 +218,9 @@ export default function AlphaSurvey() {
       console.log('alpha_feedback payload:', payload)
 
       const { error } = alphaToken
-        ? await supabase.from('alpha_feedback').upsert(payload, { onConflict: 'alpha_token' })
+        ? await supabase
+            .from('alpha_feedback')
+            .upsert(payload, { onConflict: 'alpha_token' })
         : await supabase.from('alpha_feedback').insert(payload)
       if (error) throw error
 
@@ -263,12 +264,14 @@ export default function AlphaSurvey() {
               Thank you so much!
             </h1>
             <p className="text-slate-500 text-sm leading-relaxed mb-8">
-              Your feedback goes directly to the team building this product.
-              We genuinely appreciate you taking the time.
+              Your feedback goes directly to the team building this product. We
+              genuinely appreciate you taking the time.
             </p>
             <button
               type="button"
-              onClick={() => router.push('/')}
+              onClick={() => {
+                window.location.href = 'https://lyrise.ai'
+              }}
               className="inline-flex items-center justify-center rounded-xl text-sm font-medium border border-slate-200 bg-white hover:bg-slate-50 text-slate-900 h-10 px-8 transition-colors"
             >
               Back to LyRise
