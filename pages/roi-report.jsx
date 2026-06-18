@@ -914,20 +914,33 @@ function sseEventToLogLine(event) {
 // ── Server-side auth / alpha detection ───────────────────────────────────────
 
 export async function getServerSideProps({ req, res, query }) {
-  // Alpha mode: ?alpha=<ALPHA_TOUR_TOKEN> bypasses login and activates the alpha UX.
-  // If ALPHA_TOUR_TOKEN is set, the value must match exactly; otherwise any non-empty
-  // value works (useful in dev when the env var isn't configured).
+  const { createClient, createAdminClient } =
+    await import('../src/lib/supabase-server')
+  const supabase = createClient(req, res)
+
   if (query.alpha) {
     const validToken = process.env.ALPHA_TOUR_TOKEN
     if (validToken && query.alpha !== validToken) {
       return { redirect: { destination: '/auth/login', permanent: false } }
     }
+
+    const {
+      data: { user },
+    } = await supabase.auth.getUser()
+
+    if (!user) {
+      const next = encodeURIComponent(`/roi-report?alpha=${query.alpha}`)
+      return {
+        redirect: {
+          destination: `/auth/login?next=${next}`,
+          permanent: false,
+        },
+      }
+    }
+
     return { props: { isEmployee: false, isAlpha: true } }
   }
 
-  const { createClient, createAdminClient } =
-    await import('../src/lib/supabase-server')
-  const supabase = createClient(req, res)
   const {
     data: { user },
   } = await supabase.auth.getUser()
