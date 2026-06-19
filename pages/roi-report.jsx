@@ -6,14 +6,11 @@ import clsx from 'clsx'
 import MainHeader from '../src/layout/MainHeader'
 import ReportLoadingScreen from '../src/components/ROIGenerator/ReportLoadingScreen'
 import ReportViewer from '../src/components/ROIGenerator/ReportViewer'
-import DemoReportViewer from '../src/components/ROIGenerator/DemoReportViewer'
 import GeneratingView from '../src/components/ROIGenerator/GeneratingView'
 import { drainSSE } from '../src/lib/drainSSE'
 import { PIPELINE_LOG_TOOL_NAMES } from '../src/lib/roi/constants'
 import { useRouter } from 'next/router'
 import { createClient as createBrowserClient } from '../src/lib/supabase-browser'
-import ErrorBoundary from '../src/components/shared/ErrorBoundary'
-import { isEmployeeUser } from '../src/lib/isEmployee'
 
 // ── Constants ─────────────────────────────────────────────────────────────────
 
@@ -84,8 +81,6 @@ const MIN_VISIBLE_DURATION =
 const VIEW_STATES = {
   FORM: 'form',
   LOADING: 'loading',
-  CHOICE: 'choice',
-  DEMO: 'demo',
   GENERATING: 'generating',
   FINALISING: 'finalising',
   COMPLETE: 'complete',
@@ -198,7 +193,7 @@ function SplashScreen({ onExitComplete }) {
           <button
             type="button"
             onClick={() => setExiting(true)}
-            className="absolute text-xs top-4 right-4"
+            className="absolute top-4 right-4 text-xs"
             style={{ color: 'rgba(255,255,255,0.3)' }}
           >
             Skip →
@@ -206,7 +201,7 @@ function SplashScreen({ onExitComplete }) {
 
           <div className="relative flex items-center justify-center mb-6">
             <motion.div
-              className="absolute w-64 h-16 rounded-full blur-3xl opacity-20"
+              className="absolute blur-3xl rounded-full w-64 h-16 opacity-20"
               style={{ background: '#378ADD', zIndex: -1 }}
               animate={{ opacity: [0.1, 0.25, 0.1] }}
               transition={{ duration: 3, repeat: Infinity }}
@@ -263,20 +258,20 @@ function SplashScreen({ onExitComplete }) {
             initial={{ opacity: 0 }}
             animate={{ opacity: 1 }}
             transition={{ duration: 0.5, delay: 1.2 }}
-            className="mb-3 text-sm tracking-widest uppercase"
+            className="uppercase tracking-widest text-sm mb-3"
             style={{ color: 'rgba(255,255,255,0.5)' }}
           >
             AI ROI Report · Alpha
           </motion.p>
 
           <div className="text-center space-y-2 min-h-[48px]">
-            <p className="text-sm font-light text-white/70">
+            <p className="text-white/70 text-sm font-light">
               {line1}
               {line1.length > 0 && line1.length < 70 && (
                 <span className="animate-pulse ml-0.5">|</span>
               )}
             </p>
-            <p className="text-xs text-white/40">
+            <p className="text-white/40 text-xs">
               {line2}
               {line2.length > 0 && line2.length < 65 && (
                 <span className="animate-pulse ml-0.5">|</span>
@@ -291,7 +286,7 @@ function SplashScreen({ onExitComplete }) {
 
 // ── Helpers ───────────────────────────────────────────────────────────────────
 
-function validateStep(step, s1, s2, isAlpha = false) {
+function validateStep(step, s1, s2) {
   const errors = {}
   if (
     step === 1 &&
@@ -304,9 +299,6 @@ function validateStep(step, s1, s2, isAlpha = false) {
       errors.email = 'Please enter a valid work email'
     }
     if (!s2.currency) errors.currency = 'Please select a currency'
-    if (isAlpha && !s2.recipientName.trim()) {
-      errors.recipientName = 'Please enter your name'
-    }
   }
   return errors
 }
@@ -460,7 +452,7 @@ function Step1({ data, onChange, errors, isAlpha }) {
       <div className="space-y-2">
         <label className="text-[12.5px] font-semibold text-gray-800 flex items-center">
           Team size{' '}
-          <span className="ml-1 font-normal text-gray-400">
+          <span className="font-normal text-gray-400 ml-1">
             — drives realistic workflow volumes
           </span>
           {isAlpha && (
@@ -476,7 +468,7 @@ function Step1({ data, onChange, errors, isAlpha }) {
       <div className="space-y-2">
         <label className="text-[12.5px] font-semibold text-gray-800 flex items-center">
           Estimated annual revenue{' '}
-          <span className="ml-1 font-normal text-gray-400">
+          <span className="font-normal text-gray-400 ml-1">
             — sets the 5–20% Total Financial Gain band
           </span>
           {isAlpha && (
@@ -545,9 +537,8 @@ function Step2({
         value={data.recipientName}
         onChange={(v) => onChange('recipientName', v)}
         placeholder="e.g. Sarah Al-Rashid"
-        optional={!isAlpha}
+        optional
         autoComplete="name"
-        error={errors.recipientName}
       />
       <TextInput
         id="recipientTitle"
@@ -559,7 +550,7 @@ function Step2({
       />
       <div className="space-y-2">
         <label className="text-[12.5px] font-semibold text-gray-800 flex items-center">
-          Operating currency <span className="ml-1 text-red-500">*</span>
+          Operating currency <span className="text-red-500 ml-1">*</span>
           {isAlpha && (
             <Tooltip text="Every figure in your report will display in this currency." />
           )}
@@ -575,7 +566,7 @@ function Step2({
       {/* Alpha only: intake clarity star rating */}
       {isAlpha && (
         <div className="pt-4 border-t border-gray-100">
-          <p className="mb-2 text-xs text-gray-400">
+          <p className="text-xs text-gray-400 mb-2">
             Optional — How clear was this form?
           </p>
           <div className="flex gap-1.5">
@@ -587,7 +578,7 @@ function Step2({
                 onMouseEnter={() => setIntakeHovered(star)}
                 onMouseLeave={() => setIntakeHovered(0)}
                 aria-label={`${star} star${star > 1 ? 's' : ''}`}
-                className="transition-transform focus:outline-none hover:scale-110"
+                className="focus:outline-none transition-transform hover:scale-110"
               >
                 <FaStar
                   className={clsx(
@@ -608,18 +599,12 @@ function Step2({
 
 // ── Error view ────────────────────────────────────────────────────────────────
 
-function ErrorView({ message, onRetry, onUseEstimates, isEmployee }) {
+function ErrorView({ message, onRetry, onUseEstimates }) {
   const isResearchFailure =
     message?.includes('Stages done: none') ||
     message?.includes('no assembled report') ||
     message?.includes("couldn't research") ||
     message?.includes('retrieve specific web pages')
-
-  const displayMessage =
-    isEmployee || isResearchFailure
-      ? message
-      : 'Something went wrong. Our team has been notified and will look into it.'
-
   return (
     <div className="px-8 py-10 text-center">
       <div
@@ -660,7 +645,7 @@ function ErrorView({ message, onRetry, onUseEstimates, isEmployee }) {
       ) : (
         <>
           <p className="max-w-sm mx-auto mb-6 text-sm text-gray-500">
-            {displayMessage || 'Something went wrong. Please try again.'}
+            {message || 'Something went wrong. Please try again.'}
           </p>
           <div className="flex flex-col max-w-xs gap-3 mx-auto">
             <button
@@ -728,12 +713,8 @@ function SuccessView({ email, reportId, isEmployee }) {
       })
 
       if (res.status === 403) {
-        const data = await res.json().catch(() => null)
-        if (data?.error === 'limit_reached') {
-          setLimitReached(true)
-          return
-        }
-        throw new Error('HTTP 403')
+        setLimitReached(true)
+        return
       }
       if (res.status === 429) {
         setMessages((prev) => prev.slice(0, -1))
@@ -855,7 +836,7 @@ function SuccessView({ email, reportId, isEmployee }) {
             </p>
             <a
               href="https://api.leadconnectorhq.com/widget/bookings/strategy-call-with-lyrisesivto9"
-              className="inline-flex items-center gap-2 px-4 py-2 text-xs font-semibold text-white transition-colors rounded-lg bg-amber-600 hover:bg-amber-700"
+              className="inline-flex items-center gap-2 px-4 py-2 bg-amber-600 text-white text-xs font-semibold rounded-lg hover:bg-amber-700 transition-colors"
             >
               Contact Sales →
             </a>
@@ -914,33 +895,15 @@ function sseEventToLogLine(event) {
 // ── Server-side auth / alpha detection ───────────────────────────────────────
 
 export async function getServerSideProps({ req, res, query }) {
-  const { createClient, createAdminClient } =
-    await import('../src/lib/supabase-server')
-  const supabase = createClient(req, res)
-
+  // Alpha mode: any ?alpha= param bypasses login and activates the alpha UX.
+  // Proper token validation is handled in Task 2.
   if (query.alpha) {
-    const validToken = process.env.ALPHA_TOUR_TOKEN
-    if (validToken && query.alpha !== validToken) {
-      return { redirect: { destination: '/auth/login', permanent: false } }
-    }
-
-    const {
-      data: { user },
-    } = await supabase.auth.getUser()
-
-    if (!user) {
-      const next = encodeURIComponent(`/roi-report?alpha=${query.alpha}`)
-      return {
-        redirect: {
-          destination: `/auth/login?next=${next}`,
-          permanent: false,
-        },
-      }
-    }
-
     return { props: { isEmployee: false, isAlpha: true } }
   }
 
+  const { createClient, createAdminClient } =
+    await import('../src/lib/supabase-server')
+  const supabase = createClient(req, res)
   const {
     data: { user },
   } = await supabase.auth.getUser()
@@ -956,21 +919,15 @@ export async function getServerSideProps({ req, res, query }) {
     .eq('id', user.id)
     .single()
 
-  const isEmployee = isEmployeeUser(user, userData)
-
-  // The one-report-per-client cap applies only to alpha users, which are handled
-  // above via ?alpha. Normal clients generate reports through the lyrise.ai
-  // marketing site and have no cap, so send them back to the home page.
-  if (!isEmployee) {
-    return { redirect: { destination: 'https://lyrise.ai', permanent: false } }
-  }
+  const isEmployee =
+    userData?.role === 'EMPLOYEE' || user.email?.endsWith('@lyrise.ai')
 
   return { props: { isEmployee, isAlpha: false } }
 }
 
 // ── Main ──────────────────────────────────────────────────────────────────────
 
-function ROIReportInner({ isEmployee, isAlpha }) {
+export default function ROIReport({ isEmployee, isAlpha }) {
   const router = useRouter()
   const [step, setStep] = useState(1)
   const [viewState, setViewState] = useState(VIEW_STATES.FORM)
@@ -981,10 +938,6 @@ function ROIReportInner({ isEmployee, isAlpha }) {
 
   const [isGenerationComplete, setIsGenerationComplete] = useState(false)
   const generationStartedAt = useRef(Date.now())
-  // Guards against re-entrant generation — the demo tour can fire onFinish from
-  // both the final step and the CTA, and a second run would 409 on the alpha
-  // one-report guard and flicker the UI back through the loader.
-  const generationInFlightRef = useRef(false)
   const [generationLog, setGenerationLog] = useState('')
   const [sseEvents, setSseEvents] = useState([])
   const [reportState, setReportState] = useState(null)
@@ -1012,37 +965,29 @@ function ROIReportInner({ isEmployee, isAlpha }) {
   const [errors, setErrors] = useState({})
 
   // Generate a unique per-session alpha token (used as alpha_feedback PK)
+  // and fire a one-time notification email to the internal team.
   useEffect(() => {
     if (!isAlpha) return
+
     if (!localStorage.getItem('alpha_token')) {
       localStorage.setItem(
         'alpha_token',
         `alpha_${Date.now()}_${Math.random().toString(36).slice(2, 8)}`,
       )
     }
+
+    // One notification per browser session — skip if already sent
+    if (!localStorage.getItem('alpha_notified')) {
+      const token = localStorage.getItem('alpha_token')
+      fetch('/api/alpha-notify', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ alphaToken: token }),
+      })
+        .then(() => localStorage.setItem('alpha_notified', '1'))
+        .catch(() => {}) // non-critical
+    }
   }, [isAlpha])
-  const handleGenerationError = useCallback(
-    (message) => {
-      setErrorMessage(message)
-      setViewState(VIEW_STATES.ERROR)
-      if (!isEmployee) {
-        fetch('/api/notify-error', {
-          method: 'POST',
-          headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({
-            error: message,
-            context: {
-              page: 'roi-report',
-              company: s1.companyName || '(unknown)',
-            },
-            url:
-              typeof window !== 'undefined' ? window.location.href : undefined,
-          }),
-        }).catch(() => {})
-      }
-    },
-    [isEmployee, s1.companyName],
-  )
 
   const changeS1 = useCallback((key, val) => {
     setS1((prev) => ({ ...prev, [key]: val }))
@@ -1056,8 +1001,6 @@ function ROIReportInner({ isEmployee, isAlpha }) {
 
   const runGeneration = useCallback(
     async ({ skipLLM = false, estimatesOnly = false } = {}) => {
-      if (generationInFlightRef.current) return
-      generationInFlightRef.current = true
       generationStartedAt.current = Date.now()
       setIsGenerationComplete(false)
       setViewState(VIEW_STATES.GENERATING)
@@ -1074,12 +1017,7 @@ function ROIReportInner({ isEmployee, isAlpha }) {
             createBrowserClient()
               .from('alpha_feedback')
               .upsert(
-                {
-                  alpha_token: token,
-                  step_intake_completed: true,
-                  user_name: s2.recipientName.trim() || null,
-                  user_email: s2.email.trim() || null,
-                },
+                { alpha_token: token, step_intake_completed: true },
                 { onConflict: 'alpha_token' },
               )
               .then(({ error }) => {
@@ -1116,7 +1054,6 @@ function ROIReportInner({ isEmployee, isAlpha }) {
             mode: 'generate',
             formData: payload,
             devOptions: { skipLLM, estimatesOnly },
-            isAlpha,
           }),
         })
 
@@ -1196,9 +1133,10 @@ function ROIReportInner({ isEmployee, isAlpha }) {
                 setIsGenerationComplete(true)
                 setViewState(VIEW_STATES.FINALISING)
               } else {
-                handleGenerationError(
+                setErrorMessage(
                   'Report generation finished without a complete report.',
                 )
+                setViewState(VIEW_STATES.ERROR)
               }
             } else if (event.type === 'error') {
               throw new Error(event.message)
@@ -1206,17 +1144,13 @@ function ROIReportInner({ isEmployee, isAlpha }) {
           },
         )
       } catch (err) {
-        // Release the lock only on failure so the user can retry. On success
-        // (or a 409 that resolves to the existing report) the lock stays set —
-        // the page navigates to the report, and any late duplicate trigger
-        // (e.g. the demo firing onFinish twice) is ignored.
-        generationInFlightRef.current = false
-        handleGenerationError(
+        setErrorMessage(
           err.message || 'Something went wrong. Please try again.',
         )
+        setViewState(VIEW_STATES.ERROR)
       }
     },
-    [s1, s2, isAlpha, handleGenerationError],
+    [s1, s2, isAlpha],
   )
 
   // Enforce minimum loader visibility before transitioning to COMPLETE
@@ -1273,38 +1207,24 @@ function ROIReportInner({ isEmployee, isAlpha }) {
     }
 
     const fallback = setTimeout(() => {
-      handleGenerationError(
+      setErrorMessage(
         'Report was generated but could not be saved. Please try again or check server logs.',
       )
+      setViewState(VIEW_STATES.ERROR)
     }, 8000)
     return () => clearTimeout(fallback)
-  }, [viewState, reportId, router, isAlpha, handleGenerationError])
+  }, [viewState, reportId, router, isAlpha])
 
   const next = useCallback(
     async ({ skipLLM = false } = {}) => {
-      const currentErrors = validateStep(step, s1, s2, isAlpha)
+      const currentErrors = validateStep(step, s1, s2)
       setErrors(currentErrors)
       if (Object.keys(currentErrors).length) return
       if (step < TOTAL_STEPS) {
         setStep((prev) => prev + 1)
         return
       }
-      if (skipLLM) {
-        await runGeneration({ skipLLM })
-        return
-      }
-      // Skip choice card if user already completed or skipped the demo tour
-      let tourSeen = false
-      try {
-        tourSeen = !!localStorage.getItem('lyrise_tour_seen')
-      } catch {
-        /* private browsing */
-      }
-      if (tourSeen) {
-        await runGeneration()
-      } else {
-        setViewState(VIEW_STATES.CHOICE)
-      }
+      await runGeneration({ skipLLM })
     },
     [step, s1, s2, runGeneration],
   )
@@ -1383,7 +1303,6 @@ function ROIReportInner({ isEmployee, isAlpha }) {
               message={errorMessage}
               onRetry={() => runGeneration()}
               onUseEstimates={() => runGeneration({ estimatesOnly: true })}
-              isEmployee={isEmployee}
             />
           </div>
         </div>
@@ -1392,60 +1311,6 @@ function ROIReportInner({ isEmployee, isAlpha }) {
   }
 
   // ── Form ──────────────────────────────────────────────────────────────────
-  if (viewState === VIEW_STATES.DEMO) {
-    return (
-      <DemoReportViewer
-        email={s2.email}
-        companyName={s1.companyName}
-        onFinish={() => runGeneration()}
-        onSkip={() => runGeneration()}
-      />
-    )
-  }
-
-  if (viewState === VIEW_STATES.CHOICE) {
-    return (
-      <div className="rebranding-landing-page -mt-[12px]">
-        <MainHeader />
-        <div className="flex flex-col items-center justify-center min-h-screen p-4">
-          <div className="w-full max-w-lg bg-white border border-gray-100 shadow-xl rounded-2xl overflow-hidden">
-            <div className="px-8 pt-8 pb-6 text-center border-b border-gray-100">
-              <div
-                className="inline-flex items-center justify-center w-12 h-12 rounded-full mb-4"
-                style={{ background: '#EBF0F8' }}
-              >
-                <span style={{ fontSize: 22 }}>📊</span>
-              </div>
-              <h2 className="text-xl font-bold text-gray-900 mb-2">
-                Want to explore a sample report first?
-              </h2>
-              <p className="text-sm text-gray-500 leading-relaxed max-w-sm mx-auto">
-                See exactly what your report will look like — built with real
-                data for a sample consulting firm. Takes about 2 minutes.
-              </p>
-            </div>
-            <div className="p-6 flex flex-col gap-3">
-              <button
-                type="button"
-                onClick={() => setViewState(VIEW_STATES.DEMO)}
-                className="w-full px-5 py-3 text-sm font-semibold text-white rounded-lg transition-colors"
-                style={{ background: '#003f87' }}
-              >
-                Show me the demo →
-              </button>
-              <button
-                type="button"
-                onClick={() => runGeneration()}
-                className="w-full px-5 py-3 text-sm font-medium text-gray-700 border border-gray-200 rounded-lg hover:border-gray-400 transition-colors"
-              >
-                Skip — generate my report now
-              </button>
-            </div>
-          </div>
-        </div>
-      </div>
-    )
-  }
 
   const progress = (step / TOTAL_STEPS) * 100
 
@@ -1463,7 +1328,7 @@ function ROIReportInner({ isEmployee, isAlpha }) {
 
       {/* Alpha testing banner */}
       {isAlpha && (
-        <div className="fixed top-0 left-0 right-0 z-50 flex items-center justify-center gap-2 py-1 text-xs font-semibold bg-amber-400 text-amber-900">
+        <div className="fixed top-0 left-0 right-0 z-50 flex items-center justify-center gap-2 bg-amber-400 py-1 text-xs font-semibold text-amber-900">
           <span>🧪</span>
           <span>Alpha testing — your feedback shapes this product</span>
         </div>
@@ -1587,16 +1452,5 @@ function ROIReportInner({ isEmployee, isAlpha }) {
         </div>
       </div>
     </div>
-  )
-}
-
-export default function ROIReport(props) {
-  return (
-    <ErrorBoundary
-      isEmployee={props.isEmployee}
-      pageContext={{ page: 'roi-report' }}
-    >
-      <ROIReportInner {...props} />
-    </ErrorBoundary>
   )
 }
