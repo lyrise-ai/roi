@@ -1014,10 +1014,16 @@ export default function ROIReport({ isEmployee, isAlpha }) {
         try {
           const token = localStorage.getItem('alpha_token')
           if (token) {
-            createBrowserClient()
+            const supabase = createBrowserClient()
+            supabase
               .from('alpha_feedback')
               .upsert(
-                { alpha_token: token, step_intake_completed: true },
+                {
+                  alpha_token: token,
+                  step_intake_completed: true,
+                  company_name: s1.companyName?.trim() || null,
+                  user_email: s2.email?.trim() || null,
+                },
                 { onConflict: 'alpha_token' },
               )
               .then(({ error }) => {
