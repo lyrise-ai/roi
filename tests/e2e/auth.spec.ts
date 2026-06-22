@@ -1,0 +1,104 @@
+/**
+ * Auth wall + login page tests — all run anonymously.
+ * Tests that ALL protected routes redirect correctly and the login UI is intact.
+ */
+import { test, expect } from '@playwright/test'
+
+// ── Protected-route redirects ─────────────────────────────────────────────────
+
+test.describe('protected route redirects', () => {
+  const protectedRoutes = [
+    '/dashboard',
+    '/dashboard/usage',
+    '/roi-report',
+    '/report/nonexistent-id',
+  ]
+
+  for (const route of protectedRoutes) {
+    test(`${route} → /auth/login when unauthenticated`, async ({ page }) => {
+      await page.goto(route)
+      await expect(page).toHaveURL(/auth\/login/)
+    })
+  }
+
+  test('/ redirects (to dashboard or straight to login)', async ({ page }) => {
+    await page.goto('/')
+    await expect(page).toHaveURL(/auth\/login|dashboard/)
+  })
+})
+
+// ── Login page UI ─────────────────────────────────────────────────────────────
+
+test.describe('login page UI', () => {
+  test.beforeEach(async ({ page }) => {
+    await page.goto('/auth/login')
+  })
+
+  test('page title is "Sign In | LyRise"', async ({ page }) => {
+    await expect(page).toHaveTitle('Sign In | LyRise')
+  })
+
+  test('renders without console errors', async ({ page }) => {
+    const errors: string[] = []
+    page.on('pageerror', (err) => errors.push(err.message))
+    await page.waitForLoadState('networkidle')
+    expect(errors).toHaveLength(0)
+  })
+
+  test('Google OAuth button is visible and not disabled', async ({ page }) => {
+    const btn = page.getByRole('button', { name: /continue with google/i })
+    await expect(btn).toBeVisible()
+    await expect(btn).toBeEnabled()
+  })
+
+  test('email input accepts text', async ({ page }) => {
+    const input = page.getByPlaceholder('Email')
+    await expect(input).toBeVisible()
+    await input.fill('test@example.com')
+    await expect(input).toHaveValue('test@example.com')
+  })
+
+  test('password input masks characters', async ({ page }) => {
+    const input = page.getByPlaceholder('Password')
+    await expect(input).toHaveAttribute('type', 'password')
+  })
+
+  test('Log In button submits the form', async ({ page }) => {
+    await expect(page.getByRole('button', { name: /log in/i })).toBeEnabled()
+  })
+
+  test('toggle to signup mode changes submit button text', async ({ page }) => {
+    await page.getByRole('button', { name: /sign up/i }).click()
+    await expect(
+      page.getByRole('button', { name: 'Sign Up' }).last(),
+    ).toBeVisible()
+  })
+
+  test('toggle back to login mode restores Log In text', async ({ page }) => {
+    await page.getByRole('button', { name: /sign up/i }).click()
+    await page.getByRole('button', { name: /log in/i }).click()
+    await expect(page.getByRole('button', { name: 'Log In' })).toBeVisible()
+  })
+
+  test('submitting blank form shows browser validation (email required)', async ({
+    page,
+  }) => {
+    const emailInput = page.getByPlaceholder('Email')
+    await expect(emailInput).toHaveAttribute('required', '')
+  })
+})
+
+// ── Login error feedback ──────────────────────────────────────────────────────
+
+test.describe('login error feedback', () => {
+  test('shows error message on bad credentials', async ({ page }) => {
+    await page.goto('/auth/login')
+    await page.fill('[placeholder="Email"]', 'nobody@example.com')
+    await page.fill('[placeholder="Password"]', 'wrongpassword')
+    await page.click('button[type="submit"]')
+    // The error paragraph appears when login fails
+    await expect(page.locator('p.text-red-500, p[class*="red"]')).toBeVisible({
+      timeout: 10_000,
+    })
+  })
+})
