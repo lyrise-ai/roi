@@ -895,9 +895,20 @@ function sseEventToLogLine(event) {
 // ── Server-side auth / alpha detection ───────────────────────────────────────
 
 export async function getServerSideProps({ req, res, query }) {
-  // Alpha mode: any ?alpha= param bypasses login and activates the alpha UX.
-  // Proper token validation is handled in Task 2.
   if (query.alpha) {
+    const { createClient } = await import('../src/lib/supabase-server')
+    const supabase = createClient(req, res)
+    const {
+      data: { user },
+    } = await supabase.auth.getUser()
+    if (!user) {
+      return {
+        redirect: {
+          destination: '/auth/login?next=%2Froi-report%3Falpha%3Dalpha123',
+          permanent: false,
+        },
+      }
+    }
     return { props: { isEmployee: false, isAlpha: true } }
   }
 
@@ -1014,10 +1025,16 @@ export default function ROIReport({ isEmployee, isAlpha }) {
         try {
           const token = localStorage.getItem('alpha_token')
           if (token) {
-            createBrowserClient()
+            const supabase = createBrowserClient()
+            supabase
               .from('alpha_feedback')
               .upsert(
-                { alpha_token: token, step_intake_completed: true },
+                {
+                  alpha_token: token,
+                  step_intake_completed: true,
+                  company_name: s1.companyName?.trim() || null,
+                  user_email: s2.email?.trim() || null,
+                },
                 { onConflict: 'alpha_token' },
               )
               .then(({ error }) => {
@@ -1058,7 +1075,17 @@ export default function ROIReport({ isEmployee, isAlpha }) {
         })
 
         if (response.status === 401) {
-          window.location.href = '/auth/login'
+          // Set localStorage flag as last-resort fallback for dashboard recovery.
+          // Primary recovery is the auth_next cookie set by login.js.
+          if (isAlpha) {
+            try {
+              localStorage.setItem('alpha_redirect_pending', 'true')
+            } catch {}
+          }
+          const next = encodeURIComponent(
+            window.location.pathname + window.location.search,
+          )
+          window.location.href = `/auth/login?next=${next}`
           return
         }
 

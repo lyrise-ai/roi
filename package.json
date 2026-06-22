@@ -12,6 +12,9 @@
     "prettier": "prettier --write .",
     "eval:roi": "node evals/roi/run.mjs",
     "eval:roi:scaffold": "node evals/roi/scaffoldCasesFromPdf.mjs",
+    "test:e2e": "playwright test",
+    "test:e2e:smoke": "playwright test --grep @smoke",
+    "dev:test": "next dev -p 3777",
     "prepare": "husky install"
   },
   "dependencies": {
@@ -65,6 +68,7 @@
     "*.{js,jsx,ts,tsx,json,css,md}": "prettier --write"
   },
   "devDependencies": {
+    "@playwright/test": "^1.61.0",
     "@types/react": "^18.3.12",
     "@types/react-dom": "^18.3.1",
     "autoprefixer": "^10.4.14",
