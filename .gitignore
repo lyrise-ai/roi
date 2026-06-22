@@ -57,8 +57,9 @@ temp/
 *.tmp
 *.temp
 
-# Local workflow scratch files
+# Local workflow scratch files (but keep GitHub Actions)
 workflows/
+!.github/workflows/
 
 # AI tool instructions inside .github (keep workflows/actions untouched)
 .github/code-review-graph.instruction.md
