@@ -8,14 +8,27 @@ import { supabaseAdmin } from '../../src/lib/supabaseAdmin'
 
 export async function getServerSideProps({ req, res, query }) {
   const { code } = query
+
+  // Prefer ?next= query param (legacy path). Fall back to the auth_next cookie
+  // set by login.js before the OAuth redirect — this is the primary path now,
+  // since we no longer put ?next= in redirectTo (Supabase allowlist issue).
+  let next = '/dashboard'
+  if (query.next && query.next.startsWith('/')) {
+    next = query.next
+  } else if (req.cookies?.auth_next) {
+    try {
+      const decoded = decodeURIComponent(req.cookies.auth_next)
+      if (decoded.startsWith('/')) next = decoded
+    } catch {}
+  }
+
   if (!code) {
     return { redirect: { destination: '/auth/login', permanent: false } }
   }
 
   const supabase = createRouteClient(req, res)
-  const { error: exchangeError } = await supabase.auth.exchangeCodeForSession(
-    code,
-  )
+  const { error: exchangeError } =
+    await supabase.auth.exchangeCodeForSession(code)
   if (exchangeError) {
     return { redirect: { destination: '/auth/login', permanent: false } }
   }
@@ -55,9 +68,7 @@ export async function getServerSideProps({ req, res, query }) {
     role = newRole
   }
 
-  // const destination = role === 'EMPLOYEE' ? '/dashboard' : '/roi-report'
-  const destination = '/dashboard'
-  return { redirect: { destination, permanent: false } }
+  return { redirect: { destination: next, permanent: false } }
 }
 
 export default function Callback() {

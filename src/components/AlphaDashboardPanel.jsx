@@ -1,5 +1,6 @@
 import { useState, useEffect, useCallback, useMemo } from 'react'
 import { createClient } from '../lib/supabase-browser'
+import { isEmployeeEmail } from '../lib/isEmployee'
 
 const round1 = (n) => Math.round(n * 10) / 10
 
@@ -438,7 +439,10 @@ export default function AlphaDashboardPanel() {
         .select('*')
         .order('created_at', { ascending: false })
       if (sbError) throw sbError
-      setRows(data ?? [])
+      const externalOnly = (data ?? []).filter(
+        row => !isEmployeeEmail(row.user_email)
+      )
+      setRows(externalOnly)
       setLastFetched(new Date())
     } catch {
       setError(true)
@@ -660,6 +664,72 @@ export default function AlphaDashboardPanel() {
         </div>
       </div>
 
+      {/* Headline: External Alpha Testers */}
+      <div className="border-2 border-green-400 bg-white rounded-2xl p-8 shadow-sm mb-8">
+        <p className="text-xs font-semibold uppercase tracking-wider text-green-600 mb-3">
+          External Alpha Testers
+        </p>
+        <p className="text-5xl font-bold text-slate-900 mb-2">{rows.length}</p>
+        <p className="text-sm text-slate-500">
+          Real users outside LyRise who have tried the alpha tour
+        </p>
+      </div>
+
+      {/* Tester details table */}
+      <div className="bg-white border border-slate-200 rounded-2xl shadow-sm overflow-hidden mb-8">
+        <div className="px-6 py-4 border-b border-slate-100">
+          <h2 className="text-sm font-bold text-slate-900">Tester details</h2>
+        </div>
+        {rows.length === 0 ? (
+          <p className="text-xs text-slate-400 px-6 py-8 text-center">
+            No external testers yet.
+          </p>
+        ) : (
+          <div className="max-h-72 overflow-y-auto">
+            <table className="w-full text-sm">
+              <thead className="bg-slate-50 border-b border-slate-100 sticky top-0">
+                <tr>
+                  {['Email', 'Company', 'Status', 'Started'].map((col) => (
+                    <th
+                      key={col}
+                      className="px-6 py-3 text-left text-xs font-semibold uppercase tracking-wider text-slate-400"
+                    >
+                      {col}
+                    </th>
+                  ))}
+                </tr>
+              </thead>
+              <tbody className="divide-y divide-slate-100">
+                {rows.map((r, i) => (
+                  <tr key={i} className="hover:bg-slate-50 transition-colors">
+                    <td className="px-6 py-3 text-slate-500 text-xs whitespace-nowrap">
+                      {r.user_email || <span className="text-slate-300">—</span>}
+                    </td>
+                    <td className="px-6 py-3 text-slate-600 text-xs whitespace-nowrap">
+                      {r.company_name || '—'}
+                    </td>
+                    <td className="px-6 py-3">
+                      {r.tour_completed ? (
+                        <span className="text-xs font-semibold px-2.5 py-1 rounded-full bg-green-100 text-green-700">
+                          Completed
+                        </span>
+                      ) : (
+                        <span className="text-xs font-semibold px-2.5 py-1 rounded-full bg-amber-100 text-amber-700">
+                          In progress
+                        </span>
+                      )}
+                    </td>
+                    <td className="px-6 py-3 text-slate-600 tabular-nums whitespace-nowrap">
+                      {fmtDate(r.created_at)}
+                    </td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+          </div>
+        )}
+      </div>
+
       <div className="space-y-10">
         {/* Section 1: Key metrics */}
         <section>
@@ -820,21 +890,23 @@ export default function AlphaDashboardPanel() {
             {benefitFeedback.length === 0 ? (
               <p className="text-xs text-slate-400">No responses yet.</p>
             ) : (
-              <div className="space-y-3">
-                {benefitFeedback.map((r, i) => (
-                  <div key={i} className="bg-slate-50 rounded-xl p-3">
-                    <p className="text-sm text-slate-700 leading-relaxed mb-2">
-                      {r.pmf_main_benefit}
-                    </p>
-                    {r.pmf_disappointed && (
-                      <span
-                        className={`text-[10px] font-semibold px-2 py-0.5 rounded-full ${disappointmentColor(r.pmf_disappointed)}`}
-                      >
-                        {r.pmf_disappointed}
-                      </span>
-                    )}
-                  </div>
-                ))}
+              <div className="max-h-80 overflow-y-auto pr-2">
+                <div className="space-y-3">
+                  {benefitFeedback.map((r, i) => (
+                    <div key={i} className="bg-slate-50 rounded-xl p-3">
+                      <p className="text-sm text-slate-700 leading-relaxed mb-2">
+                        {r.pmf_main_benefit}
+                      </p>
+                      {r.pmf_disappointed && (
+                        <span
+                          className={`text-[10px] font-semibold px-2 py-0.5 rounded-full ${disappointmentColor(r.pmf_disappointed)}`}
+                        >
+                          {r.pmf_disappointed}
+                        </span>
+                      )}
+                    </div>
+                  ))}
+                </div>
               </div>
             )}
           </div>
@@ -855,21 +927,23 @@ export default function AlphaDashboardPanel() {
                   No matching responses yet.
                 </p>
               ) : (
-                <div className="space-y-3">
-                  {filteredImprovementFeedback.map((r, i) => (
-                    <div key={i} className="bg-slate-50 rounded-xl p-3">
-                      <p className="text-sm text-slate-700 leading-relaxed mb-2">
-                        {r.pmf_improvement}
-                      </p>
-                      {r.pmf_disappointed && (
-                        <span
-                          className={`text-[10px] font-semibold px-2 py-0.5 rounded-full ${disappointmentColor(r.pmf_disappointed)}`}
-                        >
-                          {r.pmf_disappointed}
-                        </span>
-                      )}
-                    </div>
-                  ))}
+                <div className="max-h-80 overflow-y-auto pr-2">
+                  <div className="space-y-3">
+                    {filteredImprovementFeedback.map((r, i) => (
+                      <div key={i} className="bg-slate-50 rounded-xl p-3">
+                        <p className="text-sm text-slate-700 leading-relaxed mb-2">
+                          {r.pmf_improvement}
+                        </p>
+                        {r.pmf_disappointed && (
+                          <span
+                            className={`text-[10px] font-semibold px-2 py-0.5 rounded-full ${disappointmentColor(r.pmf_disappointed)}`}
+                          >
+                            {r.pmf_disappointed}
+                          </span>
+                        )}
+                      </div>
+                    ))}
+                  </div>
                 </div>
               )}
             </div>
@@ -883,24 +957,26 @@ export default function AlphaDashboardPanel() {
               {veryDisImprovementFeedback.length === 0 ? (
                 <p className="text-xs text-slate-400">No responses yet.</p>
               ) : (
-                <div className="space-y-3">
-                  {veryDisImprovementFeedback.map((r, i) => (
-                    <div
-                      key={i}
-                      className="bg-green-50 border border-green-100 rounded-xl p-3"
-                    >
-                      <p className="text-sm text-slate-700 leading-relaxed mb-2">
-                        {r.pmf_improvement}
-                      </p>
-                      {r.pmf_disappointed && (
-                        <span
-                          className={`text-[10px] font-semibold px-2 py-0.5 rounded-full ${disappointmentColor(r.pmf_disappointed)}`}
-                        >
-                          {r.pmf_disappointed}
-                        </span>
-                      )}
-                    </div>
-                  ))}
+                <div className="max-h-80 overflow-y-auto pr-2">
+                  <div className="space-y-3">
+                    {veryDisImprovementFeedback.map((r, i) => (
+                      <div
+                        key={i}
+                        className="bg-green-50 border border-green-100 rounded-xl p-3"
+                      >
+                        <p className="text-sm text-slate-700 leading-relaxed mb-2">
+                          {r.pmf_improvement}
+                        </p>
+                        {r.pmf_disappointed && (
+                          <span
+                            className={`text-[10px] font-semibold px-2 py-0.5 rounded-full ${disappointmentColor(r.pmf_disappointed)}`}
+                          >
+                            {r.pmf_disappointed}
+                          </span>
+                        )}
+                      </div>
+                    ))}
+                  </div>
                 </div>
               )}
             </div>
@@ -1083,81 +1159,6 @@ export default function AlphaDashboardPanel() {
                   )
                 })()}
             </>
-          )}
-        </section>
-
-        {/* Section 7: Recent submissions */}
-        <section className="bg-white border border-slate-200 rounded-2xl shadow-sm overflow-hidden">
-          <div className="px-6 py-4 border-b border-slate-100">
-            <h2 className="text-sm font-bold text-slate-900">
-              Recent responses
-            </h2>
-            <p className="text-xs text-slate-400">
-              Last {recentRows.length} submissions
-            </p>
-          </div>
-          {recentRows.length === 0 ? (
-            <p className="text-xs text-slate-400 px-6 py-8 text-center">
-              No submissions yet.
-            </p>
-          ) : (
-            <table className="w-full text-sm">
-              <thead className="bg-slate-50 border-b border-slate-100">
-                <tr>
-                  {[
-                    'Date',
-                    'Name',
-                    'Email',
-                    'Feeling',
-                    'Virality',
-                    'Completed',
-                  ].map((col) => (
-                    <th
-                      key={col}
-                      className="px-6 py-3 text-left text-xs font-semibold uppercase tracking-wider text-slate-400"
-                    >
-                      {col}
-                    </th>
-                  ))}
-                </tr>
-              </thead>
-              <tbody className="divide-y divide-slate-100">
-                {recentRows.map((r, i) => (
-                  <tr key={i} className="hover:bg-slate-50 transition-colors">
-                    <td className="px-6 py-3 text-slate-600 tabular-nums whitespace-nowrap">
-                      {fmtDate(r.created_at)}
-                    </td>
-                    <td className="px-6 py-3 text-slate-700 font-medium whitespace-nowrap">
-                      {r.user_name || (
-                        <span className="text-slate-300 text-xs">—</span>
-                      )}
-                    </td>
-                    <td className="px-6 py-3 text-slate-500 text-xs whitespace-nowrap">
-                      {r.user_email || (
-                        <span className="text-slate-300">—</span>
-                      )}
-                    </td>
-                    <td className="px-6 py-3">
-                      {r.pmf_disappointed ? (
-                        <span
-                          className={`text-xs font-semibold px-2.5 py-1 rounded-full ${disappointmentColor(r.pmf_disappointed)}`}
-                        >
-                          {r.pmf_disappointed}
-                        </span>
-                      ) : (
-                        <span className="text-slate-300 text-xs">—</span>
-                      )}
-                    </td>
-                    <td className="px-6 py-3">
-                      <Stars value={r.pmf_virality} />
-                    </td>
-                    <td className="px-6 py-3 text-base">
-                      {r.tour_completed ? '✅' : '⏳'}
-                    </td>
-                  </tr>
-                ))}
-              </tbody>
-            </table>
           )}
         </section>
       </div>

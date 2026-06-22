@@ -4,17 +4,17 @@ import Head from 'next/head'
 import { createRouteClient } from '../../src/lib/supabaseRouteClient'
 import { supabase } from '../../src/lib/supabase'
 
-export async function getServerSideProps({ req, res }) {
+export async function getServerSideProps({ req, res, query }) {
   const supabase = createRouteClient(req, res)
   const { data } = await supabase.auth.getUser()
+  const next =
+    query.next && query.next.startsWith('/') ? query.next : '/dashboard'
 
   if (data.user) {
-    return {
-      redirect: { destination: '/', permanent: false },
-    }
+    return { redirect: { destination: next, permanent: false } }
   }
 
-  return { props: {} }
+  return { props: { next } }
 }
 
 function GoogleIcon() {
@@ -33,17 +33,26 @@ function GoogleIcon() {
     </svg>
   )
 }
-const handleGoogleAuth = async () => {
-  await supabase.auth.signInWithOAuth({
-    provider: 'google',
-    options: {
-      redirectTo: `${window.location.origin}/auth/callback`,
-    },
-  })
-}
-export default function Login() {
+export default function Login({ next = '/dashboard' }) {
   const router = useRouter()
   const [mode, setMode] = useState('login')
+
+  const handleGoogleAuth = async () => {
+    // Store the post-login destination in a cookie so callback.js can read it
+    // server-side. We deliberately do NOT put ?next= in redirectTo because
+    // Supabase's allowlist validates the full URL including query params, and
+    // a URL with encoded path characters won't match the registered base URL,
+    // causing Supabase to fall back to the site root and drop the auth code.
+    try {
+      document.cookie = `auth_next=${encodeURIComponent(next)}; path=/; max-age=300; SameSite=Lax`
+    } catch {}
+    await supabase.auth.signInWithOAuth({
+      provider: 'google',
+      options: {
+        redirectTo: `${window.location.origin}/auth/callback`,
+      },
+    })
+  }
   const [email, setEmail] = useState('')
   const [password, setPassword] = useState('')
   const [loading, setLoading] = useState(false)
@@ -71,12 +80,7 @@ export default function Login() {
         return
       }
 
-      // if (data.role === 'EMPLOYEE') {
-      //   router.push('/dashboard')
-      // } else if (data.role === 'CLIENT') {
-      //   router.push('/roi-report')
-      // }
-      router.push('/dashboard')
+      router.push(next)
     } catch {
       setError('Something went wrong. Please try again.')
       setLoading(false)
@@ -214,8 +218,8 @@ export default function Login() {
               {loading
                 ? 'Please wait…'
                 : mode === 'signup'
-                ? 'Sign Up'
-                : 'Log In'}
+                  ? 'Sign Up'
+                  : 'Log In'}
             </button>
           </form>
 
