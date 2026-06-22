@@ -38,10 +38,18 @@ export default function Login({ next = '/dashboard' }) {
   const [mode, setMode] = useState('login')
 
   const handleGoogleAuth = async () => {
+    // Store the post-login destination in a cookie so callback.js can read it
+    // server-side. We deliberately do NOT put ?next= in redirectTo because
+    // Supabase's allowlist validates the full URL including query params, and
+    // a URL with encoded path characters won't match the registered base URL,
+    // causing Supabase to fall back to the site root and drop the auth code.
+    try {
+      document.cookie = `auth_next=${encodeURIComponent(next)}; path=/; max-age=300; SameSite=Lax`
+    } catch {}
     await supabase.auth.signInWithOAuth({
       provider: 'google',
       options: {
-        redirectTo: `${window.location.origin}/auth/callback?next=${encodeURIComponent(next)}`,
+        redirectTo: `${window.location.origin}/auth/callback`,
       },
     })
   }

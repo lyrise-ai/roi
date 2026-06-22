@@ -288,6 +288,13 @@ function DashboardInner({
       setActiveTab('My Reports')
   }, [isEmployee, router.query.tab])
 
+  useEffect(() => {
+    if (localStorage.getItem('alpha_redirect_pending') === 'true') {
+      localStorage.removeItem('alpha_redirect_pending')
+      window.location.href = '/roi-report?alpha=alpha123'
+    }
+  }, [])
+
   const myReports = reports.filter((r) => r.user_id === userId)
 
   const goToReport = (id) => {

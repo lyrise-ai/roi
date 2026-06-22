@@ -895,9 +895,20 @@ function sseEventToLogLine(event) {
 // ── Server-side auth / alpha detection ───────────────────────────────────────
 
 export async function getServerSideProps({ req, res, query }) {
-  // Alpha mode: any ?alpha= param bypasses login and activates the alpha UX.
-  // Proper token validation is handled in Task 2.
   if (query.alpha) {
+    const { createClient } = await import('../src/lib/supabase-server')
+    const supabase = createClient(req, res)
+    const {
+      data: { user },
+    } = await supabase.auth.getUser()
+    if (!user) {
+      return {
+        redirect: {
+          destination: '/auth/login?next=%2Froi-report%3Falpha%3Dalpha123',
+          permanent: false,
+        },
+      }
+    }
     return { props: { isEmployee: false, isAlpha: true } }
   }
 
@@ -1064,7 +1075,17 @@ export default function ROIReport({ isEmployee, isAlpha }) {
         })
 
         if (response.status === 401) {
-          window.location.href = '/auth/login'
+          // Set localStorage flag as last-resort fallback for dashboard recovery.
+          // Primary recovery is the auth_next cookie set by login.js.
+          if (isAlpha) {
+            try {
+              localStorage.setItem('alpha_redirect_pending', 'true')
+            } catch {}
+          }
+          const next = encodeURIComponent(
+            window.location.pathname + window.location.search,
+          )
+          window.location.href = `/auth/login?next=${next}`
           return
         }
 
