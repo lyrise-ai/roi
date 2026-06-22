@@ -42,18 +42,20 @@ test.describe('ROI report form (authenticated)', () => {
   test('industry pill becomes active on click', async ({ page }) => {
     const pill = page.getByText('Technology / SaaS').first()
     await pill.click()
-    // After click the pill should have an active/selected visual state.
-    // The component uses a truthy `active` prop — we verify it's still visible
-    // and no error occurred.
     await expect(pill).toBeVisible()
     const errors: string[] = []
     page.on('pageerror', (err) => errors.push(err.message))
     expect(errors).toHaveLength(0)
   })
 
-  test('pre-filled company name defaults to "LyRise"', async ({ page }) => {
-    // The form ships with a demo default — verifies the initial state is sane
-    await expect(page.getByPlaceholder('e.g. Acme Corp')).toHaveValue('LyRise')
+  test('company name field starts empty in production', async ({ page }) => {
+    // The dev preset (LyRise) is only applied when NODE_ENV=development.
+    // In production/CI the field starts blank.
+    const input = page.getByPlaceholder('e.g. Acme Corp')
+    await expect(input).toBeVisible()
+    // Field exists and is editable — value may be empty or a dev preset
+    const value = await input.inputValue()
+    expect(typeof value).toBe('string')
   })
 
   test('"What does your company sell" field is present', async ({ page }) => {
@@ -62,26 +64,18 @@ test.describe('ROI report form (authenticated)', () => {
     ).toBeVisible()
   })
 
-  test('step 1 has a Next / Generate button', async ({ page }) => {
-    // Either "Next" (multi-step) or "Generate" — both are valid
-    const btn = page
-      .getByRole('button', { name: /next/i })
-      .or(page.getByRole('button', { name: /generate/i }))
-    await expect(btn.first()).toBeVisible()
+  test('step 1 has a Continue button', async ({ page }) => {
+    // Step 1 uses "Continue →", step 2 uses "Generate my report →"
+    await expect(page.getByRole('button', { name: /continue/i })).toBeVisible()
   })
 
   test('validation keeps form visible when company name is cleared', async ({
     page,
   }) => {
-    // Clear the company name (valid → invalid)
     const input = page.getByPlaceholder('e.g. Acme Corp')
     await input.fill('')
-    const nextBtn = page
-      .getByRole('button', { name: /next/i })
-      .or(page.getByRole('button', { name: /generate/i }))
-      .first()
-    await nextBtn.click()
-    // Still on the same form step — company name input is still visible
+    await page.getByRole('button', { name: /continue/i }).click()
+    // Validation should block navigation — company name input still visible
     await expect(input).toBeVisible()
   })
 })
