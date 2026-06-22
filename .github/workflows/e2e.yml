@@ -26,23 +26,33 @@ jobs:
       - name: Install Playwright browsers
         run: npx playwright install chromium --with-deps
 
+      # Build once so `next start` serves pre-compiled pages.
+      # Without this, `next dev` compiles each page on first request
+      # which makes tests 10-30x slower in CI than locally.
+      - name: Build
+        run: npm run build
+        env:
+          NEXT_PUBLIC_SUPABASE_URL: ${{ secrets.NEXT_PUBLIC_SUPABASE_URL }}
+          NEXT_PUBLIC_SUPABASE_ANON_KEY: ${{ secrets.NEXT_PUBLIC_SUPABASE_ANON_KEY }}
+          NEXT_PUBLIC_BASE_URL: http://localhost:3777
+          NEXT_PUBLIC_ENV: ci
+
       - name: Run E2E tests
         run: npm run test:e2e
         env:
-          # ── Supabase (required — add these as GitHub repo secrets) ──────────
+          # ── Supabase ────────────────────────────────────────────────────────
           NEXT_PUBLIC_SUPABASE_URL: ${{ secrets.NEXT_PUBLIC_SUPABASE_URL }}
           NEXT_PUBLIC_SUPABASE_ANON_KEY: ${{ secrets.NEXT_PUBLIC_SUPABASE_ANON_KEY }}
           SUPABASE_SERVICE_ROLE_KEY: ${{ secrets.SUPABASE_SERVICE_ROLE_KEY }}
 
-          # ── Test user (required for authenticated tests) ─────────────────
+          # ── Test user (for authenticated project) ───────────────────────────
           TEST_USER_EMAIL: ${{ secrets.TEST_USER_EMAIL }}
           TEST_USER_PASSWORD: ${{ secrets.TEST_USER_PASSWORD }}
 
-          # ── App / misc ───────────────────────────────────────────────────
+          # ── App / misc ──────────────────────────────────────────────────────
           NEXT_PUBLIC_BASE_URL: http://localhost:3777
           NEXT_PUBLIC_ENV: ci
 
-      # Upload the HTML report so failures can be inspected in the Actions UI
       - uses: actions/upload-artifact@v4
         if: always()
         with:

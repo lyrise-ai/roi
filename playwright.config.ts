@@ -46,11 +46,12 @@ export default defineConfig({
   ],
 
   webServer: {
-    command: 'npm run dev -- -p 3777',
+    // CI: run against the production build (pre-built in the workflow) so
+    // every page serves instantly instead of triggering on-demand compilation.
+    // Local: reuse the dev server if already running, otherwise start one.
+    command: process.env.CI ? 'npm start -- -p 3777' : 'npm run dev -- -p 3777',
     port: 3777,
-    timeout: 120_000,
-    // Reuse a running test server to keep subsequent hook runs fast.
-    // In CI a fresh server always starts because nothing is pre-running.
-    reuseExistingServer: true,
+    timeout: 60_000,
+    reuseExistingServer: !process.env.CI,
   },
 })
