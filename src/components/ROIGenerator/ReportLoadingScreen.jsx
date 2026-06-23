@@ -5,8 +5,8 @@ const PHASES = [
   {
     id: 'research',
     label: 'Research',
-    subLabel: 'Collecting benchmark and market inputs',
-    heading: 'Running company research',
+    subLabel: 'Identifying likely high-friction workflows in your company',
+    heading: 'Mapping your operational signals',
     logs: [
       'Profiling company from public sources…',
       'Looking up company intelligence…',
@@ -19,8 +19,9 @@ const PHASES = [
   {
     id: 'model',
     label: 'Financial Model',
-    subLabel: 'Running ROI projections and scenario analysis',
-    heading: 'Running financial analysis',
+    subLabel:
+      'Matching your profile against benchmarks and ranking workflows by ROI',
+    heading: 'Interpreting your operational signals',
     logs: [
       'Calibrating ROI model inputs…',
       'Refining model assumptions…',
@@ -30,8 +31,8 @@ const PHASES = [
   {
     id: 'report',
     label: 'Report',
-    subLabel: 'Compiling executive summary and financial outputs',
-    heading: 'Preparing ROI report',
+    subLabel: 'Ranking workflows by ROI and assembling your Profit Map',
+    heading: 'Building your Profit Map',
     logs: [
       'Writing profit levers and executive summary…',
       'Rendering financial tables and report layout…',
@@ -77,6 +78,7 @@ export default function ReportLoadingScreen({
   generationLog,
   sseEvents = [],
   viewState = 'generating',
+  onOpen,
 }) {
   const [phaseIndex, setPhaseIndex] = useState(0)
   const [logs, setLogs] = useState([])
@@ -211,7 +213,7 @@ export default function ReportLoadingScreen({
           {
             id: logId.current,
             phase: 'finalising',
-            text: '✓ Report assembled successfully',
+            text: '✓ Profit Map assembled successfully',
             time: nowLabel(),
           },
         ].slice(-MAX_LOG_LINES)
@@ -263,12 +265,12 @@ export default function ReportLoadingScreen({
   const { displayHeading, displaySubLabel } = useMemo(() => {
     if (isComplete)
       return {
-        displayHeading: 'ROI report ready',
-        displaySubLabel: 'Opening report…',
+        displayHeading: 'Your Profit Map is ready.',
+        displaySubLabel: 'Opening your Profit Map…',
       }
     if (isFinalising)
       return {
-        displayHeading: 'Finalising report',
+        displayHeading: 'Finalising your Profit Map',
         displaySubLabel: 'Preparing deliverable',
       }
     return {
@@ -296,7 +298,7 @@ export default function ReportLoadingScreen({
             </span>
             <span className="ml-1 text-gray-300">/</span>
             <span className="font-poppins text-[12.5px] font-normal text-gray-500">
-              ROI Report
+              Profit Map
             </span>
           </div>
           <div className="flex items-center gap-3">
@@ -312,10 +314,10 @@ export default function ReportLoadingScreen({
               )}
               <span className="font-poppins text-[11.5px] font-medium text-gray-500">
                 {isComplete
-                  ? 'Complete'
+                  ? 'Ready'
                   : isFinalising
-                  ? 'Finalising'
-                  : 'Processing'}
+                    ? 'Finalising'
+                    : 'Interpreting'}
               </span>
             </div>
             <span className="text-gray-200">|</span>
@@ -393,6 +395,25 @@ export default function ReportLoadingScreen({
             />
           </div>
 
+          {/* Open Profit Map CTA — shown when complete and a handler is provided */}
+          {isComplete && onOpen && (
+            <motion.div
+              initial={{ opacity: 0, y: 6 }}
+              animate={{ opacity: 1, y: 0 }}
+              transition={{ duration: 0.35, ease: [0.22, 1, 0.36, 1] }}
+              className="mt-5"
+            >
+              <button
+                type="button"
+                onClick={onOpen}
+                className="w-full rounded-lg py-3 text-sm font-semibold text-white transition-opacity hover:opacity-90"
+                style={{ background: '#5B48F8' }}
+              >
+                Open my Profit Map →
+              </button>
+            </motion.div>
+          )}
+
           {/* Footer note */}
           <p className="font-poppins mt-1.5 text-[10px] text-gray-400 opacity-50">
             Your data is encrypted in transit and at rest.
@@ -420,8 +441,8 @@ function PhasePipeline({ phaseIndex }) {
                     (state === 'done'
                       ? 'text-gray-400'
                       : state === 'active'
-                      ? 'text-navy'
-                      : 'text-gray-300')
+                        ? 'text-navy'
+                        : 'text-gray-300')
                   }
                 >
                   {p.label}
@@ -482,9 +503,9 @@ function PhaseDot({ state }) {
 
 function ActivityLog({ logs, phaseIndex, elapsed, isFinalising }) {
   const phaseActivityLabels = [
-    'Data Collection',
+    'Signal Mapping',
     'Financial Modelling',
-    'Report Assembly',
+    'Profit Map Assembly',
   ]
   // eslint-disable-next-line security/detect-object-injection
   const activePhaseLabel = phaseActivityLabels[phaseIndex]
