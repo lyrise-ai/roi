@@ -8,6 +8,7 @@ import theme from '../src/theme'
 import createEmotionCache from '../src/utilities/createEmotionCache'
 import '../styles/global.css'
 import { initAmplitude } from '../src/utilities/amplitude'
+import posthog from 'posthog-js'
 
 const clientSideEmotionCache = createEmotionCache()
 
@@ -74,7 +75,16 @@ export default function MyApp(props) {
     ) {
       initAmplitude()
     }
-  }, [])
+},[])
+
+React.useEffect(() => {
+  if (typeof window !== 'undefined') {
+    posthog.init(process.env.NEXT_PUBLIC_POSTHOG_PROJECT_TOKEN, {
+      api_host: process.env.NEXT_PUBLIC_POSTHOG_HOST,
+    })
+  }
+}, [])
+  
 
   return (
     <CacheProvider value={emotionCache}>

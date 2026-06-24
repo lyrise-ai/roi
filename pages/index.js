@@ -16,3 +16,4 @@ export async function getServerSideProps({ query }) {
 export default function Index() {
   return null
 }
+
