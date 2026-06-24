@@ -99,33 +99,34 @@ function parseTimestamp(iso) {
   return new Date(hasZone ? iso : `${iso}Z`)
 }
 
+// Month abbreviations used by the manual formatters below.
+// Avoids toLocaleString() whose output can differ between Node.js and browsers
+// depending on the ICU data bundle, causing React hydration mismatches.
+const MONTHS_SHORT = [
+  'Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun',
+  'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec',
+]
+
 function formatDate(iso) {
   const d = parseTimestamp(iso)
   if (!d) return '—'
-  return d.toLocaleDateString('en-GB', {
-    day: 'numeric',
-    month: 'short',
-    year: 'numeric',
-  })
+  return `${d.getUTCDate()} ${MONTHS_SHORT[d.getUTCMonth()]} ${d.getUTCFullYear()}`
 }
 
-// Full timestamp (date + time) with 12-hour clock, matching the usage
-// dashboard's "When" column (e.g. "10 Jun 2026, 6:59:40 PM"). en-GB keeps the
-// day-month-year ordering; we uppercase the am/pm so it reads "PM" not "pm".
+// Full timestamp with 12-hour clock, e.g. "10 Jun 2026, 6:59:40 PM".
+// Uses explicit UTC accessors so server and client always produce the same string.
 function formatDateTime(iso) {
   const d = parseTimestamp(iso)
   if (!d) return '—'
-  return d
-    .toLocaleString('en-GB', {
-      day: 'numeric',
-      month: 'short',
-      year: 'numeric',
-      hour: 'numeric',
-      minute: '2-digit',
-      second: '2-digit',
-      hour12: true,
-    })
-    .replace(/\b(am|pm)\b/i, (m) => m.toUpperCase())
+  const day = d.getUTCDate()
+  const mon = MONTHS_SHORT[d.getUTCMonth()]
+  const yr = d.getUTCFullYear()
+  let hr = d.getUTCHours()
+  const min = String(d.getUTCMinutes()).padStart(2, '0')
+  const sec = String(d.getUTCSeconds()).padStart(2, '0')
+  const ampm = hr >= 12 ? 'PM' : 'AM'
+  hr = hr % 12 || 12
+  return `${day} ${mon} ${yr}, ${hr}:${min}:${sec} ${ampm}`
 }
 
 function timeAgo(iso) {
@@ -597,7 +598,10 @@ function DashboardInner({
                       <td className="px-6 py-4 text-gray-400 font-outfit">
                         {formatDate(u.created_at)}
                       </td>
-                      <td className="px-6 py-4 text-gray-400 font-outfit">
+                      <td
+                        className="px-6 py-4 text-gray-400 font-outfit"
+                        suppressHydrationWarning
+                      >
                         {timeAgo(u.last_active)}
                       </td>
                     </tr>
@@ -633,7 +637,10 @@ function DashboardInner({
                         {EVENT_LABELS[e.type] ?? e.type}
                       </span>
                     </span>
-                    <span className="flex-shrink-0 text-xs text-gray-400 font-outfit">
+                    <span
+                      className="flex-shrink-0 text-xs text-gray-400 font-outfit"
+                      suppressHydrationWarning
+                    >
                       {timeAgo(e.created_at)}
                     </span>
                   </li>

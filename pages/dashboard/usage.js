@@ -58,7 +58,33 @@ export async function getServerSideProps({ req, res }) {
 // ── Formatting helpers ────────────────────────────────────────────────────────
 const usd = (n) => `$${Number(n || 0).toFixed(n >= 1 ? 2 : 4)}`
 const secs = (ms) => `${(Number(ms || 0) / 1000).toFixed(1)}s`
-const num = (n) => Number(n || 0).toLocaleString()
+// Locale-independent comma-separated integer. toLocaleString() without an
+// explicit locale can differ between Node.js and the browser (ICU data).
+const num = (n) =>
+  String(Math.round(Number(n || 0))).replace(/\B(?=(\d{3})+(?!\d))/g, ',')
+
+// Month abbreviations for the date formatter below.
+const MONTHS_SHORT = [
+  'Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun',
+  'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec',
+]
+
+// Produces "10 Jun 2026, 6:59:40 PM" using UTC accessors so server and client
+// always agree, regardless of system locale or timezone.
+function fmtDateTime(iso) {
+  if (!iso) return '—'
+  const d = new Date(iso)
+  if (Number.isNaN(d.getTime())) return '—'
+  const day = d.getUTCDate()
+  const mon = MONTHS_SHORT[d.getUTCMonth()]
+  const yr = d.getUTCFullYear()
+  let hr = d.getUTCHours()
+  const min = String(d.getUTCMinutes()).padStart(2, '0')
+  const sec = String(d.getUTCSeconds()).padStart(2, '0')
+  const ampm = hr >= 12 ? 'PM' : 'AM'
+  hr = hr % 12 || 12
+  return `${day} ${mon} ${yr}, ${hr}:${min}:${sec} ${ampm}`
+}
 
 // Human-friendly duration: "—" / "45s" / "3m 20s".
 const dur = (ms) => {
@@ -473,9 +499,7 @@ function EngagementPanel({ data }) {
                     <TableCell align="right">{num(r.chatMessages)}</TableCell>
                     <TableCell align="right">{num(r.downloads)}</TableCell>
                     <TableCell align="right">
-                      {r.lastActivity
-                        ? new Date(r.lastActivity).toLocaleString()
-                        : '—'}
+                      {fmtDateTime(r.lastActivity)}
                     </TableCell>
                     <TableCell align="right">
                       <ViewReportLink reportId={r.reportId} />
@@ -591,7 +615,7 @@ function ReportRow({ row }) {
             </IconButton>
           )}
         </TableCell>
-        <TableCell>{new Date(row.created_at).toLocaleString()}</TableCell>
+        <TableCell>{fmtDateTime(row.created_at)}</TableCell>
         <TableCell>
           <Box
             component="span"
