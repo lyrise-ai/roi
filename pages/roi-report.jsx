@@ -163,16 +163,8 @@ function Tooltip({ text, openLeft = false }) {
 
 function SplashScreen({ onExitComplete }) {
   const [exiting, setExiting] = useState(false)
-  const line1 = useTypewriter(
-    'Welcome to The Alpha Tour! You are among the first to experience this.',
-    30,
-    1200,
-  )
-  const line2 = useTypewriter(
-    'This report is customised for you and will be sent to your email.',
-    30,
-    4100,
-  )
+  const line1 = useTypewriter('', 30, 1200)
+  const line2 = useTypewriter('', 30, 4100)
 
   useEffect(() => {
     const t = setTimeout(() => setExiting(true), 8050)
@@ -261,22 +253,33 @@ function SplashScreen({ onExitComplete }) {
             className="uppercase tracking-widest text-sm mb-3"
             style={{ color: 'rgba(255,255,255,0.5)' }}
           >
-            AI ROI Report · Alpha
+            AI Profit Map · Early Access
           </motion.p>
 
-          <div className="text-center space-y-2 min-h-[48px]">
-            <p className="text-white/70 text-sm font-light">
-              {line1}
-              {line1.length > 0 && line1.length < 70 && (
-                <span className="animate-pulse ml-0.5">|</span>
-              )}
+          <div className="text-center space-y-3 min-h-[48px]">
+            <h2
+              className="text-white text-xl font-bold leading-tight tracking-tight"
+              style={{ letterSpacing: '-0.3px' }}
+            >
+              Find where your company
+              <br />
+              is leaking profit.
+            </h2>
+            <p className="text-white/40 text-sm leading-relaxed max-w-xs mx-auto">
+              In 60 seconds, LyRise builds an AI Profit Map — estimating hours
+              lost, capacity leaking, and the first workflow worth fixing.
             </p>
-            <p className="text-white/40 text-xs">
-              {line2}
-              {line2.length > 0 && line2.length < 65 && (
-                <span className="animate-pulse ml-0.5">|</span>
-              )}
-            </p>
+            <motion.button
+              type="button"
+              onClick={() => setExiting(true)}
+              initial={{ opacity: 0, y: 6 }}
+              animate={{ opacity: 1, y: 0 }}
+              transition={{ duration: 0.4, delay: 1.6 }}
+              className="mt-2 px-6 py-3 rounded-lg text-white text-sm font-semibold"
+              style={{ background: '#5B48F8' }}
+            >
+              Generate my Profit Map →
+            </motion.button>
           </div>
         </motion.div>
       )}
@@ -383,18 +386,88 @@ function TextInput({
 
 // ── Step 1 ────────────────────────────────────────────────────────────────────
 
+const PAIN_CHIPS = [
+  'Hiring & onboarding',
+  'Client reporting',
+  'Proposal writing',
+  'Document review',
+  'Data entry & admin',
+  'Internal comms',
+  'Scheduling & coordination',
+]
+
+function PainSelector({ value, onChange }) {
+  return (
+    <div
+      className="rounded-lg p-4 mb-1"
+      style={{
+        background: '#F5F3FF',
+        border: '1px solid #EDE9FE',
+      }}
+    >
+      <p
+        className="text-[10px] font-bold uppercase tracking-wider mb-1"
+        style={{ color: '#5B48F8', letterSpacing: '0.12em' }}
+      >
+        ① Dream
+      </p>
+      <p className="text-sm font-semibold text-gray-900 mb-3">
+        Where do you feel the most operational drag?
+      </p>
+      <div className="flex flex-wrap gap-2">
+        {PAIN_CHIPS.map((chip) => {
+          const active = value === chip
+          return (
+            <button
+              key={chip}
+              type="button"
+              onClick={() => onChange(active ? '' : chip)}
+              className="px-3 py-1.5 rounded-full text-[12px] font-medium transition-all duration-100"
+              style={
+                active
+                  ? {
+                      background: '#5B48F8',
+                      color: 'white',
+                      border: '1.5px solid #5B48F8',
+                    }
+                  : {
+                      background: 'white',
+                      color: '#374151',
+                      border: '1.5px solid #D1D5DB',
+                    }
+              }
+            >
+              {chip}
+            </button>
+          )
+        })}
+      </div>
+    </div>
+  )
+}
+
 function Step1({ data, onChange, errors, isAlpha }) {
   return (
     <div className="space-y-5">
+      {isAlpha && (
+        <PainSelector
+          value={data.painArea || ''}
+          onChange={(v) => onChange('painArea', v)}
+        />
+      )}
       <div>
         <p className="text-[11px] font-semibold uppercase tracking-wider text-gray-400 mb-1">
           Your company
         </p>
         <h2 className="mb-1 text-xl font-bold text-gray-900">
-          Let&apos;s start with the basics
+          {isAlpha
+            ? 'Where should we look first?'
+            : "Let's start with the basics"}
         </h2>
         <p className="text-sm text-gray-500">
-          Takes under a minute — we research the rest automatically.
+          {isAlpha
+            ? "Give us the basics. We'll research the rest and build a first-pass Profit Map."
+            : 'Takes under a minute — we research the rest automatically.'}
         </p>
       </div>
       <TextInput
@@ -507,11 +580,13 @@ function Step2({
           Delivery
         </p>
         <h2 className="mb-1 text-xl font-bold text-gray-900">
-          Where should we send your report?
+          {isAlpha
+            ? 'Who should own this Profit Map?'
+            : 'Where should we send your report?'}
         </h2>
         <p className="text-sm text-gray-500">
           {isAlpha
-            ? 'Your report is generated and displayed here — usually ready in 60 seconds.'
+            ? "We'll show it here first, then send a copy you can share with your team."
             : 'Your report is generated and emailed — usually ready in 60 seconds.'}
         </p>
         {isDev && (
@@ -987,7 +1062,7 @@ export default function ROIReport({ isEmployee, isAlpha }) {
       )
     }
 
-    // One notification per browser session — skip if already sent
+    // One notification per browser session -- skip if already sent
     if (!localStorage.getItem('alpha_notified')) {
       const token = localStorage.getItem('alpha_token')
       fetch('/api/alpha-notify', {
@@ -1224,11 +1299,12 @@ export default function ROIReport({ isEmployee, isAlpha }) {
       }
     }
 
+    // Alpha users navigate manually via the "Open my Profit Map" button
+    if (isAlpha) return () => {}
+
     if (reportId) {
       const timeout = setTimeout(() => {
-        router.push(
-          isAlpha ? `/report/${reportId}?alpha=true` : `/report/${reportId}`,
-        )
+        router.push(`/report/${reportId}`)
       }, 400)
       return () => clearTimeout(timeout)
     }
@@ -1263,7 +1339,7 @@ export default function ROIReport({ isEmployee, isAlpha }) {
 
   // ── Renders ───────────────────────────────────────────────────────────────
 
-  // Alpha splash — shown until animation completes
+  // Alpha splash -- shown until animation completes
   if (isAlpha && showSplash) {
     return <SplashScreen onExitComplete={() => setShowSplash(false)} />
   }
@@ -1297,6 +1373,11 @@ export default function ROIReport({ isEmployee, isAlpha }) {
             generationLog={generationLog}
             sseEvents={sseEvents}
             viewState={viewState}
+            onOpen={
+              isAlpha && reportId
+                ? () => router.push(`/report/${reportId}?alpha=true`)
+                : undefined
+            }
           />
         </motion.div>
       </AnimatePresence>
@@ -1355,9 +1436,11 @@ export default function ROIReport({ isEmployee, isAlpha }) {
 
       {/* Alpha testing banner */}
       {isAlpha && (
-        <div className="fixed top-0 left-0 right-0 z-50 flex items-center justify-center gap-2 bg-amber-400 py-1 text-xs font-semibold text-amber-900">
-          <span>🧪</span>
-          <span>Alpha testing — your feedback shapes this product</span>
+        <div
+          className="fixed top-0 left-0 right-0 z-50 flex items-center justify-center gap-2 py-1 text-xs font-medium"
+          style={{ background: '#1A2E4A', color: '#7BAFD4' }}
+        >
+          Private early access — your feedback shapes this product
         </div>
       )}
 
@@ -1469,9 +1552,18 @@ export default function ROIReport({ isEmployee, isAlpha }) {
                 <button
                   type="button"
                   onClick={() => next()}
-                  className="px-5 py-2 text-sm font-semibold text-white transition-colors bg-gray-900 rounded-lg shadow-sm hover:bg-gray-700"
+                  className="px-5 py-2 text-sm font-semibold text-white transition-colors rounded-lg shadow-sm"
+                  style={
+                    step === TOTAL_STEPS && isAlpha
+                      ? { background: '#5B48F8' }
+                      : { background: '#111827' }
+                  }
                 >
-                  {step === TOTAL_STEPS ? 'Generate my report →' : 'Continue →'}
+                  {step === TOTAL_STEPS
+                    ? isAlpha
+                      ? 'Generate my Profit Map →'
+                      : 'Generate my report →'
+                    : 'Continue →'}
                 </button>
               </div>
             </div>
