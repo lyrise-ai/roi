@@ -25,6 +25,7 @@ import KeyboardArrowDownIcon from '@mui/icons-material/KeyboardArrowDown'
 import KeyboardArrowUpIcon from '@mui/icons-material/KeyboardArrowUp'
 import { createRouteClient } from '../../src/lib/supabaseRouteClient'
 import { createAdminClient } from '../../src/lib/supabase-server'
+import { fmtDateTime } from '../../src/utilities/formatDateTime'
 
 // ── Server-side employee gate ─────────────────────────────────────────────────
 // Non-employees never receive the page (redirected to login). Mirrors the auth
@@ -58,7 +59,10 @@ export async function getServerSideProps({ req, res }) {
 // ── Formatting helpers ────────────────────────────────────────────────────────
 const usd = (n) => `$${Number(n || 0).toFixed(n >= 1 ? 2 : 4)}`
 const secs = (ms) => `${(Number(ms || 0) / 1000).toFixed(1)}s`
-const num = (n) => Number(n || 0).toLocaleString()
+// Locale-independent comma-separated integer. toLocaleString() without an
+// explicit locale can differ between Node.js and the browser (ICU data).
+const num = (n) =>
+  String(Math.round(Number(n || 0))).replace(/\B(?=(\d{3})+(?!\d))/g, ',')
 
 // Human-friendly duration: "—" / "45s" / "3m 20s".
 const dur = (ms) => {
@@ -473,9 +477,7 @@ function EngagementPanel({ data }) {
                     <TableCell align="right">{num(r.chatMessages)}</TableCell>
                     <TableCell align="right">{num(r.downloads)}</TableCell>
                     <TableCell align="right">
-                      {r.lastActivity
-                        ? new Date(r.lastActivity).toLocaleString()
-                        : '—'}
+                      {fmtDateTime(r.lastActivity)}
                     </TableCell>
                     <TableCell align="right">
                       <ViewReportLink reportId={r.reportId} />
@@ -591,7 +593,7 @@ function ReportRow({ row }) {
             </IconButton>
           )}
         </TableCell>
-        <TableCell>{new Date(row.created_at).toLocaleString()}</TableCell>
+        <TableCell>{fmtDateTime(row.created_at)}</TableCell>
         <TableCell>
           <Box
             component="span"

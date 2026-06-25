@@ -12,6 +12,10 @@ import MainHeader from '../src/layout/MainHeader/index'
 import { getRoleForUser } from '../src/lib/authHelpers'
 import AlphaDashboardPanel from '../src/components/AlphaDashboardPanel'
 import ErrorBoundary from '../src/components/shared/ErrorBoundary'
+import {
+  fmtDate as formatDate,
+  fmtDateTime as formatDateTime,
+} from '../src/utilities/formatDateTime'
 
 const STATUS_STYLES = {
   SUCCESS: { bg: 'bg-green-50', text: 'text-green-700', label: 'Done' },
@@ -97,35 +101,6 @@ function parseTimestamp(iso) {
   if (!iso) return null
   const hasZone = /[zZ]$|[+-]\d{2}:?\d{2}$/.test(iso)
   return new Date(hasZone ? iso : `${iso}Z`)
-}
-
-function formatDate(iso) {
-  const d = parseTimestamp(iso)
-  if (!d) return '—'
-  return d.toLocaleDateString('en-GB', {
-    day: 'numeric',
-    month: 'short',
-    year: 'numeric',
-  })
-}
-
-// Full timestamp (date + time) with 12-hour clock, matching the usage
-// dashboard's "When" column (e.g. "10 Jun 2026, 6:59:40 PM"). en-GB keeps the
-// day-month-year ordering; we uppercase the am/pm so it reads "PM" not "pm".
-function formatDateTime(iso) {
-  const d = parseTimestamp(iso)
-  if (!d) return '—'
-  return d
-    .toLocaleString('en-GB', {
-      day: 'numeric',
-      month: 'short',
-      year: 'numeric',
-      hour: 'numeric',
-      minute: '2-digit',
-      second: '2-digit',
-      hour12: true,
-    })
-    .replace(/\b(am|pm)\b/i, (m) => m.toUpperCase())
 }
 
 function timeAgo(iso) {
@@ -597,7 +572,10 @@ function DashboardInner({
                       <td className="px-6 py-4 text-gray-400 font-outfit">
                         {formatDate(u.created_at)}
                       </td>
-                      <td className="px-6 py-4 text-gray-400 font-outfit">
+                      <td
+                        className="px-6 py-4 text-gray-400 font-outfit"
+                        suppressHydrationWarning
+                      >
                         {timeAgo(u.last_active)}
                       </td>
                     </tr>
@@ -633,7 +611,10 @@ function DashboardInner({
                         {EVENT_LABELS[e.type] ?? e.type}
                       </span>
                     </span>
-                    <span className="flex-shrink-0 text-xs text-gray-400 font-outfit">
+                    <span
+                      className="flex-shrink-0 text-xs text-gray-400 font-outfit"
+                      suppressHydrationWarning
+                    >
                       {timeAgo(e.created_at)}
                     </span>
                   </li>
