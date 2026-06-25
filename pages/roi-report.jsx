@@ -4,8 +4,6 @@ import { motion, AnimatePresence } from 'framer-motion'
 import { FaCheckCircle } from 'react-icons/fa'
 import clsx from 'clsx'
 import MainHeader from '../src/layout/MainHeader'
-import LogosMarquee from '../src/components/MainLandingPage/LogosMarquee'
-import LastSection from '../src/components/MainLandingPage/LastSection'
 import AssumptionVerificationView from '../src/components/ROIGenerator/AssumptionVerificationView'
 import ReportLoadingScreen from '../src/components/ROIGenerator/ReportLoadingScreen'
 import { drainSSE } from '../src/lib/drainSSE'
@@ -1280,11 +1278,7 @@ function ROIReportInner({ isEmployee }) {
               isEmployee={isEmployee}
             />
           </div>
-          <div className="w-full mt-12 md:w-1/2">
-            <LogosMarquee />
-          </div>
         </div>
-        <LastSection />
       </div>
     )
   }
@@ -1337,7 +1331,6 @@ function ROIReportInner({ isEmployee }) {
           isSubmitting={viewState === VIEW_STATES.FINALISING}
           isRerunning={isRerunningResearch}
         />
-        <LastSection />
       </>
     )
   }
@@ -1456,11 +1449,7 @@ function ROIReportInner({ isEmployee }) {
           </motion.div>
         </div>
 
-        <div className="w-full mt-12 md:w-1/2">
-          <LogosMarquee />
-        </div>
       </div>
-      <LastSection />
     </div>
   )
 }
