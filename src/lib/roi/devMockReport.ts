@@ -18,10 +18,16 @@ const CURRENCY_MAP: Record<string, Currency> = {
   GBP: { code: 'GBP', symbol: 'GBP ', name: 'British Pound' },
   SAR: { code: 'SAR', symbol: 'ر.س', name: 'Saudi Riyal' },
   AED: { code: 'AED', symbol: 'د.إ', name: 'UAE Dirham' },
+  QAR: { code: 'QAR', symbol: 'QAR ', name: 'Qatari Riyal' },
+  KWD: { code: 'KWD', symbol: 'KWD ', name: 'Kuwaiti Dinar' },
+  BHD: { code: 'BHD', symbol: 'BHD ', name: 'Bahraini Dinar' },
+  OMR: { code: 'OMR', symbol: 'OMR ', name: 'Omani Rial' },
   EGP: { code: 'EGP', symbol: 'EGP ', name: 'Egyptian Pound' },
+  NGN: { code: 'NGN', symbol: 'NGN ', name: 'Nigerian Naira' },
+  ZAR: { code: 'ZAR', symbol: 'ZAR ', name: 'South African Rand' },
 }
 
-function getCurrency(code: string): Currency {
+export function getCurrency(code: string): Currency {
   return CURRENCY_MAP[code] ?? CURRENCY_MAP.USD
 }
 

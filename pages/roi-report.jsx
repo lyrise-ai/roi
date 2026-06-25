@@ -1,16 +1,18 @@
-import React, { useState, useCallback, useEffect, useRef } from 'react'
+import React, { useState, useCallback, useEffect, useMemo, useRef } from 'react'
 import Head from 'next/head'
 import { motion, AnimatePresence } from 'framer-motion'
-import { FaCheckCircle, FaStar } from 'react-icons/fa'
+import { FaCheckCircle } from 'react-icons/fa'
 import clsx from 'clsx'
 import MainHeader from '../src/layout/MainHeader'
+import LogosMarquee from '../src/components/MainLandingPage/LogosMarquee'
+import LastSection from '../src/components/MainLandingPage/LastSection'
+import AssumptionVerificationView from '../src/components/ROIGenerator/AssumptionVerificationView'
 import ReportLoadingScreen from '../src/components/ROIGenerator/ReportLoadingScreen'
-import ReportViewer from '../src/components/ROIGenerator/ReportViewer'
-import GeneratingView from '../src/components/ROIGenerator/GeneratingView'
 import { drainSSE } from '../src/lib/drainSSE'
 import { PIPELINE_LOG_TOOL_NAMES } from '../src/lib/roi/constants'
+import { roiCalculator } from '../src/lib/roi/pipeline/roiCalculator'
 import { useRouter } from 'next/router'
-import { createClient as createBrowserClient } from '../src/lib/supabase-browser'
+import ErrorBoundary from '../src/components/shared/ErrorBoundary'
 
 // ── Constants ─────────────────────────────────────────────────────────────────
 
@@ -42,6 +44,9 @@ const CURRENCIES = [
   'NGN – Nigerian Naira (NGN)',
   'ZAR – South African Rand (ZAR)',
 ]
+// Aligned with the regions handled in roiCalculator.ts → toRegion(): UAE,
+// Saudi, Qatar/Kuwait/Bahrain/Oman (GCC peers), US, UK, Egypt. Anything else
+// falls through to the DEFAULT band.
 const COUNTRY_OPTS = [
   'Egypt',
   'United Arab Emirates',
@@ -72,22 +77,33 @@ const REVENUE_OPTS = [
   '$200M+',
   'Prefer not to say',
 ]
-
+const CURRENCY_OPTIONS = CURRENCIES.map((label) => ({
+  label,
+  value: label.split(' – ')[0],
+}))
+const TEAM_SIZE_OPTIONS = TEAM_SIZE_OPTS.map((label) => ({
+  label,
+  value: label,
+}))
+const REVENUE_OPTIONS = REVENUE_OPTS.map((label) => ({
+  label,
+  value: label === 'Prefer not to say' ? '' : label,
+}))
 const TOTAL_STEPS = 2
 const IS_DEV = process.env.NODE_ENV === 'development'
+// Minimum time the loader stays visible (ms). Override via NEXT_PUBLIC_ROI_MIN_LOADER_MS.
 const MIN_VISIBLE_DURATION =
   Number(process.env.NEXT_PUBLIC_ROI_MIN_LOADER_MS) || 3500
-
 const VIEW_STATES = {
   FORM: 'form',
   LOADING: 'loading',
   GENERATING: 'generating',
+  VERIFYING: 'verifying',
   FINALISING: 'finalising',
   COMPLETE: 'complete',
   SUCCESS: 'success',
   ERROR: 'error',
 }
-
 const DEV_STEP1_PRESET = {
   companyName: 'LyRise',
   website: 'lyrise.ai',
@@ -102,189 +118,6 @@ const DEV_STEP2_PRESET = {
   recipientName: 'Yousef',
   recipientTitle: 'COO',
   currency: 'SAR – Saudi Riyal (SAR)',
-}
-
-// ── Typewriter hook (alpha splash) ────────────────────────────────────────────
-
-function useTypewriter(text, speed = 35, startDelay = 0) {
-  const [displayed, setDisplayed] = useState('')
-  useEffect(() => {
-    let timeout
-    let interval
-    timeout = setTimeout(() => {
-      let i = 0
-      interval = setInterval(() => {
-        setDisplayed(text.slice(0, i + 1))
-        i++
-        if (i >= text.length) clearInterval(interval)
-      }, speed)
-    }, startDelay)
-    return () => {
-      clearTimeout(timeout)
-      clearInterval(interval)
-    }
-  }, [text, speed, startDelay])
-  return displayed
-}
-
-// ── Tooltip (alpha form fields) ───────────────────────────────────────────────
-
-function Tooltip({ text, openLeft = false }) {
-  const [visible, setVisible] = useState(false)
-  return (
-    <span className="relative inline-flex items-center ml-1.5">
-      <button
-        type="button"
-        aria-label="More info"
-        onMouseEnter={() => setVisible(true)}
-        onMouseLeave={() => setVisible(false)}
-        onFocus={() => setVisible(true)}
-        onBlur={() => setVisible(false)}
-        className="w-4 h-4 rounded-full bg-slate-200 text-slate-500 text-[10px] font-bold flex items-center justify-center hover:bg-slate-300 transition-colors focus:outline-none"
-      >
-        ?
-      </button>
-      {visible && (
-        <span
-          role="tooltip"
-          className={clsx(
-            'absolute z-50 w-52 rounded-lg border border-slate-200 bg-white px-3 py-2 text-xs text-slate-600 shadow-lg leading-relaxed',
-            openLeft ? 'top-6 right-0' : 'top-6 left-0',
-          )}
-        >
-          {text}
-        </span>
-      )}
-    </span>
-  )
-}
-
-// ── Splash screen (alpha only) ────────────────────────────────────────────────
-
-function SplashScreen({ onExitComplete }) {
-  const [exiting, setExiting] = useState(false)
-  const line1 = useTypewriter('', 30, 1200)
-  const line2 = useTypewriter('', 30, 4100)
-
-  useEffect(() => {
-    const t = setTimeout(() => setExiting(true), 8050)
-    return () => clearTimeout(t)
-  }, [])
-
-  return (
-    <AnimatePresence onExitComplete={onExitComplete}>
-      {!exiting && (
-        <motion.div
-          key="splash"
-          initial={{ opacity: 1 }}
-          exit={{ opacity: 0 }}
-          transition={{ duration: 0.5 }}
-          className="fixed inset-0 flex flex-col items-center justify-center"
-          style={{ background: '#0f1729' }}
-        >
-          <button
-            type="button"
-            onClick={() => setExiting(true)}
-            className="absolute top-4 right-4 text-xs"
-            style={{ color: 'rgba(255,255,255,0.3)' }}
-          >
-            Skip →
-          </button>
-
-          <div className="relative flex items-center justify-center mb-6">
-            <motion.div
-              className="absolute blur-3xl rounded-full w-64 h-16 opacity-20"
-              style={{ background: '#378ADD', zIndex: -1 }}
-              animate={{ opacity: [0.1, 0.25, 0.1] }}
-              transition={{ duration: 3, repeat: Infinity }}
-            />
-            <motion.div
-              initial={{ opacity: 0, scale: 0.8, y: 10 }}
-              animate={{ opacity: 1, scale: 1, y: 0 }}
-              transition={{ duration: 0.7, ease: 'easeOut' }}
-            >
-              <svg
-                width="152"
-                height="51"
-                viewBox="0 0 101 34"
-                fill="none"
-                xmlns="http://www.w3.org/2000/svg"
-                style={{
-                  filter: 'drop-shadow(0 0 20px rgba(55,138,221,0.3))',
-                }}
-              >
-                <path
-                  d="M100.717 11.1115V9.2424L99.9451 11.1115H99.8304L99.0609 9.2424V11.1115H98.7783V8.84229H99.184L99.8863 10.5491L100.594 8.84229H101V11.1115H100.717Z"
-                  fill="white"
-                />
-                <path
-                  d="M97.3945 11.1115V9.09411H96.6782V8.84229H98.399V9.09411H97.6771V11.1115H97.3945Z"
-                  fill="white"
-                />
-                <path
-                  fillRule="evenodd"
-                  clipRule="evenodd"
-                  d="M53.8583 22.3198L44.7675 13.3606H48.3742C52.0564 13.3522 55.0391 10.3639 55.0391 6.68168C55.0391 2.99668 52.0564 0.00839404 48.3742 0H38.1922C33.1277 0.00559598 29.023 4.1103 29.0174 9.17752V15.8645C28.8649 19.049 26.238 21.584 23.0171 21.5894C21.05 21.5866 19.458 19.9946 19.4552 18.0275V8.71572H16.1451V18.0275C16.1479 21.8217 19.2229 24.8967 23.0171 24.8995C25.2133 24.8967 27.3369 24.1182 29.0174 22.7033V24.6917C28.9072 26.9568 27.5002 28.9683 25.3898 29.8436C23.1877 30.7558 20.6555 30.2521 18.9711 28.5677L18.6465 28.2431L16.3046 30.5851L16.6292 30.9097C19.2621 33.5398 23.2185 34.326 26.6545 32.9018C30.0933 31.4777 32.3345 28.1256 32.3345 24.4042V9.1774H32.3275C32.3332 5.94014 34.9549 3.31566 38.1922 3.31286H48.3742C50.2293 3.31846 51.7318 4.82379 51.7318 6.68168C51.7318 8.53677 50.2293 10.0421 48.3742 10.0477H39.0735V24.8325H42.3864V15.6633L51.6926 24.8353H53.8583V22.3198ZM0 1.19776H3.86407V21.5198H14.9023V24.8327H0V1.19776ZM75.1536 16.3685L75.1704 16.3797C76.4603 17.3478 77.1122 18.5901 77.1122 20.0731C77.1122 23.1537 74.5464 25.2242 70.7243 25.2242C67.9907 25.2242 65.8894 24.1582 64.4763 22.0569L64.2217 21.6763L66.8407 19.8856L67.1009 20.2745C68.0186 21.6707 69.205 22.3479 70.7243 22.3479C72.5934 22.3479 73.8217 21.528 73.8469 20.2577C73.8693 19.27 73.2985 18.6461 70.1088 17.9801C66.6896 17.317 64.952 15.7529 64.952 13.327C64.952 10.3052 67.4031 8.27378 71.0489 8.27378C73.7378 8.27378 75.5873 9.28107 76.547 11.2705L76.7205 11.6342L74.0288 13.411L73.7966 12.9465C73.1922 11.7377 72.2521 11.1474 70.9174 11.1474C69.2778 11.1474 68.2173 11.8637 68.2173 12.9689C68.2173 13.7607 68.4551 14.463 71.3707 15.059C73.1922 15.4591 74.4653 15.8984 75.1536 16.3685ZM61.4048 8.66538H58.3325V24.8324H61.4048V8.66538ZM94.6751 16.6846C94.6751 14.0629 93.9392 11.9812 92.4898 10.4982C91.0488 9.02086 89.163 8.27378 86.8826 8.27378C84.591 8.27378 82.6492 9.08801 81.1103 10.6969C79.5546 12.3197 78.7655 14.3567 78.7655 16.749C78.7655 19.1329 79.5658 21.1587 81.141 22.7678C82.7023 24.3988 84.7113 25.2242 87.112 25.2242C89.8849 25.2242 92.2072 24.0798 94.0175 21.8274L94.3029 21.4721L91.8855 19.4827L91.6085 19.9248C90.6208 21.4469 88.9251 22.3618 87.112 22.3479C85.8081 22.3618 84.5574 21.8414 83.6453 20.9097C82.7723 20.0842 82.2043 18.9846 82.0336 17.7955H94.6751V16.6846ZM82.07 15.115C82.2043 14.1077 82.6967 13.2375 83.5697 12.468C84.4819 11.6258 85.6738 11.1558 86.9162 11.1474C89.4847 11.1474 91.1999 12.6891 91.3902 15.115H82.07Z"
-                  fill="white"
-                />
-                <path
-                  d="M60.6771 1.43803C59.9356 1.11346 59.071 1.26456 58.4806 1.82136C58.0805 2.1907 57.8511 2.71114 57.8511 3.25955C57.8511 3.80516 58.0777 4.3284 58.4806 4.69773C58.8528 5.05868 59.3536 5.26014 59.874 5.25734C60.151 5.25734 60.4281 5.20138 60.6855 5.09226C61.4214 4.78168 61.8998 4.05978 61.897 3.26235C61.897 2.46211 61.413 1.74302 60.6771 1.43803Z"
-                  fill="white"
-                />
-              </svg>
-            </motion.div>
-          </div>
-
-          <motion.div
-            initial={{ width: 0 }}
-            animate={{ width: '120px' }}
-            transition={{ duration: 0.6, delay: 0.8 }}
-            style={{
-              height: '1px',
-              background: '#378ADD',
-              marginBottom: '1rem',
-            }}
-          />
-
-          <motion.p
-            initial={{ opacity: 0 }}
-            animate={{ opacity: 1 }}
-            transition={{ duration: 0.5, delay: 1.2 }}
-            className="uppercase tracking-widest text-sm mb-3"
-            style={{ color: 'rgba(255,255,255,0.5)' }}
-          >
-            AI Profit Map · Early Access
-          </motion.p>
-
-          <div className="text-center space-y-3 min-h-[48px]">
-            <h2
-              className="text-white text-xl font-bold leading-tight tracking-tight"
-              style={{ letterSpacing: '-0.3px' }}
-            >
-              Find where your company
-              <br />
-              is leaking profit.
-            </h2>
-            <p className="text-white/40 text-sm leading-relaxed max-w-xs mx-auto">
-              In 60 seconds, LyRise builds an AI Profit Map — estimating hours
-              lost, capacity leaking, and the first workflow worth fixing.
-            </p>
-            <motion.button
-              type="button"
-              onClick={() => setExiting(true)}
-              initial={{ opacity: 0, y: 6 }}
-              animate={{ opacity: 1, y: 0 }}
-              transition={{ duration: 0.4, delay: 1.6 }}
-              className="mt-2 px-6 py-3 rounded-lg text-white text-sm font-semibold"
-              style={{ background: '#5B48F8' }}
-            >
-              Generate my Profit Map →
-            </motion.button>
-          </div>
-        </motion.div>
-      )}
-    </AnimatePresence>
-  )
 }
 
 // ── Helpers ───────────────────────────────────────────────────────────────────
@@ -306,6 +139,81 @@ function validateStep(step, s1, s2) {
   return errors
 }
 
+function coerceNullablePositiveNumber(value) {
+  if (value === '' || value == null) return null
+  const numeric = Number(value)
+  if (!Number.isFinite(numeric) || numeric <= 0) return null
+  return numeric
+}
+
+function buildVerificationPatch(baseState, draftState) {
+  return {
+    company: {
+      employees: coerceNullablePositiveNumber(draftState?.company?.employees),
+      revenueEstimateM: coerceNullablePositiveNumber(
+        draftState?.company?.revenueEstimateM,
+      ),
+      industry: draftState?.company?.industry ?? '',
+      country: draftState?.company?.country ?? '',
+      teamSize: draftState?.normInput?.teamSize ?? '',
+      revenueRange: draftState?.normInput?.revenueRange ?? '',
+      selectedCurrency: draftState?.normInput?.selectedCurrency ?? '',
+    },
+    workflows: (draftState?.workflows ?? []).map((workflow, index) => ({
+      index,
+      originalName: baseState?.workflows?.[index]?.name ?? workflow.name,
+      name: workflow.name ?? '',
+      function: workflow.function ?? '',
+      owner: workflow.owner ?? '',
+      monthlyVolume: coerceNullablePositiveNumber(workflow.monthlyVolume),
+      minutesPerItemBefore: coerceNullablePositiveNumber(
+        workflow.minutesPerItemBefore,
+      ),
+      minutesPerItemAfter: coerceNullablePositiveNumber(
+        workflow.minutesPerItemAfter,
+      ),
+      rateOverride: coerceNullablePositiveNumber(workflow.rateOverride),
+      seniorityLevel: workflow.seniorityLevel ?? '',
+      sourceType: workflow.sourceType ?? '',
+      rationale: workflow.rationale ?? '',
+    })),
+  }
+}
+
+function validateVerificationDraft(draftState) {
+  const errors = { company: {}, workflows: {} }
+
+  ;(draftState?.workflows ?? []).forEach((workflow, index) => {
+    const workflowErrors = {}
+    if (!workflow?.name?.trim()) workflowErrors.name = 'Required'
+    if (!workflow?.function?.trim()) workflowErrors.function = 'Required'
+    if (!workflow?.owner?.trim()) workflowErrors.owner = 'Required'
+    if (!workflow?.sourceType?.trim()) workflowErrors.sourceType = 'Required'
+    if (!workflow?.rationale?.trim()) workflowErrors.rationale = 'Required'
+    if (!coerceNullablePositiveNumber(workflow?.monthlyVolume)) {
+      workflowErrors.monthlyVolume = 'Enter a positive number'
+    }
+    if (!coerceNullablePositiveNumber(workflow?.minutesPerItemBefore)) {
+      workflowErrors.minutesPerItemBefore = 'Enter a positive number'
+    }
+    if (!coerceNullablePositiveNumber(workflow?.minutesPerItemAfter)) {
+      workflowErrors.minutesPerItemAfter = 'Enter a positive number'
+    }
+    if (!coerceNullablePositiveNumber(workflow?.rateOverride)) {
+      workflowErrors.rateOverride = 'Enter a positive number'
+    }
+    if (Object.keys(workflowErrors).length > 0) {
+      errors.workflows[index] = workflowErrors
+    }
+  })
+
+  const hasErrors =
+    Object.keys(errors.company).length > 0 ||
+    Object.keys(errors.workflows).length > 0
+
+  return hasErrors ? errors : null
+}
+
 // ── Shared UI ─────────────────────────────────────────────────────────────────
 
 function Pill({ label, active, onClick, dimmed }) {
@@ -319,8 +227,8 @@ function Pill({ label, active, onClick, dimmed }) {
         active
           ? 'bg-gray-900 border-gray-900 text-white'
           : dimmed
-            ? 'border-gray-200 text-gray-400 opacity-40 cursor-not-allowed'
-            : 'border-gray-200 text-gray-500 hover:border-gray-400 hover:text-gray-900 cursor-pointer',
+          ? 'border-gray-200 text-gray-400 opacity-40 cursor-not-allowed'
+          : 'border-gray-200 text-gray-500 hover:border-gray-400 hover:text-gray-900 cursor-pointer',
       )}
     >
       {label}
@@ -386,88 +294,18 @@ function TextInput({
 
 // ── Step 1 ────────────────────────────────────────────────────────────────────
 
-const PAIN_CHIPS = [
-  'Hiring & onboarding',
-  'Client reporting',
-  'Proposal writing',
-  'Document review',
-  'Data entry & admin',
-  'Internal comms',
-  'Scheduling & coordination',
-]
-
-function PainSelector({ value, onChange }) {
-  return (
-    <div
-      className="rounded-lg p-4 mb-1"
-      style={{
-        background: '#F5F3FF',
-        border: '1px solid #EDE9FE',
-      }}
-    >
-      <p
-        className="text-[10px] font-bold uppercase tracking-wider mb-1"
-        style={{ color: '#5B48F8', letterSpacing: '0.12em' }}
-      >
-        ① Dream
-      </p>
-      <p className="text-sm font-semibold text-gray-900 mb-3">
-        Where do you feel the most operational drag?
-      </p>
-      <div className="flex flex-wrap gap-2">
-        {PAIN_CHIPS.map((chip) => {
-          const active = value === chip
-          return (
-            <button
-              key={chip}
-              type="button"
-              onClick={() => onChange(active ? '' : chip)}
-              className="px-3 py-1.5 rounded-full text-[12px] font-medium transition-all duration-100"
-              style={
-                active
-                  ? {
-                      background: '#5B48F8',
-                      color: 'white',
-                      border: '1.5px solid #5B48F8',
-                    }
-                  : {
-                      background: 'white',
-                      color: '#374151',
-                      border: '1.5px solid #D1D5DB',
-                    }
-              }
-            >
-              {chip}
-            </button>
-          )
-        })}
-      </div>
-    </div>
-  )
-}
-
-function Step1({ data, onChange, errors, isAlpha }) {
+function Step1({ data, onChange, errors }) {
   return (
     <div className="space-y-5">
-      {isAlpha && (
-        <PainSelector
-          value={data.painArea || ''}
-          onChange={(v) => onChange('painArea', v)}
-        />
-      )}
       <div>
         <p className="text-[11px] font-semibold uppercase tracking-wider text-gray-400 mb-1">
           Your company
         </p>
         <h2 className="mb-1 text-xl font-bold text-gray-900">
-          {isAlpha
-            ? 'Where should we look first?'
-            : "Let's start with the basics"}
+          Let&apos;s start with the basics
         </h2>
         <p className="text-sm text-gray-500">
-          {isAlpha
-            ? "Give us the basics. We'll research the rest and build a first-pass Profit Map."
-            : 'Takes under a minute — we research the rest automatically.'}
+          Takes under a minute — we research the rest automatically.
         </p>
       </div>
       <TextInput
@@ -523,14 +361,11 @@ function Step1({ data, onChange, errors, isAlpha }) {
         />
       </div>
       <div className="space-y-2">
-        <label className="text-[12.5px] font-semibold text-gray-800 flex items-center">
+        <label className="text-[12.5px] font-semibold text-gray-800">
           Team size{' '}
-          <span className="font-normal text-gray-400 ml-1">
+          <span className="font-normal text-gray-400">
             — drives realistic workflow volumes
           </span>
-          {isAlpha && (
-            <Tooltip text="Larger teams have more repetitive work to automate. This sizes the opportunity accurately." />
-          )}
         </label>
         <PillGroup
           options={TEAM_SIZE_OPTS}
@@ -539,17 +374,11 @@ function Step1({ data, onChange, errors, isAlpha }) {
         />
       </div>
       <div className="space-y-2">
-        <label className="text-[12.5px] font-semibold text-gray-800 flex items-center">
+        <label className="text-[12.5px] font-semibold text-gray-800">
           Estimated annual revenue{' '}
-          <span className="font-normal text-gray-400 ml-1">
+          <span className="font-normal text-gray-400">
             — sets the 5–20% Total Financial Gain band
           </span>
-          {isAlpha && (
-            <Tooltip
-              text="Used to estimate scale only — not shared externally. Pick the closest band."
-              openLeft
-            />
-          )}
         </label>
         <PillGroup
           options={REVENUE_OPTS}
@@ -563,16 +392,7 @@ function Step1({ data, onChange, errors, isAlpha }) {
 
 // ── Step 2 ────────────────────────────────────────────────────────────────────
 
-function Step2({
-  data,
-  onChange,
-  errors,
-  isDev,
-  isAlpha,
-  intakeRating,
-  onIntakeRatingChange,
-}) {
-  const [intakeHovered, setIntakeHovered] = useState(0)
+function Step2({ data, onChange, errors, isDev }) {
   return (
     <div className="space-y-5">
       <div>
@@ -580,14 +400,11 @@ function Step2({
           Delivery
         </p>
         <h2 className="mb-1 text-xl font-bold text-gray-900">
-          {isAlpha
-            ? 'Who should own this Profit Map?'
-            : 'Where should we send your report?'}
+          Where should we send your report?
         </h2>
         <p className="text-sm text-gray-500">
-          {isAlpha
-            ? "We'll show it here first, then send a copy you can share with your team."
-            : 'Your report is generated and emailed — usually ready in 60 seconds.'}
+          We prepare the research first, then you confirm the assumptions before
+          we generate and email the final report.
         </p>
         {isDev && (
           <p className="mt-2 text-xs text-amber-600">
@@ -624,11 +441,8 @@ function Step2({
         optional
       />
       <div className="space-y-2">
-        <label className="text-[12.5px] font-semibold text-gray-800 flex items-center">
-          Operating currency <span className="text-red-500 ml-1">*</span>
-          {isAlpha && (
-            <Tooltip text="Every figure in your report will display in this currency." />
-          )}
+        <label className="text-[12.5px] font-semibold text-gray-800">
+          Operating currency <span className="text-red-500">*</span>
         </label>
         <PillGroup
           options={CURRENCIES}
@@ -637,49 +451,24 @@ function Step2({
           error={errors.currency}
         />
       </div>
-
-      {/* Alpha only: intake clarity star rating */}
-      {isAlpha && (
-        <div className="pt-4 border-t border-gray-100">
-          <p className="text-xs text-gray-400 mb-2">
-            Optional — How clear was this form?
-          </p>
-          <div className="flex gap-1.5">
-            {[1, 2, 3, 4, 5].map((star) => (
-              <button
-                key={star}
-                type="button"
-                onClick={() => onIntakeRatingChange(star)}
-                onMouseEnter={() => setIntakeHovered(star)}
-                onMouseLeave={() => setIntakeHovered(0)}
-                aria-label={`${star} star${star > 1 ? 's' : ''}`}
-                className="focus:outline-none transition-transform hover:scale-110"
-              >
-                <FaStar
-                  className={clsx(
-                    'w-5 h-5 transition-colors',
-                    star <= (intakeHovered || intakeRating)
-                      ? 'text-amber-400'
-                      : 'text-slate-200',
-                  )}
-                />
-              </button>
-            ))}
-          </div>
-        </div>
-      )}
     </div>
   )
 }
 
-// ── Error view ────────────────────────────────────────────────────────────────
+// ── Generating & Success views ────────────────────────────────────────────────
 
-function ErrorView({ message, onRetry, onUseEstimates }) {
+function ErrorView({ message, onRetry, onUseEstimates, isEmployee }) {
   const isResearchFailure =
     message?.includes('Stages done: none') ||
     message?.includes('no assembled report') ||
     message?.includes("couldn't research") ||
     message?.includes('retrieve specific web pages')
+
+  const displayMessage =
+    isEmployee || isResearchFailure
+      ? message
+      : 'Something went wrong. Our team has been notified and will look into it.'
+
   return (
     <div className="px-8 py-10 text-center">
       <div
@@ -720,7 +509,7 @@ function ErrorView({ message, onRetry, onUseEstimates }) {
       ) : (
         <>
           <p className="max-w-sm mx-auto mb-6 text-sm text-gray-500">
-            {message || 'Something went wrong. Please try again.'}
+            {displayMessage || 'Something went wrong. Please try again.'}
           </p>
           <div className="flex flex-col max-w-xs gap-3 mx-auto">
             <button
@@ -744,8 +533,6 @@ function ErrorView({ message, onRetry, onUseEstimates }) {
   )
 }
 
-// ── Success view ──────────────────────────────────────────────────────────────
-
 function SuccessView({ email, reportId, isEmployee }) {
   const [messages, setMessages] = useState([])
   const [inputValue, setInputValue] = useState('')
@@ -755,6 +542,7 @@ function SuccessView({ email, reportId, isEmployee }) {
 
   const userSentCount = messages.filter((m) => m.role === 'user').length
 
+  // Load existing conversation from DB when reportId is set
   useEffect(() => {
     if (!reportId) return
     fetch(`/api/chat?reportId=${reportId}`)
@@ -792,6 +580,7 @@ function SuccessView({ email, reportId, isEmployee }) {
         return
       }
       if (res.status === 429) {
+        // Remove the optimistic user message we added
         setMessages((prev) => prev.slice(0, -1))
         setInputValue(trimmed)
         return
@@ -817,6 +606,7 @@ function SuccessView({ email, reportId, isEmployee }) {
 
   return (
     <div className="p-8">
+      {/* ── Success header ── */}
       <div className="pb-8 text-center border-b border-gray-100">
         <div className="flex items-center justify-center mx-auto mb-6 border border-green-100 rounded-full w-14 h-14 bg-green-50">
           <FaCheckCircle className="text-3xl text-green-500" />
@@ -843,6 +633,7 @@ function SuccessView({ email, reportId, isEmployee }) {
         </a>
       </div>
 
+      {/* ── Chat ── */}
       <div className="pt-6">
         <div className="flex items-center justify-between mb-3">
           <h3 className="text-sm font-semibold text-gray-900">
@@ -859,6 +650,7 @@ function SuccessView({ email, reportId, isEmployee }) {
           )}
         </div>
 
+        {/* Message history */}
         {messages.length > 0 && (
           <div className="pr-1 mb-4 space-y-3 overflow-y-auto max-h-72">
             {messages.map((msg, i) => (
@@ -898,6 +690,7 @@ function SuccessView({ email, reportId, isEmployee }) {
           </div>
         )}
 
+        {/* Limit reached banner */}
         {limitReached ? (
           <div className="p-5 text-center border bg-amber-50 border-amber-200 rounded-xl">
             <p className="mb-2 font-mono text-xs font-semibold text-amber-500">
@@ -947,48 +740,12 @@ function SuccessView({ email, reportId, isEmployee }) {
   )
 }
 
-// ── SSE log mapper ────────────────────────────────────────────────────────────
+// ── Main ──────────────────────────────────────────────────────────────────────
 
-const PIPELINE_LOG_TOOLS = new Set(PIPELINE_LOG_TOOL_NAMES)
-
-function sseEventToLogLine(event) {
-  if (event.type !== 'tool_start') return null
-  if (PIPELINE_LOG_TOOLS.has(event.tool)) return null
-  const labels = {
-    search_evidence: 'Searching evidence base…',
-    update_copy: 'Updating report section…',
-    update_workflow: 'Updating workflow assumptions…',
-    add_workflow: 'Adding workflow…',
-    remove_workflow: 'Removing workflow…',
-    scale_rates: 'Adjusting salary rates…',
-    set_currency: 'Setting currency…',
-    update_globals: 'Updating global inputs…',
-  }
-  return labels[event.tool] ?? `[${event.tool}]`
-}
-
-// ── Server-side auth / alpha detection ───────────────────────────────────────
-
-export async function getServerSideProps({ req, res, query }) {
-  if (query.alpha) {
-    const { createClient } = await import('../src/lib/supabase-server')
-    const supabase = createClient(req, res)
-    const {
-      data: { user },
-    } = await supabase.auth.getUser()
-    if (!user) {
-      return {
-        redirect: {
-          destination: '/auth/login?next=%2Froi-report%3Falpha%3Dalpha123',
-          permanent: false,
-        },
-      }
-    }
-    return { props: { isEmployee: false, isAlpha: true } }
-  }
-
-  const { createClient, createAdminClient } =
-    await import('../src/lib/supabase-server')
+export async function getServerSideProps({ req, res }) {
+  const { createClient, createAdminClient } = await import(
+    '../src/lib/supabase-server'
+  )
   const supabase = createClient(req, res)
   const {
     data: { user },
@@ -1008,25 +765,44 @@ export async function getServerSideProps({ req, res, query }) {
   const isEmployee =
     userData?.role === 'EMPLOYEE' || user.email?.endsWith('@lyrise.ai')
 
-  return { props: { isEmployee, isAlpha: false } }
+  return { props: { isEmployee } }
 }
 
-// ── Main ──────────────────────────────────────────────────────────────────────
+// Tools with pipeline_log coverage emit their own messages from the server-side
+// execute function. Returning null here prevents a duplicate tool_start entry
+// from flooding the log before the classified pipeline_log message arrives.
+const PIPELINE_LOG_TOOLS = new Set(PIPELINE_LOG_TOOL_NAMES)
 
-export default function ROIReport({ isEmployee, isAlpha }) {
+function sseEventToLogLine(event) {
+  if (event.type !== 'tool_start') return null
+  if (PIPELINE_LOG_TOOLS.has(event.tool)) return null
+  const labels = {
+    search_evidence: 'Searching evidence base…',
+    update_copy: 'Updating report section…',
+    update_workflow: 'Updating workflow assumptions…',
+    add_workflow: 'Adding workflow…',
+    remove_workflow: 'Removing workflow…',
+    scale_rates: 'Adjusting salary rates…',
+    set_currency: 'Setting currency…',
+    update_globals: 'Updating global inputs…',
+  }
+  return labels[event.tool] ?? `[${event.tool}]`
+}
+
+function ROIReportInner({ isEmployee }) {
   const router = useRouter()
   const [step, setStep] = useState(1)
   const [viewState, setViewState] = useState(VIEW_STATES.FORM)
 
-  // Alpha-specific UI state
-  const [showSplash, setShowSplash] = useState(isAlpha)
-  const [intakeRating, setIntakeRating] = useState(0)
-
-  const [isGenerationComplete, setIsGenerationComplete] = useState(false)
-  const generationStartedAt = useRef(Date.now())
+  const loaderStartedAt = useRef(Date.now())
   const [generationLog, setGenerationLog] = useState('')
   const [sseEvents, setSseEvents] = useState([])
   const [reportState, setReportState] = useState(null)
+  const [verificationState, setVerificationState] = useState(null)
+  const [verificationDraft, setVerificationDraft] = useState(null)
+  const [verificationReportId, setVerificationReportId] = useState(null)
+  const [verificationErrors, setVerificationErrors] = useState(null)
+  const [isRerunningResearch, setIsRerunningResearch] = useState(false)
   const [errorMessage, setErrorMessage] = useState('')
   const [reportId, setReportId] = useState(null)
 
@@ -1050,30 +826,29 @@ export default function ROIReport({ isEmployee, isAlpha }) {
   )
   const [errors, setErrors] = useState({})
 
-  // Generate a unique per-session alpha token (used as alpha_feedback PK)
-  // and fire a one-time notification email to the internal team.
-  useEffect(() => {
-    if (!isAlpha) return
-
-    if (!localStorage.getItem('alpha_token')) {
-      localStorage.setItem(
-        'alpha_token',
-        `alpha_${Date.now()}_${Math.random().toString(36).slice(2, 8)}`,
-      )
-    }
-
-    // One notification per browser session -- skip if already sent
-    if (!localStorage.getItem('alpha_notified')) {
-      const token = localStorage.getItem('alpha_token')
-      fetch('/api/alpha-notify', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ alphaToken: token }),
-      })
-        .then(() => localStorage.setItem('alpha_notified', '1'))
-        .catch(() => {}) // non-critical
-    }
-  }, [isAlpha])
+  const handleGenerationError = useCallback(
+    (message) => {
+      setErrorMessage(message)
+      setIsRerunningResearch(false)
+      setViewState(VIEW_STATES.ERROR)
+      if (!isEmployee) {
+        fetch('/api/notify-error', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({
+            error: message,
+            context: {
+              page: 'roi-report',
+              company: s1.companyName || '(unknown)',
+            },
+            url:
+              typeof window !== 'undefined' ? window.location.href : undefined,
+          }),
+        }).catch(() => {})
+      }
+    },
+    [isEmployee, s1.companyName],
+  )
 
   const changeS1 = useCallback((key, val) => {
     setS1((prev) => ({ ...prev, [key]: val }))
@@ -1085,41 +860,71 @@ export default function ROIReport({ isEmployee, isAlpha }) {
     setErrors((prev) => ({ ...prev, [key]: '' }))
   }, [])
 
+  const verificationPreview = useMemo(() => {
+    if (
+      !verificationDraft?.company ||
+      !verificationDraft?.globals ||
+      !verificationDraft?.workflows
+    ) {
+      return verificationDraft?.calcOutput ?? null
+    }
+    try {
+      return roiCalculator(
+        verificationDraft.workflows,
+        verificationDraft.globals,
+        verificationDraft.company,
+      )
+    } catch {
+      return verificationDraft?.calcOutput ?? null
+    }
+  }, [verificationDraft])
+
+  const hydrateVerificationState = useCallback(async (existingReportId) => {
+    const existing = await fetch(`/api/roi-agent?reportId=${existingReportId}`)
+    if (!existing.ok) {
+      throw new Error('Could not load your prepared report. Please try again.')
+    }
+    const existingData = await existing.json()
+    if (!existingData?.report) {
+      throw new Error('Prepared report not found.')
+    }
+
+    const { buildStateFromReportRow } = await import(
+      '../src/lib/roi/reportState'
+    )
+    const builtState = buildStateFromReportRow(existingData.report)
+
+    if (existingData.report.status === 'PENDING_VERIFICATION') {
+      setVerificationReportId(existingData.report.id)
+      setVerificationState(builtState)
+      setVerificationDraft(JSON.parse(JSON.stringify(builtState)))
+      setVerificationErrors(null)
+      setIsRerunningResearch(false)
+      setViewState(VIEW_STATES.VERIFYING)
+      return
+    }
+
+    window.location.href = `/report/${existingData.report.id}`
+  }, [])
+
   const runGeneration = useCallback(
-    async ({ skipLLM = false, estimatesOnly = false } = {}) => {
-      generationStartedAt.current = Date.now()
-      setIsGenerationComplete(false)
+    async ({
+      skipLLM = false,
+      estimatesOnly = false,
+      existingReportId = null,
+      isRerun = false,
+    } = {}) => {
+      loaderStartedAt.current = Date.now()
       setViewState(VIEW_STATES.GENERATING)
       setGenerationLog('')
       setSseEvents([])
       setReportState(null)
+      setVerificationReportId(existingReportId)
+      setVerificationState(null)
+      setVerificationDraft(null)
+      setVerificationErrors(null)
       setErrorMessage('')
-
-      // Alpha: mark intake step as complete
-      if (isAlpha) {
-        try {
-          const token = localStorage.getItem('alpha_token')
-          if (token) {
-            const supabase = createBrowserClient()
-            supabase
-              .from('alpha_feedback')
-              .upsert(
-                {
-                  alpha_token: token,
-                  step_intake_completed: true,
-                  company_name: s1.companyName?.trim() || null,
-                  user_email: s2.email?.trim() || null,
-                },
-                { onConflict: 'alpha_token' },
-              )
-              .then(({ error }) => {
-                if (error) console.error('[alpha] intake tracking:', error)
-              })
-          }
-        } catch {
-          /* non-critical */
-        }
-      }
+      setIsRerunningResearch(isRerun)
 
       const payload = {
         'Company Name': s1.companyName.trim(),
@@ -1143,68 +948,27 @@ export default function ROIReport({ isEmployee, isAlpha }) {
           method: 'POST',
           headers: { 'Content-Type': 'application/json' },
           body: JSON.stringify({
-            mode: 'generate',
+            mode: 'prepare',
             formData: payload,
+            reportId: existingReportId,
             devOptions: { skipLLM, estimatesOnly },
           }),
         })
 
         if (response.status === 401) {
-          // Set localStorage flag as last-resort fallback for dashboard recovery.
-          // Primary recovery is the auth_next cookie set by login.js.
-          if (isAlpha) {
-            try {
-              localStorage.setItem('alpha_redirect_pending', 'true')
-            } catch {}
-          }
-          const next = encodeURIComponent(
-            window.location.pathname + window.location.search,
-          )
-          window.location.href = `/auth/login?next=${next}`
+          window.location.href = '/auth/login'
           return
         }
 
         if (response.status === 409) {
           const data = await response.json()
           if (data.report_id) {
-            try {
-              const existing = await fetch('/api/roi-agent')
-              if (!existing.ok) {
-                // eslint-disable-next-line no-console
-                console.warn(
-                  'GET /api/roi-agent failed during 409 fallback:',
-                  existing.status,
-                )
-              } else {
-                const existingData = await existing.json()
-                if (existingData?.report?.rendered_html) {
-                  const { buildStateFromReportRow } =
-                    await import('../src/lib/roi/reportState')
-                  const builtState = buildStateFromReportRow(
-                    existingData.report,
-                  )
-                  setReportId(data.report_id)
-                  setReportState(builtState)
-                  setIsGenerationComplete(true)
-                  setViewState(VIEW_STATES.FINALISING)
-                  return
-                }
-              }
-            } catch (err) {
-              // eslint-disable-next-line no-console
-              console.warn(
-                'Failed to load existing report from 409 fallback:',
-                err,
-              )
-            }
-            window.location.href = isAlpha
-              ? `/report/${data.report_id}?alpha=true`
-              : `/report/${data.report_id}`
+            await hydrateVerificationState(data.report_id)
           }
           return
         }
 
-        let latestState = null
+        let preparedState = null
         await drainSSE(
           response.body.getReader(),
           new TextDecoder(),
@@ -1222,48 +986,142 @@ export default function ROIReport({ isEmployee, isAlpha }) {
                 `${prev}\n${event.message}`.slice(-2000),
               )
               setSseEvents((prev) => [...prev, { text: event.message }])
-            } else if (event.type === 'report_update') {
-              latestState = event.state
-              setReportState(event.state)
-            } else if (event.type === 'report_saved') {
-              setReportId(event.report_id)
-            } else if (event.type === 'done') {
-              if (
-                (event.assembled || latestState?.assembled) &&
-                latestState?.renderedHtml
-              ) {
-                setIsGenerationComplete(true)
-                setViewState(VIEW_STATES.FINALISING)
-              } else {
-                setErrorMessage(
-                  'Report generation finished without a complete report.',
-                )
-                setViewState(VIEW_STATES.ERROR)
-              }
+            } else if (event.type === 'report_prepared') {
+              preparedState = event.state
+              setVerificationReportId(event.report_id)
+              setVerificationState(event.state)
+              setVerificationDraft(JSON.parse(JSON.stringify(event.state)))
+              setVerificationErrors(null)
+              setIsRerunningResearch(false)
+              setViewState(VIEW_STATES.VERIFYING)
             } else if (event.type === 'error') {
               throw new Error(event.message)
             }
           },
         )
+        if (!preparedState) {
+          handleGenerationError(
+            'Preparation finished without a verification state.',
+          )
+        }
       } catch (err) {
-        setErrorMessage(
+        handleGenerationError(
           err.message || 'Something went wrong. Please try again.',
         )
-        setViewState(VIEW_STATES.ERROR)
       }
     },
-    [s1, s2, isAlpha],
+    [handleGenerationError, hydrateVerificationState, s1, s2],
   )
 
-  // Enforce minimum loader visibility before transitioning to COMPLETE
+  const runFinalize = useCallback(async () => {
+    const validationErrors = validateVerificationDraft(verificationDraft)
+    if (validationErrors) {
+      setVerificationErrors(validationErrors)
+      return
+    }
+    if (!verificationReportId || !verificationState || !verificationDraft) {
+      handleGenerationError(
+        'Prepared report data is missing. Please re-run research.',
+      )
+      return
+    }
+
+    loaderStartedAt.current = Date.now()
+    setViewState(VIEW_STATES.FINALISING)
+    setGenerationLog('')
+    setSseEvents([{ text: 'Generating final report copy…' }])
+    setVerificationErrors(null)
+    setErrorMessage('')
+    setReportState(null)
+
+    try {
+      const response = await fetch('/api/roi-agent', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          mode: 'finalize',
+          reportId: verificationReportId,
+          verificationPatch: buildVerificationPatch(
+            verificationState,
+            verificationDraft,
+          ),
+        }),
+      })
+
+      if (response.status === 401) {
+        window.location.href = '/auth/login'
+        return
+      }
+
+      if (!response.ok) {
+        const data = await response.json().catch(() => ({}))
+        throw new Error(data?.error || `HTTP ${response.status}`)
+      }
+
+      let latestState = null
+      await drainSSE(response.body.getReader(), new TextDecoder(), (event) => {
+        if (event.type === 'text_delta') {
+          setGenerationLog((prev) => (prev + event.delta).slice(-2000))
+        } else if (event.type === 'tool_start') {
+          setGenerationLog((prev) => `${prev}\n[${event.tool}]`)
+          const line = sseEventToLogLine(event)
+          if (line) {
+            setSseEvents((prev) => [...prev, { text: line }])
+          }
+        } else if (event.type === 'pipeline_log') {
+          setGenerationLog((prev) => `${prev}\n${event.message}`.slice(-2000))
+          setSseEvents((prev) => [...prev, { text: event.message }])
+        } else if (event.type === 'report_update') {
+          latestState = event.state
+          setReportState(event.state)
+          setSseEvents((prev) => [
+            ...prev,
+            { text: 'Rendering report layout…' },
+          ])
+        } else if (event.type === 'report_saved') {
+          setReportId(event.report_id)
+          setSseEvents((prev) => [
+            ...prev,
+            { text: 'Report saved successfully. Opening report…' },
+          ])
+        } else if (event.type === 'done') {
+          setSseEvents((prev) => [
+            ...prev,
+            { text: 'Final report copy generated.' },
+          ])
+          if (!(event.assembled || latestState?.assembled)) {
+            handleGenerationError(
+              'Report finalization finished without a complete report.',
+            )
+          }
+        } else if (event.type === 'error') {
+          throw new Error(event.message)
+        }
+      })
+    } catch (err) {
+      handleGenerationError(
+        err.message || 'Something went wrong. Please try again.',
+      )
+    }
+  }, [
+    handleGenerationError,
+    verificationDraft,
+    verificationReportId,
+    verificationState,
+  ])
+
+  // Finalisation lifecycle: enforce minimum visible loader duration, then
+  // transition to COMPLETE once FINALISING and renderedHtml are available.
   useEffect(() => {
     if (viewState !== VIEW_STATES.FINALISING) return () => {}
     if (!reportState?.renderedHtml) return () => {}
 
     let timeout
-    const elapsed = Date.now() - generationStartedAt.current
+
+    const elapsed = Date.now() - loaderStartedAt.current
     const remaining = Math.max(0, MIN_VISIBLE_DURATION - elapsed)
 
+    // Force a paint cycle so the FINALISING state visually mounts
     const rafId = requestAnimationFrame(() => {
       timeout = setTimeout(() => {
         setViewState(VIEW_STATES.COMPLETE)
@@ -1276,47 +1134,24 @@ export default function ROIReport({ isEmployee, isAlpha }) {
     }
   }, [viewState, reportState])
 
-  // COMPLETE: track generation (alpha), then navigate to report
+  // COMPLETE lifecycle: brief beat, then navigate to the persisted report.
+  // If reportId hasn't arrived within 8s of COMPLETE, show an error — the
+  // report save likely failed server-side (check server logs).
   useEffect(() => {
     if (viewState !== VIEW_STATES.COMPLETE) return () => {}
-
-    if (isAlpha) {
-      try {
-        const token = localStorage.getItem('alpha_token')
-        if (token) {
-          createBrowserClient()
-            .from('alpha_feedback')
-            .upsert(
-              { alpha_token: token, step_generation_completed: true },
-              { onConflict: 'alpha_token' },
-            )
-            .then(({ error }) => {
-              if (error) console.error('[alpha] generation tracking:', error)
-            })
-        }
-      } catch {
-        /* non-critical */
-      }
-    }
-
-    // Alpha users navigate manually via the "Open my Profit Map" button
-    if (isAlpha) return () => {}
-
     if (reportId) {
       const timeout = setTimeout(() => {
         router.push(`/report/${reportId}`)
       }, 400)
       return () => clearTimeout(timeout)
     }
-
     const fallback = setTimeout(() => {
-      setErrorMessage(
+      handleGenerationError(
         'Report was generated but could not be saved. Please try again or check server logs.',
       )
-      setViewState(VIEW_STATES.ERROR)
     }, 8000)
     return () => clearTimeout(fallback)
-  }, [viewState, reportId, router, isAlpha])
+  }, [viewState, reportId, router, handleGenerationError])
 
   const next = useCallback(
     async ({ skipLLM = false } = {}) => {
@@ -1337,13 +1172,66 @@ export default function ROIReport({ isEmployee, isAlpha }) {
     setErrors({})
   }, [])
 
-  // ── Renders ───────────────────────────────────────────────────────────────
+  const changeVerificationCompanyField = useCallback((field, value) => {
+    setVerificationDraft((prev) => {
+      if (!prev) return prev
+      if (
+        field === 'teamSize' ||
+        field === 'revenueRange' ||
+        field === 'selectedCurrency'
+      ) {
+        return {
+          ...prev,
+          normInput: {
+            ...prev.normInput,
+            [field]: value,
+          },
+        }
+      }
+      return {
+        ...prev,
+        company: {
+          ...prev.company,
+          [field]: value,
+        },
+      }
+    })
+    setVerificationErrors((prev) =>
+      prev
+        ? {
+            ...prev,
+            company: { ...(prev.company ?? {}), [field]: undefined },
+          }
+        : prev,
+    )
+  }, [])
 
-  // Alpha splash -- shown until animation completes
-  if (isAlpha && showSplash) {
-    return <SplashScreen onExitComplete={() => setShowSplash(false)} />
-  }
+  const changeVerificationWorkflowField = useCallback((index, field, value) => {
+    setVerificationDraft((prev) => {
+      if (!prev?.workflows?.[index]) return prev
+      return {
+        ...prev,
+        workflows: prev.workflows.map((workflow, workflowIndex) =>
+          workflowIndex === index ? { ...workflow, [field]: value } : workflow,
+        ),
+      }
+    })
+    setVerificationErrors((prev) => {
+      if (!prev?.workflows?.[index]) return prev
+      return {
+        ...prev,
+        workflows: {
+          ...prev.workflows,
+          [index]: {
+            ...prev.workflows[index],
+            [field]: undefined,
+          },
+        },
+      }
+    })
+  }, [])
 
+  // Non-form views
   if (viewState === VIEW_STATES.LOADING) {
     return (
       <div className="rebranding-landing-page -mt-[12px]">
@@ -1355,6 +1243,7 @@ export default function ROIReport({ isEmployee, isAlpha }) {
     )
   }
 
+  // Loader state animates out smoothly on completion, before navigation
   if (
     viewState === VIEW_STATES.GENERATING ||
     viewState === VIEW_STATES.FINALISING ||
@@ -1373,11 +1262,6 @@ export default function ROIReport({ isEmployee, isAlpha }) {
             generationLog={generationLog}
             sseEvents={sseEvents}
             viewState={viewState}
-            onOpen={
-              isAlpha && reportId
-                ? () => router.push(`/report/${reportId}?alpha=true`)
-                : undefined
-            }
           />
         </motion.div>
       </AnimatePresence>
@@ -1396,7 +1280,11 @@ export default function ROIReport({ isEmployee, isAlpha }) {
               isEmployee={isEmployee}
             />
           </div>
+          <div className="w-full mt-12 md:w-1/2">
+            <LogosMarquee />
+          </div>
         </div>
+        <LastSection />
       </div>
     )
   }
@@ -1411,6 +1299,7 @@ export default function ROIReport({ isEmployee, isAlpha }) {
               message={errorMessage}
               onRetry={() => runGeneration()}
               onUseEstimates={() => runGeneration({ estimatesOnly: true })}
+              isEmployee={isEmployee}
             />
           </div>
         </div>
@@ -1418,7 +1307,40 @@ export default function ROIReport({ isEmployee, isAlpha }) {
     )
   }
 
-  // ── Form ──────────────────────────────────────────────────────────────────
+  if (viewState === VIEW_STATES.VERIFYING && verificationDraft) {
+    return (
+      <>
+        <Head>
+          <title>Verify ROI Assumptions | LyRise</title>
+        </Head>
+        <MainHeader />
+        <AssumptionVerificationView
+          draftState={verificationDraft}
+          previewCalc={verificationPreview}
+          errors={verificationErrors}
+          teamSizeOptions={TEAM_SIZE_OPTIONS}
+          revenueOptions={REVENUE_OPTIONS}
+          currencyOptions={CURRENCY_OPTIONS}
+          onCompanyFieldChange={changeVerificationCompanyField}
+          onWorkflowFieldChange={changeVerificationWorkflowField}
+          onBack={() => {
+            setVerificationErrors(null)
+            setViewState(VIEW_STATES.FORM)
+          }}
+          onConfirm={runFinalize}
+          onRerun={() =>
+            runGeneration({
+              existingReportId: verificationReportId,
+              isRerun: true,
+            })
+          }
+          isSubmitting={viewState === VIEW_STATES.FINALISING}
+          isRerunning={isRerunningResearch}
+        />
+        <LastSection />
+      </>
+    )
+  }
 
   const progress = (step / TOTAL_STEPS) * 100
 
@@ -1431,25 +1353,9 @@ export default function ROIReport({ isEmployee, isAlpha }) {
           name="description"
           content="Discover how much time and money AI can save your business."
         />
-        {isAlpha && <meta name="robots" content="noindex,nofollow" />}
       </Head>
 
-      {/* Alpha testing banner */}
-      {isAlpha && (
-        <div
-          className="fixed top-0 left-0 right-0 z-50 flex items-center justify-center gap-2 py-1 text-xs font-medium"
-          style={{ background: '#1A2E4A', color: '#7BAFD4' }}
-        >
-          Private early access — your feedback shapes this product
-        </div>
-      )}
-
-      <div
-        className={clsx(
-          'flex flex-col items-center justify-center min-h-screen p-4 font-sans text-gray-900',
-          isAlpha && 'pt-10',
-        )}
-      >
+      <div className="flex flex-col items-center justify-center min-h-screen p-4 font-sans text-gray-900">
         <div className="w-full max-w-xl">
           <motion.div
             initial={{ opacity: 0, y: 20 }}
@@ -1489,12 +1395,7 @@ export default function ROIReport({ isEmployee, isAlpha }) {
                   transition={{ duration: 0.18 }}
                 >
                   {step === 1 && (
-                    <Step1
-                      data={s1}
-                      onChange={changeS1}
-                      errors={errors}
-                      isAlpha={isAlpha}
-                    />
+                    <Step1 data={s1} onChange={changeS1} errors={errors} />
                   )}
                   {step === 2 && (
                     <Step2
@@ -1502,19 +1403,13 @@ export default function ROIReport({ isEmployee, isAlpha }) {
                       onChange={changeS2}
                       errors={errors}
                       isDev={IS_DEV}
-                      isAlpha={isAlpha}
-                      intakeRating={intakeRating}
-                      onIntakeRatingChange={(v) => {
-                        setIntakeRating(v)
-                        localStorage.setItem('alpha_intake_rating', String(v))
-                      }}
                     />
                   )}
                 </motion.div>
               </AnimatePresence>
             </div>
 
-            {/* Navigation footer */}
+            {/* Nav */}
             <div className="flex items-center justify-between py-5 mt-4 border-t border-gray-100 px-7">
               <button
                 type="button"
@@ -1546,30 +1441,36 @@ export default function ROIReport({ isEmployee, isAlpha }) {
                     onClick={() => next({ skipLLM: true })}
                     className="px-5 py-2 text-sm font-semibold text-gray-700 transition-colors bg-gray-100 rounded-lg hover:bg-gray-200"
                   >
-                    Fast mock preview
+                    Prepare mock assumptions
                   </button>
                 )}
                 <button
                   type="button"
                   onClick={() => next()}
-                  className="px-5 py-2 text-sm font-semibold text-white transition-colors rounded-lg shadow-sm"
-                  style={
-                    step === TOTAL_STEPS && isAlpha
-                      ? { background: '#5B48F8' }
-                      : { background: '#111827' }
-                  }
+                  className="px-5 py-2 text-sm font-semibold text-white transition-colors bg-gray-900 rounded-lg shadow-sm hover:bg-gray-700"
                 >
-                  {step === TOTAL_STEPS
-                    ? isAlpha
-                      ? 'Generate my Profit Map →'
-                      : 'Generate my report →'
-                    : 'Continue →'}
+                  {step === TOTAL_STEPS ? 'Review assumptions →' : 'Continue →'}
                 </button>
               </div>
             </div>
           </motion.div>
         </div>
+
+        <div className="w-full mt-12 md:w-1/2">
+          <LogosMarquee />
+        </div>
       </div>
+      <LastSection />
     </div>
+  )
+}
+
+export default function ROIReport(props) {
+  const { isEmployee } = props
+
+  return (
+    <ErrorBoundary isEmployee={isEmployee} pageContext={{ page: 'roi-report' }}>
+      <ROIReportInner {...props} />
+    </ErrorBoundary>
   )
 }

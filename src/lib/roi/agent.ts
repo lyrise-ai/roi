@@ -240,11 +240,17 @@ function buildTools(
         })
         if (SALARY_SEARCH_RE.test(query)) {
           // eslint-disable-next-line security/detect-object-injection
-          callbacks.onPipelineLog?.(SALARY_SEARCH_POOL[salarySearchCount % SALARY_SEARCH_POOL.length])
+          callbacks.onPipelineLog?.(
+            SALARY_SEARCH_POOL[salarySearchCount % SALARY_SEARCH_POOL.length],
+          )
           salarySearchCount++
         } else {
           // eslint-disable-next-line security/detect-object-injection
-          callbacks.onPipelineLog?.(COMPANY_SEARCH_POOL[companySearchCount % COMPANY_SEARCH_POOL.length])
+          callbacks.onPipelineLog?.(
+            COMPANY_SEARCH_POOL[
+              companySearchCount % COMPANY_SEARCH_POOL.length
+            ],
+          )
           companySearchCount++
         }
         const response = await webSearch(query, maxResults ?? 3)
@@ -464,7 +470,9 @@ function buildTools(
       }),
       execute: async (input) => {
         const cp = input.company_profile
-        callbacks.onPipelineLog?.(`Research complete — ${input.workflows.length} workflows identified…`)
+        callbacks.onPipelineLog?.(
+          `Research complete — ${input.workflows.length} workflows identified…`,
+        )
         roiLog('tool:set_research', `locking research for ${cp.company}`, {
           industry: cp.industry,
           country: cp.country,
@@ -713,7 +721,8 @@ function buildTools(
             retryHint = `\n\nPREVIOUS ATTEMPT FAILED: ${lastError}.${prescription}`
           }
 
-          if (attempt > 0) callbacks.onPipelineLog?.('Refining model assumptions…')
+          if (attempt > 0)
+            callbacks.onPipelineLog?.('Refining model assumptions…')
           roiLog(
             'modeler',
             `attempt ${attempt + 1}/3${attempt > 0 ? ' (retry)' : ''}`,
@@ -969,7 +978,9 @@ function buildTools(
       }),
       execute: async (copy: ReportCopy) => {
         state.copy = copy
-        callbacks.onPipelineLog?.('Writing profit levers and executive summary…')
+        callbacks.onPipelineLog?.(
+          'Writing profit levers and executive summary…',
+        )
         reAssemble(state, execTemplateHtml, fullTemplateHtml, callbacks, [
           'thesis',
           'workflows',
@@ -1492,7 +1503,12 @@ function buildTools(
 function buildGenerationSystemPrompt(
   companyName: string,
   estimatesOnly = false,
+  stopAfterFinancialModel = false,
 ): string {
+  const nextStepInstruction = stopAfterFinancialModel
+    ? 'Then: run_financial_model() and stop. Do NOT call set_report_copy.'
+    : 'Then: run_financial_model() → set_report_copy(…)'
+
   if (estimatesOnly) {
     return `You are the LyRise ROI Report Agent. Generate an estimate-based report for ${companyName}.
 
@@ -1504,9 +1520,15 @@ YOUR FIRST ACTION: call set_research_output immediately with:
 - confidenceLevel: 'low'
 - A clear coreThesis based on the company description
 
-Then: run_financial_model() → set_report_copy(…)
+${nextStepInstruction}
 
 Do not write any text before calling set_research_output. Act immediately.
+
+${
+  stopAfterFinancialModel
+    ? 'This is a preparation-only run. End immediately after run_financial_model succeeds.'
+    : ''
+}
 
 MANDATORY for set_report_copy:
 • unified_pattern_thesis (KR-16): 2-3 sentences naming SINGLE operating pattern
@@ -1577,7 +1599,11 @@ Every text field you emit (whyItMatters, volumeRationale, expectedOutcome, resea
 Each sentence must reference at least one of: the company's actual product/service, its industry sub-vertical, its country/region, an observed tool/system, a stated client type, a regulatory or competitive context surfaced from research, or a numeric signal (headcount, transaction volume, geographic footprint). If you cannot tie a sentence to a concrete signal, delete it rather than pad.
 
 After phases 1–6, call tools in order:
-  set_research_output(…) → run_financial_model() → set_report_copy(…)
+  ${
+    stopAfterFinancialModel
+      ? 'set_research_output(…) → run_financial_model()'
+      : 'set_research_output(…) → run_financial_model() → set_report_copy(…)'
+  }
 
 MANDATORY for set_report_copy:
 • unified_pattern_thesis (KR-16): 2-3 sentences naming SINGLE operating pattern, no workflow lists
@@ -1597,15 +1623,113 @@ TERMINOLOGY (mandatory):
 • "Hours Returned" — never "time saved"
 
 ABSOLUTE PIPELINE REQUIREMENT:
-You MUST call set_research_output → run_financial_model → set_report_copy in sequence, without exception.
+You MUST call ${
+    stopAfterFinancialModel
+      ? 'set_research_output → run_financial_model'
+      : 'set_research_output → run_financial_model → set_report_copy'
+  } in sequence, without exception.
 If all web searches fail or return no useful data: STOP researching and call set_research_output IMMEDIATELY using the questionnaire inputs and industry benchmarks, with confidenceLevel: 'low' and sourceType: 'inferred' for all workflows.
 NEVER end generation with only text. NEVER explain why you couldn't research. If stuck: call set_research_output NOW.
+${
+  stopAfterFinancialModel
+    ? '\nThis request is preparation-only. Once run_financial_model succeeds, stop immediately without writing report copy.'
+    : ''
+}
 
 WORKFLOWS REQUIREMENT (critical):
 • set_research_output.workflows MUST contain EXACTLY 4 workflows — not 3, not 5
 • Every workflow MUST have monthlyVolume > 0 (use industry benchmarks if unknown — e.g. 200/mo for a 50-person firm)
 • Every workflow MUST have minutesPerItemBefore > 0 and minutesPerItemAfter > 0
 • Infer realistic volumes from team size and industry — do NOT submit 0 or omit these fields`
+}
+
+function buildFinalizeSystemPrompt(state: ReportState): string {
+  const company = state.company
+  const globals = state.globals
+  const workflows = state.workflows ?? []
+  const calc = state.calcOutput
+
+  if (!company || !globals || !calc) {
+    throw new Error(
+      'Finalize mode requires prepared company, workflow, and calculator state',
+    )
+  }
+
+  const currencySymbol =
+    globals.currency?.symbol ?? globals.currency?.code ?? '$'
+  const workflowLines = workflows
+    .map((workflow, index) => {
+      const calcWorkflow = calc.workflows[index]
+      return `${index + 1}. ${workflow.name}
+- Function: ${workflow.function}
+- Owner: ${workflow.owner}
+- Monthly volume: ${workflow.monthlyVolume}
+- Minutes before AI: ${workflow.minutesPerItemBefore}
+- Minutes after AI: ${workflow.minutesPerItemAfter}
+- Hourly rate: ${workflow.rateOverride ?? globals.laborRate}
+- Seniority: ${workflow.seniorityLevel ?? 'mid'}
+- Source type: ${workflow.sourceType}
+- Rationale: ${workflow.rationale}
+- Annual hours returned: ${Math.round(calcWorkflow?.annualHours ?? 0)}
+- Annual value: ${Math.round(calcWorkflow?.annualValue ?? 0)}`
+    })
+    .join('\n\n')
+
+  const painPointLines = (state.painPoints ?? [])
+    .map(
+      (point) =>
+        `- ${point.title} (${point.confidence}, ${point.source}): ${point.description}`,
+    )
+    .join('\n')
+
+  return `You are the LyRise ROI Report Finalizer.
+
+This report has already completed research and financial modeling. Do NOT call set_research_output. Do NOT call run_financial_model. Do NOT call web_search or fetch_page. Do NOT explain your plan in plain text.
+
+Your only job is to author the final report copy by calling set_report_copy exactly once.
+
+Company:
+- Name: ${company.company}
+- Industry: ${company.industry}
+- Country: ${company.country ?? 'Unknown'}
+- Employees: ${company.employees ?? 'Unknown'}
+- Revenue estimate (millions): ${company.revenueEstimateM ?? 'Unknown'}
+- Confidence: ${state.confidenceLevel ?? 'low'}
+- Thesis anchor: ${state.coreThesis ?? ''}
+- Research summary: ${state.researchSummary ?? ''}
+
+Pain points:
+${painPointLines || '- None recorded'}
+
+Workflows:
+${workflowLines}
+
+Calculated totals:
+- Total monthly hours returned: ${Math.round(calc.totalMonthlyHours)}
+- Total annual hours returned: ${Math.round(calc.summary.totalAnnualHours)}
+- Operational Dividend (12 mo): ${currencySymbol}${Math.round(
+    calc.summary.operationalDividend12mo,
+  )}
+- Total Financial Gain (12 mo): ${currencySymbol}${Math.round(
+    calc.summary.totalFinancialGain12mo,
+  )}
+
+MANDATORY for set_report_copy:
+- unified_pattern_thesis: 2-3 sentences naming a single operating pattern
+- company_snapshot: 3-5 bullets with source tags
+- profit_levers: exactly 4 items, one per workflow in the same order
+- cost_of_delay.narrative: no dollar figure, must end with "Delay is not neutral â€” it carries a monthly price."
+- resilience_rows: exactly 4 rows with dimensions Cost per unit, Delivery speed, Error rate, Strategic capacity
+- pilot_recommendation: must reference specific company characteristics
+- risks: at least 3 company-specific rows
+- cta_paragraph: criteria-based, not salesy
+
+Terminology:
+- "Operational Dividend", never "cost savings"
+- "Total Financial Gain", never "ROI"
+- "Hours Returned", never "time saved"
+
+Call set_report_copy now and then stop.`
 }
 
 function buildChatSystemPrompt(state: ReportState): string {
@@ -1887,7 +2011,7 @@ STRICT RULES:
 // ── Main entry point ──────────────────────────────────────────────────────────
 
 export async function runReportAgent(params: {
-  mode: 'generate' | 'chat'
+  mode: 'generate' | 'prepare' | 'finalize' | 'chat'
   state: ReportState
   message?: string
   chatHistory?: ModelMessage[]
@@ -1895,6 +2019,7 @@ export async function runReportAgent(params: {
   templateHtml: string
   fullTemplateHtml: string
   estimatesOnly?: boolean
+  stopAfterFinancialModel?: boolean
   // Aborts the streamText loop when the caller (e.g. an HTTP client) goes away,
   // so we stop burning tokens on a report nobody is waiting on.
   abortSignal?: AbortSignal
@@ -1908,12 +2033,14 @@ export async function runReportAgent(params: {
     templateHtml,
     fullTemplateHtml,
     estimatesOnly = false,
+    stopAfterFinancialModel = false,
     abortSignal,
   } = params
 
   const company = state.normInput?.companyName ?? 'unknown'
   roiLog('agent', `▶ runReportAgent mode=${mode} company="${company}"`, {
     estimatesOnly,
+    stopAfterFinancialModel,
     country: state.normInput?.country,
     industry: state.normInput?.industry,
     teamSize: state.normInput?.teamSize,
@@ -1927,18 +2054,24 @@ export async function runReportAgent(params: {
     )
   }
   const tracker = new UsageTracker({ company, mode })
-  const tools = buildTools(
+  const allTools = buildTools(
     state,
     templateHtml,
     fullTemplateHtml,
     callbacks,
     tracker,
   )
+  const tools =
+    mode === 'finalize'
+      ? { set_report_copy: allTools.set_report_copy }
+      : (mode === 'generate' || mode === 'prepare') && stopAfterFinancialModel
+      ? (({ set_report_copy, ...prepareTools }) => prepareTools)(allTools)
+      : allTools
 
   let system: string
   let messages: ModelMessage[]
 
-  if (mode === 'generate') {
+  if (mode === 'generate' || mode === 'prepare') {
     const companyName = state.normInput.companyName
     const website = state.normInput.website
     const desc = state.normInput.businessDescription
@@ -1950,11 +2083,19 @@ export async function runReportAgent(params: {
         }`
       : ''
 
-    system = buildGenerationSystemPrompt(companyName, estimatesOnly)
+    system = buildGenerationSystemPrompt(
+      companyName,
+      estimatesOnly,
+      stopAfterFinancialModel,
+    )
     messages = [
       {
         role: 'user',
-        content: `Generate a complete ROI report for ${companyName}.
+        content: `Generate a ${
+          stopAfterFinancialModel
+            ? 'prepared ROI assumptions package'
+            : 'complete ROI report'
+        } for ${companyName}.
 Website: ${website}
 Description: ${desc}
 ${recip ? 'Recipient: ' + recip : ''}
@@ -1968,6 +2109,22 @@ ${
   state.normInput.workContext ? 'Context: ' + state.normInput.workContext : ''
 }`,
       },
+    ]
+  } else if (mode === 'finalize') {
+    if (
+      !state.company ||
+      !state.globals ||
+      !state.workflows ||
+      !state.calcOutput
+    ) {
+      callbacks.onError(
+        new Error('Finalize mode requires a prepared report state'),
+      )
+      return
+    }
+    system = buildFinalizeSystemPrompt(state)
+    messages = [
+      { role: 'user', content: 'Generate the final report copy now.' },
     ]
   } else {
     // Chat mode — state must have calcOutput + copy
@@ -1989,7 +2146,7 @@ ${
     system,
     messages,
     tools,
-    stopWhen: stepCountIs(mode === 'generate' ? 24 : 8),
+    stopWhen: stepCountIs(mode === 'generate' || mode === 'prepare' ? 24 : 8),
     abortSignal,
   })
 
@@ -1998,7 +2155,10 @@ ${
       if (part.type === 'text-delta') {
         callbacks.onTextDelta(part.text)
       } else if (part.type === 'tool-call') {
-        callbacks.onToolStart(part.toolName, part.input as Record<string, unknown>)
+        callbacks.onToolStart(
+          part.toolName,
+          part.input as Record<string, unknown>,
+        )
       } else if (part.type === 'error') {
         // An abort surfaces here as an error part — treat it as a clean stop,
         // not a generation failure, so the caller doesn't persist/email it.
@@ -2036,7 +2196,7 @@ ${
   // agent runs, so the agent itself has no report_id to write.
   callbacks.onUsage?.(tracker.flush())
 
-  if (mode === 'generate' && !state.assembled) {
+  if ((mode === 'generate' || mode === 'finalize') && !state.assembled) {
     const done =
       [
         state.company ? 'research' : null,
@@ -2065,6 +2225,16 @@ ${
             : ''
         }`,
       ),
+    )
+    return
+  }
+
+  if (
+    mode === 'prepare' &&
+    (!state.company || !state.globals || !state.calcOutput)
+  ) {
+    callbacks.onError(
+      new Error('Preparation completed without a financial model state'),
     )
     return
   }

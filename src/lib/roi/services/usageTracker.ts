@@ -57,7 +57,7 @@ export interface UsageEntry {
 export interface UsageSummary {
   ts: string
   company: string
-  mode: 'generate' | 'chat'
+  mode: 'generate' | 'prepare' | 'finalize' | 'chat'
   durationMs: number
   calls: UsageEntry[]
   totals: {
@@ -73,13 +73,16 @@ export interface UsageSummary {
 export class UsageTracker {
   private company: string
 
-  private mode: 'generate' | 'chat'
+  private mode: 'generate' | 'prepare' | 'finalize' | 'chat'
 
   private startMs: number
 
   private entries: UsageEntry[] = []
 
-  constructor(opts: { company: string; mode: 'generate' | 'chat' }) {
+  constructor(opts: {
+    company: string
+    mode: 'generate' | 'prepare' | 'finalize' | 'chat'
+  }) {
     this.company = opts.company
     this.mode = opts.mode
     this.startMs = Date.now()

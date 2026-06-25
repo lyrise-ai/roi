@@ -15,8 +15,12 @@
 import crypto from 'node:crypto'
 import { normalizeInput } from '@/src/lib/roi/pipeline/normalize'
 import { loadTemplate } from '@/src/lib/roi/pipeline/renderTemplate'
+import { roiCalculator } from '@/src/lib/roi/pipeline/roiCalculator'
 import { runReportAgent } from '@/src/lib/roi/agent'
-import { buildDevMockReportState } from '@/src/lib/roi/devMockReport'
+import {
+  buildDevMockReportState,
+  getCurrency,
+} from '@/src/lib/roi/devMockReport'
 import { generatePdf } from '@/src/lib/roi/services/pdf'
 import {
   sendReportEmail,
@@ -30,8 +34,6 @@ import {
 import { persistReportEvidence } from '@/src/lib/roi/reportEvidence'
 import { persistUsage } from '@/src/lib/roi/services/usageStore'
 import { assessReportSpecificity } from '@/src/lib/roi/specificity'
-import { isEmployeeUser } from '@/src/lib/isEmployee'
-import { REPORT_CHAT_MESSAGE_LIMIT } from '@/src/lib/roi/constants'
 
 export const config = {
   maxDuration: 300,
@@ -86,6 +88,188 @@ function buildShareUrl(req, reportId, token) {
   )}`
 }
 
+function createInitialReportState(normInput) {
+  return {
+    normInput,
+    company: null,
+    globals: null,
+    workflows: null,
+    copy: null,
+    calcOutput: null,
+    assembled: null,
+    renderedHtml: null,
+    renderedFullHtml: null,
+    confidenceLevel: null,
+    coreThesis: null,
+    painPoints: [],
+    researchSummary: null,
+    evidenceItems: [],
+    specificityAssessment: null,
+    salaryEvidence: [],
+  }
+}
+
+function stripFinalReportFields(state) {
+  return {
+    ...state,
+    copy: null,
+    assembled: null,
+    renderedHtml: null,
+    renderedFullHtml: null,
+    specificityAssessment: null,
+  }
+}
+
+function coercePositiveNumberOrNull(value) {
+  if (value === '' || value == null) return null
+  const numeric = Number(value)
+  if (!Number.isFinite(numeric)) return Number.NaN
+  if (numeric <= 0) return Number.NaN
+  return numeric
+}
+
+function sanitizeOptionalString(value) {
+  if (value == null) return null
+  const text = String(value).trim()
+  return text || null
+}
+
+function applyVerificationPatch(state, verificationPatch = {}) {
+  if (
+    !state?.company ||
+    !state?.normInput ||
+    !state?.workflows ||
+    !state?.globals
+  ) {
+    throw new Error('Prepared report state is incomplete')
+  }
+
+  const companyPatch = verificationPatch.company ?? {}
+  const workflowPatches = Array.isArray(verificationPatch.workflows)
+    ? verificationPatch.workflows
+    : []
+
+  if ('employees' in companyPatch) {
+    const employees = coercePositiveNumberOrNull(companyPatch.employees)
+    if (Number.isNaN(employees)) {
+      throw new Error('Employee estimate must be a positive number')
+    }
+    state.company.employees = employees
+  }
+  if ('revenueEstimateM' in companyPatch) {
+    const revenueEstimateM = coercePositiveNumberOrNull(
+      companyPatch.revenueEstimateM,
+    )
+    if (Number.isNaN(revenueEstimateM)) {
+      throw new Error('Revenue estimate must be a positive number')
+    }
+    state.company.revenueEstimateM = revenueEstimateM
+  }
+  if ('industry' in companyPatch) {
+    state.company.industry = sanitizeOptionalString(companyPatch.industry) ?? ''
+  }
+  if ('country' in companyPatch) {
+    state.company.country = sanitizeOptionalString(companyPatch.country)
+  }
+  if ('teamSize' in companyPatch) {
+    state.normInput.teamSize =
+      sanitizeOptionalString(companyPatch.teamSize) ?? ''
+  }
+  if ('revenueRange' in companyPatch) {
+    state.normInput.revenueRange =
+      sanitizeOptionalString(companyPatch.revenueRange) ?? ''
+  }
+  if ('selectedCurrency' in companyPatch) {
+    const selectedCurrency =
+      sanitizeOptionalString(companyPatch.selectedCurrency) ?? ''
+    state.normInput.selectedCurrency = selectedCurrency
+    if (selectedCurrency) {
+      state.globals.currency = getCurrency(selectedCurrency)
+    }
+  }
+
+  workflowPatches.forEach((patch) => {
+    if (!patch || typeof patch !== 'object') return
+    const index = Number(patch.index)
+    if (
+      !Number.isInteger(index) ||
+      index < 0 ||
+      index >= state.workflows.length
+    ) {
+      throw new Error('Verification patch referenced an invalid workflow index')
+    }
+    const workflow = state.workflows[index]
+    if (
+      patch.originalName &&
+      String(patch.originalName).trim() !== workflow.name
+    ) {
+      throw new Error('Verification patch did not match the expected workflow')
+    }
+
+    const nextName = sanitizeOptionalString(patch.name)
+    if (nextName) workflow.name = nextName
+    const nextFunction = sanitizeOptionalString(patch.function)
+    if (nextFunction) workflow.function = nextFunction
+    const nextOwner = sanitizeOptionalString(patch.owner)
+    if (nextOwner) workflow.owner = nextOwner
+    const nextSeniority = sanitizeOptionalString(patch.seniorityLevel)
+    if (nextSeniority) workflow.seniorityLevel = nextSeniority
+    const nextSourceType = sanitizeOptionalString(patch.sourceType)
+    if (nextSourceType) workflow.sourceType = nextSourceType
+    const nextRationale = sanitizeOptionalString(patch.rationale)
+    if (nextRationale) workflow.rationale = nextRationale
+    ;[
+      'monthlyVolume',
+      'minutesPerItemBefore',
+      'minutesPerItemAfter',
+      'rateOverride',
+    ].forEach((field) => {
+      if (!(field in patch)) return
+      const numeric = coercePositiveNumberOrNull(patch[field])
+      if (Number.isNaN(numeric)) {
+        throw new Error(`${workflow.name}: ${field} must be a positive number`)
+      }
+      workflow[field] = numeric
+    })
+  })
+
+  const invalidWorkflow = state.workflows.find(
+    (workflow) =>
+      !sanitizeOptionalString(workflow.name) ||
+      !sanitizeOptionalString(workflow.function) ||
+      !sanitizeOptionalString(workflow.owner) ||
+      !sanitizeOptionalString(workflow.sourceType) ||
+      !sanitizeOptionalString(workflow.rationale) ||
+      !Number.isFinite(workflow.monthlyVolume) ||
+      workflow.monthlyVolume <= 0 ||
+      !Number.isFinite(workflow.minutesPerItemBefore) ||
+      workflow.minutesPerItemBefore <= 0 ||
+      !Number.isFinite(workflow.minutesPerItemAfter) ||
+      workflow.minutesPerItemAfter <= 0 ||
+      !Number.isFinite(workflow.rateOverride) ||
+      workflow.rateOverride <= 0,
+  )
+
+  if (invalidWorkflow) {
+    throw new Error(
+      `Workflow "${invalidWorkflow.name}" is missing one or more required fields`,
+    )
+  }
+
+  state.calcOutput = roiCalculator(
+    state.workflows,
+    state.globals,
+    state.company,
+  )
+  state.copy = null
+  state.assembled = null
+  state.renderedHtml = null
+  state.renderedFullHtml = null
+  state.specificityAssessment = null
+
+  return state
+}
+
 export default async function handler(req, res) {
   if (req.method === 'GET') {
     const supabase = createClient(req, res)
@@ -96,13 +280,22 @@ export default async function handler(req, res) {
       res.status(401).json({ error: 'Unauthorized' })
       return
     }
-    const { data: report } = await supabase
+    const reportId =
+      typeof req.query?.reportId === 'string' ? req.query.reportId : null
+    let reportQuery = supabase
       .from('reports')
-      .select('id, rendered_html, rendered_full_html, state_data')
+      .select(
+        'id, status, input_data, rendered_html, rendered_full_html, state_data',
+      )
       .eq('user_id', user.id)
-      .order('created_at', { ascending: false })
-      .limit(1)
-      .maybeSingle()
+    if (reportId) {
+      reportQuery = reportQuery.eq('id', reportId).limit(1)
+    } else {
+      reportQuery = reportQuery
+        .order('created_at', { ascending: false })
+        .limit(1)
+    }
+    const { data: report } = await reportQuery.maybeSingle()
 
     let messagesUsed = 0
     if (report) {
@@ -138,17 +331,18 @@ export default async function handler(req, res) {
     reportId,
     emailOverride,
     shareToken,
-    isAlpha,
+    verificationPatch,
   } = req.body
 
-  if (!mode || !['generate', 'chat'].includes(mode)) {
-    res
-      .status(400)
-      .json({ error: 'Invalid mode. Must be "generate" or "chat".' })
+  if (!mode || !['generate', 'prepare', 'finalize', 'chat'].includes(mode)) {
+    res.status(400).json({
+      error:
+        'Invalid mode. Must be "generate", "prepare", "finalize", or "chat".',
+    })
     return
   }
 
-  const CHAT_LIMIT = REPORT_CHAT_MESSAGE_LIMIT
+  const CHAT_LIMIT = 5
   let chatUserRole = 'CLIENT'
   const adminSupabase = createAdminClient()
   let persistedReport = null
@@ -199,7 +393,9 @@ export default async function handler(req, res) {
         .eq('id', reportId)
         .single(),
     ])
-    const isEmployeeChat = isEmployeeUser(user, userData)
+    const isEmployeeChat =
+      userData?.role === 'EMPLOYEE' ||
+      user.email?.endsWith('@lyrise.ai') === true
 
     // Employees see all messages on the report; clients see only their own
     let msgQuery = adminSupabase
@@ -210,14 +406,13 @@ export default async function handler(req, res) {
       .limit(20)
     if (!isEmployeeChat) msgQuery = msgQuery.eq('user_id', user.id)
     const { data: messages } = await msgQuery
-    chatUserRole = isEmployeeChat ? 'EMPLOYEE' : (userData?.role ?? 'CLIENT')
+    chatUserRole = isEmployeeChat ? 'EMPLOYEE' : userData?.role ?? 'CLIENT'
 
     if (!report || (report.user_id !== user.id && !isEmployeeChat)) {
       res.status(403).json({ error: 'Unauthorized' })
       return
     }
 
-    // Employees chat without limits; clients and alpha testers are capped.
     if (!isEmployeeChat) {
       const { data: usage } = await adminSupabase
         .from('chat_usage')
@@ -291,20 +486,78 @@ export default async function handler(req, res) {
     persistedReport.share_message_count = claimedCount
   }
 
-  // Alpha testers get one report per account (keeps the guided tour to a single
-  // run). Normal clients and employees can generate freely.
-  if (mode === 'generate' && isAlpha && user) {
-    const { data: existingReport } = await supabase
-      .from('reports')
-      .select('id')
-      .eq('user_id', user.id)
-      .limit(1)
-      .maybeSingle()
-    if (existingReport) {
-      res
-        .status(409)
-        .json({ error: 'report_exists', report_id: existingReport.id })
-      return
+  if (mode === 'generate' || mode === 'prepare' || mode === 'finalize') {
+    const { data: genUserData } = await adminSupabase
+      .from('users')
+      .select('role')
+      .eq('id', user.id)
+      .single()
+    const isEmployee =
+      genUserData?.role === 'EMPLOYEE' ||
+      user.email?.endsWith('@lyrise.ai') === true
+
+    if (!isEmployee && (mode === 'generate' || mode === 'prepare')) {
+      const { data: existingReports } = await supabase
+        .from('reports')
+        .select('id, status')
+        .eq('user_id', user.id)
+        .order('created_at', { ascending: false })
+
+      const successReport = (existingReports ?? []).find(
+        (report) => report.status === 'SUCCESS',
+      )
+      if (successReport) {
+        res
+          .status(409)
+          .json({ error: 'report_exists', report_id: successReport.id })
+        return
+      }
+
+      const pendingDraft = (existingReports ?? []).find(
+        (report) => report.status === 'PENDING_VERIFICATION',
+      )
+      if (
+        pendingDraft &&
+        (mode === 'generate' || !reportId || pendingDraft.id !== reportId)
+      ) {
+        res.status(409).json({
+          error: 'verification_pending',
+          report_id: pendingDraft.id,
+        })
+        return
+      }
+    }
+
+    if (mode === 'finalize') {
+      if (!reportId) {
+        res
+          .status(400)
+          .json({ error: 'reportId is required for finalize mode' })
+        return
+      }
+
+      const { data: report } = await adminSupabase
+        .from('reports')
+        .select(
+          'id, user_id, email, status, input_data, state_data, rendered_html, rendered_full_html, share_token',
+        )
+        .eq('id', reportId)
+        .single()
+
+      if (!report || report.user_id !== user.id) {
+        res.status(403).json({ error: 'Unauthorized' })
+        return
+      }
+
+      if (report.status !== 'PENDING_VERIFICATION') {
+        res.status(409).json({
+          error: 'report_not_pending_verification',
+          report_id: report.id,
+        })
+        return
+      }
+
+      persistedReport = report
     }
   }
 
@@ -333,46 +586,39 @@ export default async function handler(req, res) {
     const execTemplateHtml = loadTemplate('roi-exec-template.html')
     const fullTemplateHtml = loadTemplate('roi-template.html')
     const useDevMock =
-      IS_DEV && mode === 'generate' && devOptions?.skipLLM === true
+      IS_DEV &&
+      (mode === 'generate' || mode === 'prepare') &&
+      devOptions?.skipLLM === true
 
     let state
-    if (mode === 'generate') {
+    if (mode === 'generate' || mode === 'prepare') {
       const payload = mapFormToPayload(formData ?? req.body)
       const normInput = normalizeInput(payload)
 
       if (useDevMock) {
-        state = buildDevMockReportState({
+        const mockState = buildDevMockReportState({
           normInput,
           execTemplateHtml,
           fullTemplateHtml,
         })
+        state =
+          mode === 'prepare' ? stripFinalReportFields(mockState) : mockState
         send(res, {
           type: 'text_delta',
           delta:
             'Using dev mock report. Skipping research and LLM calls, but still saving the report.',
         })
-        send(res, { type: 'report_update', state })
+        if (mode === 'generate') {
+          send(res, { type: 'report_update', state })
+        }
       }
 
       if (!useDevMock) {
-        state = {
-          normInput,
-          company: null,
-          globals: null,
-          workflows: null,
-          copy: null,
-          calcOutput: null,
-          assembled: null,
-          renderedHtml: null,
-          renderedFullHtml: null,
-          confidenceLevel: null,
-          coreThesis: null,
-          painPoints: [],
-          researchSummary: null,
-          evidenceItems: [],
-          specificityAssessment: null,
-        }
+        state = createInitialReportState(normInput)
       }
+    } else if (mode === 'finalize') {
+      state = buildStateFromReportRow(persistedReport)
+      applyVerificationPatch(state, verificationPatch)
     } else {
       state = buildStateFromReportRow(persistedReport)
     }
@@ -386,7 +632,7 @@ export default async function handler(req, res) {
       ]
       send(res, {
         type: 'done',
-        assembled: true,
+        assembled: Boolean(state?.assembled),
         messages: capturedMessages,
       })
     } else {
@@ -398,6 +644,7 @@ export default async function handler(req, res) {
         templateHtml: execTemplateHtml,
         fullTemplateHtml,
         estimatesOnly: Boolean(devOptions?.estimatesOnly),
+        stopAfterFinancialModel: mode === 'prepare',
         abortSignal: abortController.signal,
         callbacks: {
           onTextDelta: (delta) => send(res, { type: 'text_delta', delta }),
@@ -549,10 +796,82 @@ export default async function handler(req, res) {
       }
     }
 
-    // Save report to DB after generation
-    let generatedShareToken = null
-    let savedReportId = null
-    if (mode === 'generate' && state.assembled) {
+    // Save report state after generation/finalization
+    let generatedShareToken = persistedReport?.share_token ?? null
+    let savedReportId = reportId ?? persistedReport?.id ?? null
+    if (mode === 'prepare' && state.calcOutput) {
+      const preparedState = stripFinalReportFields(state)
+      const { stateData } = splitStoredState(preparedState)
+      let savedDraft = null
+      let saveError = null
+
+      if (reportId) {
+        const result = await supabase
+          .from('reports')
+          .update({
+            company_name:
+              preparedState.company?.company ??
+              preparedState.normInput?.companyName ??
+              '',
+            email: preparedState.normInput?.email ?? '',
+            status: 'PENDING_VERIFICATION',
+            input_data: preparedState.normInput,
+            state_data: stateData,
+            rendered_html: null,
+            rendered_full_html: null,
+            completed_at: null,
+          })
+          .eq('id', reportId)
+          .eq('user_id', user.id)
+          .select('id')
+          .single()
+        savedDraft = result.data
+        saveError = result.error
+      } else {
+        const result = await supabase
+          .from('reports')
+          .insert({
+            user_id: user.id,
+            company_name:
+              preparedState.company?.company ??
+              preparedState.normInput?.companyName ??
+              '',
+            email: preparedState.normInput?.email ?? '',
+            status: 'PENDING_VERIFICATION',
+            input_data: preparedState.normInput,
+            state_data: stateData,
+          })
+          .select('id')
+          .single()
+        savedDraft = result.data
+        saveError = result.error
+      }
+
+      if (saveError) {
+        console.error('[roi-agent] draft save failed:', saveError)
+        send(res, {
+          type: 'error',
+          message: 'Failed to save prepared report: ' + saveError.message,
+        })
+        res.end()
+        return
+      }
+
+      if (savedDraft?.id) {
+        savedReportId = savedDraft.id
+        if (capturedUsage) {
+          await persistUsage(capturedUsage, {
+            reportId: savedDraft.id,
+            userId: user.id,
+          })
+        }
+        send(res, {
+          type: 'report_prepared',
+          report_id: savedDraft.id,
+          state: preparedState,
+        })
+      }
+    } else if (mode === 'generate' && state.assembled) {
       state.specificityAssessment = assessReportSpecificity(state)
 
       if (state.specificityAssessment.level === 'weak') {
@@ -582,7 +901,6 @@ export default async function handler(req, res) {
           rendered_full_html: renderedFullHtml,
           state_data: stateData,
           share_token: generatedShareToken,
-          is_alpha: Boolean(isAlpha),
         })
         .select('id')
         .single()
@@ -599,11 +917,6 @@ export default async function handler(req, res) {
 
       if (savedReport?.id) {
         savedReportId = savedReport.id
-        // Persist LLM usage now that the report row (report_id) exists.
-        // Awaited (not fire-and-forget): on Vercel the serverless function can
-        // be frozen once the response ends, dropping un-awaited background
-        // writes. persistUsage swallows its own errors, so awaiting it can
-        // never block or fail generation.
         if (capturedUsage) {
           await persistUsage(capturedUsage, {
             reportId: savedReport.id,
@@ -628,13 +941,87 @@ export default async function handler(req, res) {
           })
         send(res, { type: 'report_saved', report_id: savedReport.id })
       }
+    } else if (mode === 'finalize' && state.assembled) {
+      state.specificityAssessment = assessReportSpecificity(state)
+
+      if (state.specificityAssessment.level === 'weak') {
+        send(res, {
+          type: 'text_delta',
+          delta:
+            '\n\nLow-confidence note: public company evidence was limited, so some workflow assumptions may still rely on benchmarks.',
+        })
+      }
+
+      const { stateData, renderedHtml, renderedFullHtml } =
+        splitStoredState(state)
+      generatedShareToken =
+        persistedReport?.share_token ??
+        crypto.randomBytes(24).toString('base64url')
+
+      const { error: updateError } = await supabase
+        .from('reports')
+        .update({
+          company_name:
+            state.assembled.roi_data?.company ??
+            state.normInput?.companyName ??
+            '',
+          email: state.normInput?.email ?? '',
+          status: 'SUCCESS',
+          input_data: state.normInput,
+          completed_at: new Date().toISOString(),
+          rendered_html: renderedHtml,
+          rendered_full_html: renderedFullHtml,
+          state_data: stateData,
+          share_token: generatedShareToken,
+        })
+        .eq('id', persistedReport.id)
+        .eq('user_id', user.id)
+
+      if (updateError) {
+        console.error('[roi-agent] finalize save failed:', updateError)
+        send(res, {
+          type: 'error',
+          message: 'Failed to finalize report: ' + updateError.message,
+        })
+        res.end()
+        return
+      }
+
+      savedReportId = persistedReport.id
+      if (capturedUsage) {
+        await persistUsage(capturedUsage, {
+          reportId: persistedReport.id,
+          userId: user.id,
+        })
+      }
+      await persistReportEvidence(
+        adminSupabase,
+        persistedReport.id,
+        state.evidenceItems,
+      )
+      adminSupabase
+        .from('events')
+        .insert({
+          user_id: user.id,
+          report_id: persistedReport.id,
+          type: 'report_created',
+        })
+        .then(({ error }) => {
+          if (error)
+            console.error('event insert failed (report_created)', error)
+        })
+      send(res, { type: 'report_saved', report_id: persistedReport.id })
     }
 
     // Fire-and-forget PDF + email after generation.
     // Skip when the client has disconnected: the report is still saved above
     // and reachable from the dashboard, but we don't auto-email a company a
     // report whose request was abandoned.
-    if (clientDisconnected && mode === 'generate' && state.assembled) {
+    if (
+      clientDisconnected &&
+      (mode === 'generate' || mode === 'finalize') &&
+      state.assembled
+    ) {
       console.warn(
         '[roi-agent] client gone — report saved but skipping PDF/email',
       )
@@ -642,7 +1029,7 @@ export default async function handler(req, res) {
     if (
       !IS_DEV &&
       !clientDisconnected &&
-      mode === 'generate' &&
+      (mode === 'generate' || mode === 'finalize') &&
       state.assembled &&
       state.renderedHtml &&
       state.normInput?.email

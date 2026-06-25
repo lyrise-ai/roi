@@ -15,6 +15,10 @@ import { supabaseAdmin } from '@/src/lib/supabaseAdmin'
 import { maybeSendUsageCostAlert } from './usageAlerts'
 import type { UsageSummary } from './usageTracker'
 
+function persistedModeFor(summary: UsageSummary): 'generate' | 'chat' {
+  return summary.mode === 'chat' ? 'chat' : 'generate'
+}
+
 export async function persistUsage(
   summary: UsageSummary,
   ids: { reportId: string; userId?: string | null },
@@ -26,6 +30,8 @@ export async function persistUsage(
     return
   }
   try {
+    const persistedMode = persistedModeFor(summary)
+
     // Additive upsert: a report's cost accrues across the initial generation
     // AND every chat turn. The upsert_roi_usage RPC sums cost/tokens/duration
     // and concatenates calls on conflict, so a cheap chat turn never overwrites
@@ -34,7 +40,7 @@ export async function persistUsage(
       p_report_id: ids.reportId,
       p_user_id: ids.userId ?? null,
       p_company: summary.company,
-      p_mode: summary.mode,
+      p_mode: persistedMode,
       p_duration_ms: summary.durationMs,
       p_input_tokens: summary.totals.inputTokens,
       p_output_tokens: summary.totals.outputTokens,
@@ -50,7 +56,7 @@ export async function persistUsage(
     await maybeSendUsageCostAlert({
       reportId: ids.reportId,
       company: summary.company,
-      mode: summary.mode,
+      mode: persistedMode,
       incrementCostUsd: summary.totals.costUsd,
     })
   } catch (err) {
