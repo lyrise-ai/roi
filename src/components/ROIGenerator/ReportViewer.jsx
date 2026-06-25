@@ -201,7 +201,12 @@ export default function ReportViewer({
     }
   }, [isShareLink, shareToken, reportId])
 
-  const TOUR_JOURNEY = ['Your Report', 'Full Analysis', 'Export & Share', 'Refine with AI']
+  const TOUR_JOURNEY = [
+    'Your Report',
+    'Full Analysis',
+    'Export & Share',
+    'Refine with AI',
+  ]
 
   const TOUR_STEPS = [
     {
@@ -568,9 +573,9 @@ export default function ReportViewer({
         lineHeight: 1.5,
         wordBreak: 'break-word',
         borderRadius: '14px 14px 3px 14px',
-        background: '#003f87',
+        background: '#0B1528',
         color: '#fff',
-        boxShadow: '0 1px 2px rgba(0, 63, 135, 0.18)',
+        boxShadow: '0 1px 3px rgba(11,21,40,0.18)',
       },
       assistant: {
         maxWidth: '92%',
@@ -589,7 +594,7 @@ export default function ReportViewer({
       width: 6,
       height: 6,
       borderRadius: '50%',
-      background: '#003f87',
+      background: '#5B48F8',
       marginRight: 5,
       verticalAlign: 'middle',
       animation: 'pulse 1s infinite',
@@ -599,7 +604,7 @@ export default function ReportViewer({
       width: 6,
       height: 6,
       borderRadius: '50%',
-      background: '#003f87',
+      background: '#5B48F8',
       marginLeft: 4,
       verticalAlign: 'middle',
       animation: 'pulse 1s infinite',
@@ -637,7 +642,7 @@ export default function ReportViewer({
         flexDirection: 'column',
         height: '100vh',
         fontFamily:
-          "Calibri, 'Carlito', 'Segoe UI', 'Helvetica Neue', Arial, sans-serif",
+          "'Inter', -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif",
         WebkitFontSmoothing: 'antialiased',
         MozOsxFontSmoothing: 'grayscale',
         textRendering: 'optimizeLegibility',
@@ -671,15 +676,15 @@ export default function ReportViewer({
               ← Back
             </Link>
           )}
-          <div style={{ fontWeight: 600, fontSize: 14, color: '#1a1a1a' }}>
-            {company} — AI ROI Report
+          <div style={{ fontWeight: 600, fontSize: 14, color: '#0F172A' }}>
+            {company ? `${company} — Profit Map` : 'Profit Map'}
           </div>
           {batchContext && (
             <span
               style={{
                 fontSize: 11,
                 fontWeight: 600,
-                color: '#2957FF',
+                color: '#5B48F8',
                 background: '#EBF0F8',
                 borderRadius: 999,
                 padding: '3px 10px',
@@ -695,10 +700,10 @@ export default function ReportViewer({
             <div
               style={{
                 display: 'flex',
+                background: '#F3F4F6',
+                borderRadius: 999,
+                padding: 3,
                 gap: 2,
-                border: '1px solid #e2e8f0',
-                borderRadius: 6,
-                overflow: 'hidden',
               }}
             >
               <button
@@ -706,13 +711,17 @@ export default function ReportViewer({
                 type="button"
                 onClick={() => handleTabSelect('exec')}
                 style={{
-                  padding: '6px 12px',
-                  fontSize: 13,
+                  padding: '5px 16px',
+                  fontSize: 12,
                   fontWeight: 500,
                   border: 'none',
-                  background: activeTab === 'exec' ? '#2957FF' : '#fff',
+                  borderRadius: 999,
+                  background: activeTab === 'exec' ? '#5B48F8' : 'transparent',
                   color: activeTab === 'exec' ? '#fff' : '#374151',
                   cursor: 'pointer',
+                  whiteSpace: 'nowrap',
+                  fontFamily: 'inherit',
+                  transition: 'background 0.15s, color 0.15s',
                 }}
               >
                 Executive Summary
@@ -722,13 +731,17 @@ export default function ReportViewer({
                 type="button"
                 onClick={() => handleTabSelect('full')}
                 style={{
-                  padding: '6px 12px',
-                  fontSize: 13,
+                  padding: '5px 16px',
+                  fontSize: 12,
                   fontWeight: 500,
                   border: 'none',
-                  background: activeTab === 'full' ? '#2957FF' : '#fff',
+                  borderRadius: 999,
+                  background: activeTab === 'full' ? '#5B48F8' : 'transparent',
                   color: activeTab === 'full' ? '#fff' : '#374151',
                   cursor: 'pointer',
+                  whiteSpace: 'nowrap',
+                  fontFamily: 'inherit',
+                  transition: 'background 0.15s, color 0.15s',
                 }}
               >
                 Full Report
@@ -790,14 +803,14 @@ export default function ReportViewer({
                 padding: '6px 14px',
                 fontSize: 13,
                 fontWeight: 500,
-                border: '1px solid #2957FF',
+                border: '1px solid #5B48F8',
                 borderRadius: 6,
                 background:
                   emailStatus === 'sent'
                     ? '#dcfce7'
                     : emailStatus === 'error'
                       ? '#fee2e2'
-                      : '#2957FF',
+                      : '#5B48F8',
                 color:
                   emailStatus === 'sent'
                     ? '#166534'
@@ -919,7 +932,7 @@ export default function ReportViewer({
                   width: 36,
                   height: 36,
                   border: '3px solid #e2e8f0',
-                  borderTopColor: '#2957FF',
+                  borderTopColor: '#5B48F8',
                   borderRadius: '50%',
                   animation: 'spin 0.75s linear infinite',
                 }}
@@ -950,37 +963,36 @@ export default function ReportViewer({
             flex: '0 0 35%',
             display: 'flex',
             flexDirection: 'column',
-            background: '#f5f5f5',
+            background: '#F8F7F5',
           }}
         >
           {/* Chat header */}
           <div
             style={{
-              padding: '12px 16px 10px',
+              padding: '13px 16px 11px',
               background: '#fff',
-              borderBottom: '2.5px solid #003f87',
+              borderBottom: '1px solid #E5E7EB',
               flexShrink: 0,
             }}
           >
             <div
               style={{
-                fontSize: 11,
+                fontSize: 13,
                 fontWeight: 700,
-                textTransform: 'uppercase',
-                letterSpacing: 0.8,
-                color: '#003f87',
+                color: '#0F172A',
+                letterSpacing: '-0.2px',
               }}
             >
-              AI Assistant
+              Refine the Business Case
             </div>
             <div
               style={{
                 fontSize: 11,
-                color: '#5a5a6e',
+                color: '#6B7280',
                 marginTop: 2,
               }}
             >
-              Refine the report with natural language
+              Ask me to adjust, rewrite, or share →
             </div>
           </div>
 
@@ -995,40 +1007,103 @@ export default function ReportViewer({
               gap: 10,
             }}
           >
-            {/* Initial assistant message — rendered as insight panel */}
+            {/* Initial insight panel */}
             <div
               style={{
-                display: 'flex',
-                background: '#fff',
-                border: '1px solid #d0d0d0',
-                marginRight: 8,
+                background: '#EFF6FF',
+                borderRadius: 8,
+                padding: 14,
+                borderLeft: '3px solid #5B48F8',
               }}
             >
-              <div style={{ width: 4, background: '#003f87', flexShrink: 0 }} />
               <div
                 style={{
-                  padding: '10px 14px',
-                  fontSize: 13,
-                  color: '#1a1a1a',
-                  lineHeight: 1.55,
-                  flex: 1,
+                  fontSize: 10,
+                  fontWeight: 700,
+                  textTransform: 'uppercase',
+                  letterSpacing: '0.1em',
+                  color: '#5B48F8',
+                  marginBottom: 6,
                 }}
               >
-                <div
-                  style={{
-                    fontSize: 10,
-                    fontWeight: 700,
-                    textTransform: 'uppercase',
-                    letterSpacing: 0.6,
-                    color: '#003f87',
-                    marginBottom: 4,
-                  }}
-                >
-                  Report Ready
-                </div>
+                Profit Map Ready
+              </div>
+              <div
+                style={{
+                  fontSize: 12,
+                  color: '#374151',
+                  lineHeight: 1.55,
+                }}
+              >
                 {initialMessage}
               </div>
             </div>
+
+            {/* Prompt chips — shown before first user message */}
+            {chatHistory.filter((m) => m.role === 'user').length === 0 && (
+              <div>
+                <div
+                  style={{
+                    fontSize: 10,
+                    fontWeight: 600,
+                    color: '#9CA3AF',
+                    letterSpacing: '0.08em',
+                    textTransform: 'uppercase',
+                    marginBottom: 10,
+                  }}
+                >
+                  Guided actions
+                </div>
+                <div
+                  style={{
+                    display: 'grid',
+                    gridTemplateColumns: '1fr 1fr',
+                    gap: 6,
+                  }}
+                >
+                  {[
+                    'Show assumptions',
+                    'Change currency',
+                    'Rank by payback',
+                    'Rewrite for CFO',
+                    'Draft email to decision-maker',
+                    'Show first sprint',
+                    'Adjust team size',
+                    'Make board-ready',
+                  ].map((chip) => (
+                    <button
+                      key={chip}
+                      type="button"
+                      onClick={() => handleSend(null, chip)}
+                      disabled={isAgentRunning}
+                      style={{
+                        padding: '8px 10px',
+                        fontSize: 11,
+                        fontWeight: 500,
+                        color: '#5B21B6',
+                        background: '#F5F3FF',
+                        border: 'none',
+                        borderRadius: 6,
+                        cursor: isAgentRunning ? 'not-allowed' : 'pointer',
+                        fontFamily: 'inherit',
+                        textAlign: 'left',
+                        opacity: isAgentRunning ? 0.5 : 1,
+                        transition: 'background 0.15s',
+                      }}
+                      onMouseEnter={(e) => {
+                        if (!isAgentRunning)
+                          e.currentTarget.style.background = '#EDE9FE'
+                      }}
+                      onMouseLeave={(e) => {
+                        e.currentTarget.style.background = '#F5F3FF'
+                      }}
+                    >
+                      {chip}
+                    </button>
+                  ))}
+                </div>
+              </div>
+            )}
 
             {/* Conversation history */}
             {chatHistory.map((msg, i) => {
@@ -1068,8 +1143,8 @@ export default function ReportViewer({
             {showCallPrompt && !isEmployee && (
               <div
                 style={{
-                  background: '#f0f4ff',
-                  border: '1px solid #c7d2fe',
+                  background: '#F5F3FF',
+                  border: '1px solid #C4B5FD',
                   borderRadius: 12,
                   padding: '12px 14px',
                 }}
@@ -1078,22 +1153,24 @@ export default function ReportViewer({
                   style={{
                     fontSize: 13,
                     fontWeight: 600,
-                    color: '#1e3a8a',
+                    color: '#0F172A',
                     margin: '0 0 5px',
+                    letterSpacing: '-0.2px',
                   }}
                 >
-                  Want to walk through these findings with our team?
+                  Ready to validate these findings?
                 </p>
                 <p
                   style={{
                     fontSize: 13,
                     color: '#374151',
-                    lineHeight: 1.5,
+                    lineHeight: 1.55,
                     margin: '0 0 10px',
                   }}
                 >
-                  Book a free 30-min call with a LyRise specialist to explore
-                  next steps for your ROI strategy.
+                  Book a free 30-min call with a LyRise specialist to walk
+                  through your Profit Map and identify the first workflow to
+                  fix.
                 </p>
                 <a
                   href="https://api.leadconnectorhq.com/widget/bookings/strategy-call-with-lyrisesivto9"
@@ -1101,16 +1178,16 @@ export default function ReportViewer({
                   rel="noopener noreferrer"
                   style={{
                     display: 'inline-block',
-                    padding: '7px 14px',
-                    background: '#2957FF',
+                    padding: '8px 16px',
+                    background: '#5B48F8',
                     color: '#fff',
-                    borderRadius: 7,
+                    borderRadius: 10,
                     fontSize: 13,
                     fontWeight: 600,
                     textDecoration: 'none',
                   }}
                 >
-                  Schedule a free call →
+                  Book a validation call →
                 </a>
               </div>
             )}
@@ -1152,9 +1229,9 @@ export default function ReportViewer({
                         style={{
                           fontSize: 11,
                           fontWeight: 500,
-                          background: '#eef2ff',
+                          background: '#EDE9FE',
                           color: '#2957ff',
-                          border: '1px solid #c7d2fe',
+                          border: '1px solid #C4B5FD',
                           borderRadius: 4,
                           padding: '2px 7px',
                           cursor: 'pointer',
@@ -1177,11 +1254,11 @@ export default function ReportViewer({
                     alignItems: 'center',
                     gap: 7,
                     padding: '5px 11px',
-                    background: '#ebf0f8',
-                    border: '1px solid #003f87',
+                    background: '#EDE9FE',
+                    border: '1px solid #5B48F8',
                     borderRadius: 12,
                     fontSize: 11,
-                    color: '#003f87',
+                    color: '#5B48F8',
                     fontWeight: 700,
                     textTransform: 'uppercase',
                     letterSpacing: 0.5,
@@ -1209,7 +1286,7 @@ export default function ReportViewer({
             style={{
               padding: '12px 14px 14px',
               background: '#fff',
-              borderTop: '1px solid #d0d0d0',
+              borderTop: '1px solid #E5E7EB',
             }}
           >
             {reportId && (
@@ -1246,7 +1323,7 @@ export default function ReportViewer({
                     margin: '0 0 4px',
                   }}
                 >
-                  You&apos;ve used your {REPORT_CHAT_MESSAGE_LIMIT} messages.
+                  You&apos;ve used your {REPORT_CHAT_MESSAGE_LIMIT} refinements.
                 </p>
                 {isEmployee ? (
                   <p style={{ fontSize: 12, color: '#92400e', margin: 0 }}>
@@ -1255,7 +1332,7 @@ export default function ReportViewer({
                 ) : (
                   <a
                     href="https://api.leadconnectorhq.com/widget/bookings/strategy-call-with-lyrisesivto9"
-                    style={{ fontSize: 12, color: '#2957FF' }}
+                    style={{ fontSize: 12, color: '#5B48F8' }}
                   >
                     Contact LyRise to continue →
                   </a>
@@ -1277,24 +1354,24 @@ export default function ReportViewer({
                     style={{
                       flex: 1,
                       padding: '9px 12px',
-                      border: '1px solid #d0d0d0',
-                      borderRadius: 6,
+                      border: '1.5px solid #E5E7EB',
+                      borderRadius: 10,
                       fontSize: 13,
                       lineHeight: 1.5,
                       resize: 'none',
                       outline: 'none',
                       fontFamily: 'inherit',
-                      color: '#1a1a1a',
-                      background: isAgentRunning ? '#f5f5f5' : '#fff',
+                      color: '#0F172A',
+                      background: isAgentRunning ? '#F9F9F9' : '#fff',
                       transition: 'border-color 0.15s, box-shadow 0.15s',
                     }}
                     onFocus={(e) => {
-                      e.target.style.borderColor = '#003f87'
+                      e.target.style.borderColor = '#5B48F8'
                       e.target.style.boxShadow =
-                        '0 0 0 2px rgba(0, 63, 135, 0.15)'
+                        '0 0 0 2px rgba(91, 72, 248, 0.15)'
                     }}
                     onBlur={(e) => {
-                      e.target.style.borderColor = '#d0d0d0'
+                      e.target.style.borderColor = '#E5E7EB'
                       e.target.style.boxShadow = 'none'
                     }}
                   />
@@ -1303,25 +1380,24 @@ export default function ReportViewer({
                     disabled={isAgentRunning || !input.trim()}
                     style={{
                       padding: '9px 18px',
-                      borderRadius: 6,
+                      borderRadius: 10,
                       border: 'none',
                       background:
-                        isAgentRunning || !input.trim() ? '#d0d0d0' : '#003f87',
+                        isAgentRunning || !input.trim() ? '#E5E7EB' : '#111827',
                       color:
-                        isAgentRunning || !input.trim() ? '#5a5a6e' : '#fff',
-                      fontWeight: 700,
-                      fontSize: 12,
-                      textTransform: 'uppercase',
-                      letterSpacing: 0.5,
+                        isAgentRunning || !input.trim() ? '#9CA3AF' : '#fff',
+                      fontWeight: 600,
+                      fontSize: 13,
                       cursor:
                         isAgentRunning || !input.trim()
                           ? 'not-allowed'
                           : 'pointer',
                       flexShrink: 0,
+                      fontFamily: 'inherit',
                       transition: 'background 0.15s',
                     }}
                   >
-                    Send
+                    Send →
                   </button>
                 </form>
               </div>
@@ -1394,7 +1470,7 @@ export default function ReportViewer({
               height: tourRect.height + 12,
               borderRadius: 10,
               boxShadow:
-                '0 0 0 2px rgba(255,255,255,0.45) inset, 0 0 24px rgba(41, 87, 255, 0.55)',
+                '0 0 0 2px rgba(255,255,255,0.45) inset, 0 0 24px rgba(91, 72, 248, 0.55)',
               pointerEvents: 'none',
               zIndex: 1001,
               transition: 'all 0.25s ease',
@@ -1440,7 +1516,7 @@ export default function ReportViewer({
               style={{
                 fontSize: 15,
                 fontWeight: 700,
-                color: '#0a2540',
+                color: '#0F172A',
                 marginBottom: 6,
                 paddingRight: 18,
               }}
@@ -1467,7 +1543,7 @@ export default function ReportViewer({
                     flex: 1,
                     height: 3,
                     borderRadius: 2,
-                    background: i <= tourStep ? '#2957FF' : '#e2e8f0',
+                    background: i <= tourStep ? '#5B48F8' : '#e2e8f0',
                     transition: 'background 0.2s',
                   }}
                 />
@@ -1495,7 +1571,7 @@ export default function ReportViewer({
                 onClick={advanceTour}
                 style={{
                   padding: '7px 16px',
-                  background: '#2957FF',
+                  background: '#5B48F8',
                   color: '#fff',
                   border: 'none',
                   borderRadius: 8,

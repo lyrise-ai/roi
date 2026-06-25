@@ -33,16 +33,16 @@ function GoogleIcon() {
     </svg>
   )
 }
+
 export default function Login({ next = '/dashboard' }) {
   const router = useRouter()
   const [mode, setMode] = useState('login')
+  const [email, setEmail] = useState('')
+  const [password, setPassword] = useState('')
+  const [loading, setLoading] = useState(false)
+  const [error, setError] = useState('')
 
   const handleGoogleAuth = async () => {
-    // Store the post-login destination in a cookie so callback.js can read it
-    // server-side. We deliberately do NOT put ?next= in redirectTo because
-    // Supabase's allowlist validates the full URL including query params, and
-    // a URL with encoded path characters won't match the registered base URL,
-    // causing Supabase to fall back to the site root and drop the auth code.
     try {
       document.cookie = `auth_next=${encodeURIComponent(next)}; path=/; max-age=300; SameSite=Lax`
     } catch {}
@@ -53,10 +53,6 @@ export default function Login({ next = '/dashboard' }) {
       },
     })
   }
-  const [email, setEmail] = useState('')
-  const [password, setPassword] = useState('')
-  const [loading, setLoading] = useState(false)
-  const [error, setError] = useState('')
 
   const handleSubmit = async (e) => {
     e.preventDefault()
@@ -87,20 +83,6 @@ export default function Login({ next = '/dashboard' }) {
     }
   }
 
-  const inputStyle = {
-    width: '100%',
-    border: '1.5px solid #e5e7eb',
-    borderRadius: '10px',
-    padding: '11px 14px',
-    fontSize: '14px',
-    fontFamily: 'inherit',
-    outline: 'none',
-    background: '#fafafa',
-    color: '#2C2C2C',
-    boxSizing: 'border-box',
-    marginBottom: '10px',
-  }
-
   return (
     <>
       <Head>
@@ -108,96 +90,208 @@ export default function Login({ next = '/dashboard' }) {
       </Head>
 
       <div
-        className="flex items-center justify-center min-h-screen px-4 rebranding-landing-page"
         style={{
-          position: 'relative',
-          overflow: 'hidden',
-          background:
-            'linear-gradient(135deg, #f0f4ff 0%, #ffffff 50%, #fef0f7 100%)',
+          minHeight: '100vh',
+          display: 'flex',
+          alignItems: 'center',
+          justifyContent: 'center',
+          background: '#E2DED8',
+          padding: '24px 16px',
+          fontFamily:
+            "'Inter', -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif",
         }}
       >
         <div
           style={{
-            position: 'relative',
-            zIndex: 10,
             width: '100%',
-            maxWidth: '380px',
-            background: 'rgba(255,255,255,0.92)',
-            backdropFilter: 'blur(12px)',
-            borderRadius: '20px',
+            maxWidth: '400px',
+            background: '#ffffff',
+            borderRadius: '16px',
             padding: '40px 36px',
-            boxShadow: '0 8px 48px rgba(0,0,0,0.10)',
+            boxShadow: '0 2px 24px rgba(0,0,0,0.08)',
           }}
         >
-          <div className="text-center mb-7">
+          {/* Logo */}
+          <div
+            style={{
+              display: 'flex',
+              alignItems: 'center',
+              gap: 8,
+              marginBottom: 32,
+            }}
+          >
             <div
-              className="font-outfit font-bold text-[#2C2C2C] mx-auto mb-5"
-              style={{ fontSize: '22px', letterSpacing: '-0.5px' }}
-            >
-              LyRise
-            </div>
-            <h1
-              className="font-outfit font-bold text-[#2C2C2C]"
               style={{
-                fontSize: '26px',
-                letterSpacing: '-0.5px',
-                lineHeight: '1.2',
-                marginBottom: '8px',
+                background: '#0B1528',
+                color: 'white',
+                borderRadius: 6,
+                width: 28,
+                height: 28,
+                display: 'flex',
+                alignItems: 'center',
+                justifyContent: 'center',
+                fontSize: 10,
+                fontWeight: 700,
+                flexShrink: 0,
+                letterSpacing: '-0.3px',
               }}
             >
-              Welcome
+              Ly
+            </div>
+            <span style={{ fontSize: 13, fontWeight: 600, color: '#0B1528' }}>
+              LyRise
+            </span>
+            <span style={{ color: '#D1D5DB', fontSize: 13 }}>/</span>
+            <span style={{ fontSize: 12, color: '#9CA3AF' }}>
+              AI Profit Map
+            </span>
+          </div>
+
+          {/* Heading */}
+          <div style={{ marginBottom: 28 }}>
+            <h1
+              style={{
+                fontSize: 22,
+                fontWeight: 700,
+                color: '#0F172A',
+                margin: '0 0 6px',
+                letterSpacing: '-0.4px',
+                lineHeight: 1.2,
+              }}
+            >
+              {mode === 'signup' ? 'Create your account' : 'Welcome back'}
             </h1>
             <p
-              className="font-outfit text-[15px] text-gray-500"
-              style={{ lineHeight: '1.5' }}
+              style={{
+                fontSize: 14,
+                color: '#6B7280',
+                margin: 0,
+                lineHeight: 1.55,
+              }}
             >
-              Sign in to access your AI ROI reports
+              {mode === 'signup'
+                ? 'Start building AI Profit Maps for your clients.'
+                : 'Sign in to access your AI Profit Maps.'}
             </p>
           </div>
 
+          {/* Google OAuth */}
           <button
             type="button"
             onClick={handleGoogleAuth}
-            className="w-full flex items-center justify-center gap-3 font-outfit font-semibold text-[#2C2C2C] bg-white transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
             style={{
-              border: '1.5px solid #e5e7eb',
-              borderRadius: '50px',
-              padding: '13px 20px',
-              fontSize: '15px',
+              width: '100%',
+              display: 'flex',
+              alignItems: 'center',
+              justifyContent: 'center',
+              gap: 10,
+              border: '1.5px solid #E5E7EB',
+              borderRadius: 10,
+              padding: '11px 16px',
+              fontSize: 14,
+              fontWeight: 500,
+              color: '#0F172A',
+              background: '#fff',
+              cursor: 'pointer',
+              fontFamily: 'inherit',
+              marginBottom: 20,
+              boxSizing: 'border-box',
+              transition: 'border-color 0.15s',
             }}
+            onMouseEnter={(e) =>
+              (e.currentTarget.style.borderColor = '#9CA3AF')
+            }
+            onMouseLeave={(e) =>
+              (e.currentTarget.style.borderColor = '#E5E7EB')
+            }
           >
             <GoogleIcon />
             Continue with Google
           </button>
 
-          <div className="flex items-center my-5">
-            <div className="flex-1 border-t border-gray-200" />
-            <span className="mx-3 text-xs text-gray-400 font-outfit">or</span>
-            <div className="flex-1 border-t border-gray-200" />
+          {/* Divider */}
+          <div
+            style={{
+              display: 'flex',
+              alignItems: 'center',
+              gap: 12,
+              marginBottom: 20,
+            }}
+          >
+            <div style={{ flex: 1, height: 1, background: '#F3F4F6' }} />
+            <span style={{ fontSize: 12, color: '#9CA3AF' }}>or</span>
+            <div style={{ flex: 1, height: 1, background: '#F3F4F6' }} />
           </div>
 
+          {/* Email / password form */}
           <form onSubmit={handleSubmit}>
-            <input
-              type="email"
-              placeholder="Email"
-              value={email}
-              onChange={(e) => setEmail(e.target.value)}
-              required
-              style={inputStyle}
-              className="font-outfit"
-            />
-            <input
-              type="password"
-              placeholder="Password"
-              value={password}
-              onChange={(e) => setPassword(e.target.value)}
-              required
-              style={inputStyle}
-              className="font-outfit"
-            />
+            <div
+              style={{
+                display: 'flex',
+                flexDirection: 'column',
+                gap: 10,
+                marginBottom: 12,
+              }}
+            >
+              <input
+                type="email"
+                placeholder="Work email"
+                value={email}
+                onChange={(e) => setEmail(e.target.value)}
+                required
+                autoComplete="email"
+                style={{
+                  border: '1.5px solid #E5E7EB',
+                  borderRadius: 10,
+                  padding: '11px 14px',
+                  fontSize: 14,
+                  fontFamily: 'inherit',
+                  outline: 'none',
+                  color: '#0F172A',
+                  background: '#FAFAFA',
+                  boxSizing: 'border-box',
+                  width: '100%',
+                  transition: 'border-color 0.15s',
+                }}
+                onFocus={(e) => (e.target.style.borderColor = '#5B48F8')}
+                onBlur={(e) => (e.target.style.borderColor = '#E5E7EB')}
+              />
+              <input
+                type="password"
+                placeholder="Password"
+                value={password}
+                onChange={(e) => setPassword(e.target.value)}
+                required
+                autoComplete={
+                  mode === 'signup' ? 'new-password' : 'current-password'
+                }
+                style={{
+                  border: '1.5px solid #E5E7EB',
+                  borderRadius: 10,
+                  padding: '11px 14px',
+                  fontSize: 14,
+                  fontFamily: 'inherit',
+                  outline: 'none',
+                  color: '#0F172A',
+                  background: '#FAFAFA',
+                  boxSizing: 'border-box',
+                  width: '100%',
+                  transition: 'border-color 0.15s',
+                }}
+                onFocus={(e) => (e.target.style.borderColor = '#5B48F8')}
+                onBlur={(e) => (e.target.style.borderColor = '#E5E7EB')}
+              />
+            </div>
 
             {error && (
-              <p className="font-outfit text-[12px] text-red-500 mb-3 leading-relaxed">
+              <p
+                style={{
+                  fontSize: 12,
+                  color: '#EF4444',
+                  margin: '0 0 12px',
+                  lineHeight: 1.5,
+                }}
+              >
                 {error}
               </p>
             )}
@@ -205,25 +299,39 @@ export default function Login({ next = '/dashboard' }) {
             <button
               type="submit"
               disabled={loading}
-              className="w-full font-semibold text-white transition-colors cursor-pointer font-outfit disabled:opacity-60"
               style={{
-                background: '#2957FF',
-                borderRadius: '50px',
-                padding: '13px 20px',
-                fontSize: '15px',
+                width: '100%',
+                background: loading ? '#A49CF4' : '#5B48F8',
+                color: '#fff',
                 border: 'none',
-                marginBottom: '10px',
+                borderRadius: 10,
+                padding: '12px 16px',
+                fontSize: 14,
+                fontWeight: 600,
+                cursor: loading ? 'not-allowed' : 'pointer',
+                fontFamily: 'inherit',
+                marginBottom: 16,
+                boxSizing: 'border-box',
+                transition: 'background 0.15s',
               }}
             >
               {loading
                 ? 'Please wait…'
                 : mode === 'signup'
-                  ? 'Sign Up'
-                  : 'Log In'}
+                  ? 'Create account'
+                  : 'Sign in'}
             </button>
           </form>
 
-          <p className="font-outfit text-center text-[13px] text-gray-500">
+          {/* Mode toggle */}
+          <p
+            style={{
+              fontSize: 13,
+              color: '#6B7280',
+              textAlign: 'center',
+              margin: 0,
+            }}
+          >
             {mode === 'login' ? (
               <>
                 Don&apos;t have an account?{' '}
@@ -233,7 +341,16 @@ export default function Login({ next = '/dashboard' }) {
                     setMode('signup')
                     setError('')
                   }}
-                  className="font-semibold text-[#2957FF] hover:underline cursor-pointer bg-transparent border-none p-0"
+                  style={{
+                    color: '#5B48F8',
+                    fontWeight: 600,
+                    background: 'none',
+                    border: 'none',
+                    cursor: 'pointer',
+                    padding: 0,
+                    fontFamily: 'inherit',
+                    fontSize: 'inherit',
+                  }}
                 >
                   Sign up
                 </button>
@@ -247,15 +364,33 @@ export default function Login({ next = '/dashboard' }) {
                     setMode('login')
                     setError('')
                   }}
-                  className="font-semibold text-[#2957FF] hover:underline cursor-pointer bg-transparent border-none p-0"
+                  style={{
+                    color: '#5B48F8',
+                    fontWeight: 600,
+                    background: 'none',
+                    border: 'none',
+                    cursor: 'pointer',
+                    padding: 0,
+                    fontFamily: 'inherit',
+                    fontSize: 'inherit',
+                  }}
                 >
-                  Log in
+                  Sign in
                 </button>
               </>
             )}
           </p>
 
-          <p className="font-outfit text-center text-[12px] text-gray-400 mt-4 leading-relaxed">
+          <p
+            style={{
+              fontSize: 11,
+              color: '#9CA3AF',
+              textAlign: 'center',
+              marginTop: 16,
+              marginBottom: 0,
+              lineHeight: 1.5,
+            }}
+          >
             By continuing you agree to our Terms of Service and Privacy Policy.
           </p>
         </div>
