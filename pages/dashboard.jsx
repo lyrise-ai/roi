@@ -12,6 +12,10 @@ import MainHeader from '../src/layout/MainHeader/index'
 import { getRoleForUser } from '../src/lib/authHelpers'
 import AlphaDashboardPanel from '../src/components/AlphaDashboardPanel'
 import ErrorBoundary from '../src/components/shared/ErrorBoundary'
+import {
+  fmtDate as formatDate,
+  fmtDateTime as formatDateTime,
+} from '../src/utilities/formatDateTime'
 
 const STATUS_STYLES = {
   SUCCESS: { bg: 'bg-green-50', text: 'text-green-700', label: 'Done' },
@@ -97,36 +101,6 @@ function parseTimestamp(iso) {
   if (!iso) return null
   const hasZone = /[zZ]$|[+-]\d{2}:?\d{2}$/.test(iso)
   return new Date(hasZone ? iso : `${iso}Z`)
-}
-
-// Month abbreviations used by the manual formatters below.
-// Avoids toLocaleString() whose output can differ between Node.js and browsers
-// depending on the ICU data bundle, causing React hydration mismatches.
-const MONTHS_SHORT = [
-  'Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun',
-  'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec',
-]
-
-function formatDate(iso) {
-  const d = parseTimestamp(iso)
-  if (!d) return '—'
-  return `${d.getUTCDate()} ${MONTHS_SHORT[d.getUTCMonth()]} ${d.getUTCFullYear()}`
-}
-
-// Full timestamp with 12-hour clock, e.g. "10 Jun 2026, 6:59:40 PM".
-// Uses explicit UTC accessors so server and client always produce the same string.
-function formatDateTime(iso) {
-  const d = parseTimestamp(iso)
-  if (!d) return '—'
-  const day = d.getUTCDate()
-  const mon = MONTHS_SHORT[d.getUTCMonth()]
-  const yr = d.getUTCFullYear()
-  let hr = d.getUTCHours()
-  const min = String(d.getUTCMinutes()).padStart(2, '0')
-  const sec = String(d.getUTCSeconds()).padStart(2, '0')
-  const ampm = hr >= 12 ? 'PM' : 'AM'
-  hr = hr % 12 || 12
-  return `${day} ${mon} ${yr}, ${hr}:${min}:${sec} ${ampm}`
 }
 
 function timeAgo(iso) {

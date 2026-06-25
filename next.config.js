@@ -1,6 +1,7 @@
 const path = require('path')
+const { withSentryConfig } = require('@sentry/nextjs')
 
-module.exports = {
+const nextConfig = {
   reactStrictMode: false,
   eslint: {
     ignoreDuringBuilds: true,
@@ -29,3 +30,6 @@ module.exports = {
   },
 }
 
+module.exports = withSentryConfig(nextConfig, {
+  silent: true,
+})
