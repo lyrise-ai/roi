@@ -12,16 +12,15 @@ import MainHeader from '../src/layout/MainHeader/index'
 import { getRoleForUser } from '../src/lib/authHelpers'
 import AlphaDashboardPanel from '../src/components/AlphaDashboardPanel'
 import ErrorBoundary from '../src/components/shared/ErrorBoundary'
-import {
-  fmtDate as formatDate,
-  fmtDateTime as formatDateTime,
-} from '../src/utilities/formatDateTime'
+
+const FONT =
+  "'Inter', -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif"
 
 const STATUS_STYLES = {
-  SUCCESS: { bg: 'bg-green-50', text: 'text-green-700', label: 'Done' },
-  RUNNING: { bg: 'bg-blue-50', text: 'text-blue-700', label: 'Running' },
-  FAILED: { bg: 'bg-red-50', text: 'text-red-600', label: 'Failed' },
-  PENDING: { bg: 'bg-gray-100', text: 'text-gray-500', label: 'Pending' },
+  SUCCESS: { bg: '#F0FDF4', color: '#15803D', label: 'Done' },
+  RUNNING: { bg: '#EFF6FF', color: '#1D4ED8', label: 'Running' },
+  FAILED: { bg: '#FEF2F2', color: '#DC2626', label: 'Failed' },
+  PENDING: { bg: '#F9FAFB', color: '#6B7280', label: 'Pending' },
 }
 
 const EVENT_LABELS = {
@@ -31,29 +30,69 @@ const EVENT_LABELS = {
   chat_limit_reached: 'reached the chat limit',
 }
 
-const EVENT_COLORS = {
-  report_created: 'bg-green-400',
-  report_viewed: 'bg-blue-400',
-  chat_message_sent: 'bg-purple-400',
-  chat_limit_reached: 'bg-orange-400',
+const EVENT_DOT_COLORS = {
+  report_created: '#4ADE80',
+  report_viewed: '#60A5FA',
+  chat_message_sent: '#A78BFA',
+  chat_limit_reached: '#FB923C',
+}
+
+const thStyle = {
+  padding: '12px 24px',
+  fontSize: 11,
+  fontWeight: 600,
+  textTransform: 'uppercase',
+  letterSpacing: '0.06em',
+  color: '#9CA3AF',
+  textAlign: 'left',
+  whiteSpace: 'nowrap',
+  fontFamily: FONT,
+}
+
+const tdStyle = {
+  padding: '16px 24px',
+  fontSize: 13,
+  fontFamily: FONT,
 }
 
 function StatusBadge({ status }) {
   const s = STATUS_STYLES[status] ?? STATUS_STYLES.PENDING
   return (
     <span
-      className={`inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-semibold ${s.bg} ${s.text}`}
+      style={{
+        display: 'inline-flex',
+        alignItems: 'center',
+        padding: '2px 10px',
+        borderRadius: 999,
+        fontSize: 12,
+        fontWeight: 600,
+        background: s.bg,
+        color: s.color,
+        fontFamily: FONT,
+      }}
     >
       {s.label}
     </span>
   )
 }
 
-// Distinguishes alpha-tour runs from real client/employee reports. Purple so it
-// reads as a separate category from the green/blue status + role badges.
 function AlphaBadge() {
   return (
-    <span className="inline-flex items-center px-2 py-0.5 rounded-full text-[10px] font-bold uppercase tracking-wide bg-purple-100 text-purple-700">
+    <span
+      style={{
+        display: 'inline-flex',
+        alignItems: 'center',
+        padding: '1px 8px',
+        borderRadius: 999,
+        fontSize: 10,
+        fontWeight: 700,
+        textTransform: 'uppercase',
+        letterSpacing: '0.05em',
+        background: '#F3E8FF',
+        color: '#7C3AED',
+        fontFamily: FONT,
+      }}
+    >
       Alpha
     </span>
   )
@@ -63,21 +102,23 @@ function RoleBadge({ role }) {
   const isEmployee = role === 'EMPLOYEE'
   return (
     <span
-      className={`inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-semibold ${
-        isEmployee ? 'bg-blue-50 text-blue-700' : 'bg-gray-100 text-gray-500'
-      }`}
+      style={{
+        display: 'inline-flex',
+        alignItems: 'center',
+        padding: '2px 10px',
+        borderRadius: 999,
+        fontSize: 12,
+        fontWeight: 600,
+        background: isEmployee ? '#EFF6FF' : '#F9FAFB',
+        color: isEmployee ? '#1D4ED8' : '#6B7280',
+        fontFamily: FONT,
+      }}
     >
       {isEmployee ? 'Employee' : 'Client'}
     </span>
   )
 }
 
-// Tags each report with the email + role of the user who actually requested
-// it. The requester is the authenticated account that submitted the request
-// (resolved via user_id) — for bulk uploads that is the LyRise employee who
-// uploaded the CSV, NOT the company contact in reports.email the report is
-// addressed to. Showing reports.email here made employee bulk runs look like
-// self-service client requests. Only @lyrise.ai addresses count as employees.
 function withRequester(reports, requesterEmailFor) {
   return (reports ?? []).map((r) => {
     const requesterEmail = requesterEmailFor(r) ?? r.email ?? null
@@ -91,16 +132,36 @@ function withRequester(reports, requesterEmailFor) {
   })
 }
 
-// Some Supabase columns (e.g. reports.created_at) are stored as `timestamp`
-// WITHOUT a timezone, so the API returns them with no offset (e.g.
-// "2026-06-10T15:59:39"). `new Date()` would then parse them as LOCAL time and
-// render the wrong hour — the value is actually UTC. Normalize a naive
-// timestamp to UTC by appending "Z" before parsing. Values that already carry a
-// zone ("Z" or "+00:00") are left untouched.
 function parseTimestamp(iso) {
   if (!iso) return null
   const hasZone = /[zZ]$|[+-]\d{2}:?\d{2}$/.test(iso)
   return new Date(hasZone ? iso : `${iso}Z`)
+}
+
+function formatDate(iso) {
+  const d = parseTimestamp(iso)
+  if (!d) return '—'
+  return d.toLocaleDateString('en-GB', {
+    day: 'numeric',
+    month: 'short',
+    year: 'numeric',
+  })
+}
+
+function formatDateTime(iso) {
+  const d = parseTimestamp(iso)
+  if (!d) return '—'
+  return d
+    .toLocaleString('en-GB', {
+      day: 'numeric',
+      month: 'short',
+      year: 'numeric',
+      hour: 'numeric',
+      minute: '2-digit',
+      second: '2-digit',
+      hour12: true,
+    })
+    .replace(/\b(am|pm)\b/i, (m) => m.toUpperCase())
 }
 
 function timeAgo(iso) {
@@ -118,11 +179,31 @@ function timeAgo(iso) {
 
 function StatCard({ label, value }) {
   return (
-    <div className="px-6 py-5 bg-white border border-gray-100 shadow-sm rounded-2xl">
-      <p className="font-outfit text-[11px] uppercase tracking-wider text-gray-400 font-semibold mb-1">
+    <div
+      style={{
+        background: '#fff',
+        borderRadius: 12,
+        padding: '20px 24px',
+        boxShadow: '0 1px 6px rgba(0,0,0,0.07)',
+        border: '1px solid #F3F4F6',
+        fontFamily: FONT,
+      }}
+    >
+      <p
+        style={{
+          fontSize: 11,
+          textTransform: 'uppercase',
+          letterSpacing: '0.06em',
+          color: '#9CA3AF',
+          fontWeight: 600,
+          margin: '0 0 8px',
+        }}
+      >
         {label}
       </p>
-      <p className="font-outfit text-3xl font-bold text-[#2C2C2C]">{value}</p>
+      <p style={{ fontSize: 28, fontWeight: 700, color: '#0F172A', margin: 0 }}>
+        {value}
+      </p>
     </div>
   )
 }
@@ -257,6 +338,7 @@ function DashboardInner({
   const [deletingId, setDeletingId] = useState(null)
   const [navigatingId, setNavigatingId] = useState(null)
   const [activeTab, setActiveTab] = useState('Reports')
+  const [hoveredRowId, setHoveredRowId] = useState(null)
 
   useEffect(() => {
     if (isEmployee && router.query.tab === 'my-reports')
@@ -271,6 +353,7 @@ function DashboardInner({
   }, [])
 
   const myReports = reports.filter((r) => r.user_id === userId)
+  const activeReports = activeTab === 'My Reports' ? myReports : reports
 
   const goToReport = (id) => {
     if (navigatingId) return
@@ -291,30 +374,72 @@ function DashboardInner({
     }
   }
 
+  const TABS = ['Reports', 'My Reports', 'Users', 'Activity', 'Alpha']
+
   return (
-    <div className="rebranding-landing-page min-h-screen -mt-[12px]">
+    <div
+      style={{ minHeight: '100vh', background: '#E2DED8', fontFamily: FONT }}
+    >
       <style>{`@keyframes spin { to { transform: rotate(360deg); } }`}</style>
       <MainHeader />
       <Head>
-        <title>{isEmployee ? 'Admin Dashboard' : 'My Reports'} | LyRise</title>
+        <title>
+          {isEmployee ? 'Admin Dashboard' : 'My Profit Maps'} | LyRise
+        </title>
       </Head>
 
-      <div className="max-w-5xl px-4 py-12 mx-auto">
-        {/* Header row */}
-        <div className="flex items-center justify-between mb-8">
+      <div style={{ maxWidth: 960, margin: '0 auto', padding: '48px 16px' }}>
+        {/* Header */}
+        <div
+          style={{
+            display: 'flex',
+            alignItems: 'flex-start',
+            justifyContent: 'space-between',
+            marginBottom: 32,
+            gap: 16,
+            flexWrap: 'wrap',
+          }}
+        >
           <div>
-            <h1 className="font-outfit text-2xl font-bold text-[#2C2C2C]">
-              {isEmployee ? 'Admin Dashboard' : 'My Reports'}
+            <h1
+              style={{
+                fontSize: 22,
+                fontWeight: 700,
+                color: '#0F172A',
+                margin: '0 0 4px',
+                letterSpacing: '-0.3px',
+                lineHeight: 1.2,
+              }}
+            >
+              {isEmployee ? 'Admin Dashboard' : 'My Profit Maps'}
             </h1>
-            <p className="font-outfit text-sm text-gray-500 mt-0.5">
+            <p style={{ fontSize: 13, color: '#6B7280', margin: 0 }}>
               {user.email}
             </p>
           </div>
-          <div className="flex items-center gap-3">
+          <div
+            style={{
+              display: 'flex',
+              alignItems: 'center',
+              gap: 10,
+              flexShrink: 0,
+              flexWrap: 'wrap',
+            }}
+          >
             {isEmployee && (
               <Link
                 href="/dashboard/usage"
-                className="font-outfit text-sm font-semibold text-[#2C2C2C] hover:bg-gray-50 transition-colors border border-gray-300 rounded-full px-5 py-2.5"
+                style={{
+                  fontSize: 13,
+                  fontWeight: 600,
+                  color: '#374151',
+                  border: '1px solid #E5E7EB',
+                  borderRadius: 999,
+                  padding: '9px 18px',
+                  textDecoration: 'none',
+                  background: '#fff',
+                  fontFamily: FONT,
+                }}
               >
                 Usage
               </Link>
@@ -322,192 +447,392 @@ function DashboardInner({
             {isEmployee && (
               <Link
                 href="/roi-report/bulk"
-                className="font-outfit text-[#2C2C2C] hover:bg-gray-50 transition-colors border border-gray-300 rounded-full px-5 py-1.5 flex flex-col items-center leading-tight"
+                style={{
+                  display: 'flex',
+                  flexDirection: 'column',
+                  alignItems: 'center',
+                  lineHeight: 1.35,
+                  color: '#374151',
+                  border: '1px solid #E5E7EB',
+                  borderRadius: 999,
+                  padding: '6px 18px',
+                  textDecoration: 'none',
+                  background: '#fff',
+                  fontFamily: FONT,
+                }}
               >
-                <span className="text-sm font-semibold">
+                <span style={{ fontSize: 13, fontWeight: 600 }}>
                   Create multiple reports
                 </span>
-                <span className="text-[10px] font-medium text-gray-500">
+                <span style={{ fontSize: 10, color: '#9CA3AF' }}>
                   Upload CSV file
                 </span>
               </Link>
             )}
             <Link
               href="/roi-report"
-              className="font-outfit text-sm font-semibold text-white bg-[#2C2C2C] hover:bg-black transition-colors rounded-full px-5 py-2.5"
+              style={{
+                fontSize: 13,
+                fontWeight: 600,
+                color: '#fff',
+                background: '#5B48F8',
+                borderRadius: 999,
+                padding: '10px 20px',
+                textDecoration: 'none',
+                fontFamily: FONT,
+                whiteSpace: 'nowrap',
+              }}
             >
-              + New Report
+              + New Profit Map
             </Link>
           </div>
         </div>
 
-        {/* Employee: stats + tabs */}
+        {/* Employee: stat cards + tab bar */}
         {isEmployee && (
           <>
-            <div className="grid grid-cols-4 gap-4 mb-6">
+            <div
+              style={{
+                display: 'grid',
+                gridTemplateColumns: 'repeat(4, 1fr)',
+                gap: 16,
+                marginBottom: 24,
+              }}
+            >
               <StatCard label="Total Users" value={users.length} />
               <StatCard label="Total Reports" value={reports.length} />
               <StatCard label="Reports This Week" value={reportsThisWeek} />
               <StatCard label="Reports Today" value={reportsToday} />
             </div>
 
-            <div className="flex gap-1 p-1 mb-6 bg-gray-100 rounded-xl w-fit">
-              {['Reports', 'My Reports', 'Users', 'Activity', 'Alpha'].map(
-                (tab) => (
-                  <button
-                    key={tab}
-                    type="button"
-                    onClick={() => setActiveTab(tab)}
-                    className={`font-outfit text-sm font-medium px-4 py-1.5 rounded-lg transition-colors ${
-                      activeTab === tab
-                        ? 'bg-white text-[#2C2C2C] shadow-sm'
-                        : 'text-gray-500 hover:text-gray-700'
-                    }`}
-                  >
-                    {tab}
-                  </button>
-                ),
-              )}
+            <div
+              style={{
+                display: 'flex',
+                background: '#F3F4F6',
+                borderRadius: 999,
+                padding: 3,
+                gap: 2,
+                width: 'fit-content',
+                marginBottom: 24,
+              }}
+            >
+              {TABS.map((tab) => (
+                <button
+                  key={tab}
+                  type="button"
+                  onClick={() => setActiveTab(tab)}
+                  style={{
+                    padding: '6px 18px',
+                    fontSize: 13,
+                    fontWeight: 500,
+                    borderRadius: 999,
+                    border: 'none',
+                    cursor: 'pointer',
+                    fontFamily: FONT,
+                    background: activeTab === tab ? '#5B48F8' : 'transparent',
+                    color: activeTab === tab ? '#fff' : '#6B7280',
+                    transition: 'background 0.15s, color 0.15s',
+                    whiteSpace: 'nowrap',
+                  }}
+                >
+                  {tab}
+                </button>
+              ))}
             </div>
           </>
         )}
 
-        {/* Reports tab */}
+        {/* Reports / My Reports (and client view) */}
         {(!isEmployee ||
           activeTab === 'Reports' ||
           activeTab === 'My Reports') &&
-          ((activeTab === 'My Reports' ? myReports : reports).length === 0 ? (
-            <div className="py-20 text-center bg-white border border-gray-100 shadow-sm rounded-2xl">
-              <p className="mb-4 text-sm text-gray-400 font-outfit">
-                No reports yet.
+          (activeReports.length === 0 ? (
+            <div
+              style={{
+                background: '#fff',
+                borderRadius: 12,
+                border: '1px solid #F3F4F6',
+                boxShadow: '0 1px 6px rgba(0,0,0,0.07)',
+                padding: '80px 24px',
+                textAlign: 'center',
+              }}
+            >
+              <div
+                style={{
+                  width: 48,
+                  height: 48,
+                  borderRadius: '50%',
+                  background: '#EDE9FE',
+                  display: 'flex',
+                  alignItems: 'center',
+                  justifyContent: 'center',
+                  margin: '0 auto 16px',
+                }}
+              >
+                <svg
+                  width="22"
+                  height="22"
+                  viewBox="0 0 24 24"
+                  fill="none"
+                  stroke="#5B48F8"
+                  strokeWidth="2"
+                  strokeLinecap="round"
+                  strokeLinejoin="round"
+                >
+                  <path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z" />
+                  <polyline points="14,2 14,8 20,8" />
+                  <line x1="12" y1="18" x2="12" y2="12" />
+                  <line x1="9" y1="15" x2="15" y2="15" />
+                </svg>
+              </div>
+              <p
+                style={{
+                  fontSize: 15,
+                  fontWeight: 600,
+                  color: '#0F172A',
+                  margin: '0 0 6px',
+                }}
+              >
+                {isEmployee
+                  ? 'No reports yet'
+                  : 'Your first Profit Map is one click away'}
+              </p>
+              <p
+                style={{
+                  fontSize: 13,
+                  color: '#9CA3AF',
+                  margin: '0 0 24px',
+                  maxWidth: 340,
+                  marginLeft: 'auto',
+                  marginRight: 'auto',
+                  lineHeight: 1.6,
+                }}
+              >
+                {isEmployee
+                  ? 'Reports will appear here once generated.'
+                  : "Enter your prospect's company name and we'll build an AI-powered business case in minutes."}
               </p>
               <Link
                 href="/roi-report"
-                className="font-outfit text-sm font-semibold text-white bg-[#2C2C2C] hover:bg-black transition-colors rounded-full px-6 py-3"
+                style={{
+                  display: 'inline-block',
+                  fontSize: 13,
+                  fontWeight: 600,
+                  color: '#fff',
+                  background: '#5B48F8',
+                  borderRadius: 999,
+                  padding: '10px 24px',
+                  textDecoration: 'none',
+                  fontFamily: FONT,
+                }}
               >
-                Generate your first report
+                + New Profit Map
               </Link>
             </div>
           ) : (
-            <div className="overflow-hidden bg-white border border-gray-100 shadow-sm rounded-2xl">
-              <table className="w-full text-sm">
+            <div
+              style={{
+                background: '#fff',
+                borderRadius: 12,
+                border: '1px solid #F3F4F6',
+                boxShadow: '0 1px 6px rgba(0,0,0,0.07)',
+                overflow: 'hidden',
+              }}
+            >
+              <table style={{ width: '100%', borderCollapse: 'collapse' }}>
                 <thead>
-                  <tr className="border-b border-gray-100">
-                    <th className="font-outfit font-semibold text-[11px] uppercase tracking-wider text-gray-400 text-left px-6 py-3.5">
-                      Company
-                    </th>
-                    <th className="font-outfit font-semibold text-[11px] uppercase tracking-wider text-gray-400 text-left px-6 py-3.5">
-                      Requested By
-                    </th>
-                    {/* pl offset (px-6 + badge's px-2.5) aligns the header with the badge text */}
-                    <th className="font-outfit font-semibold text-[11px] uppercase tracking-wider text-gray-400 text-left pl-[34px] pr-6 py-3.5">
-                      Role
-                    </th>
-                    <th className="font-outfit font-semibold text-[11px] uppercase tracking-wider text-gray-400 text-left px-6 py-3.5">
-                      Status
-                    </th>
-                    <th className="font-outfit font-semibold text-[11px] uppercase tracking-wider text-gray-400 text-left px-6 py-3.5">
-                      When
-                    </th>
-                    <th className="px-6 py-3.5" />
+                  <tr style={{ borderBottom: '1px solid #F3F4F6' }}>
+                    <th style={thStyle}>Company</th>
+                    {isEmployee && <th style={thStyle}>Requested By</th>}
+                    {isEmployee && (
+                      <th style={{ ...thStyle, paddingLeft: 34 }}>Role</th>
+                    )}
+                    <th style={thStyle}>Status</th>
+                    <th style={thStyle}>When</th>
+                    <th style={{ ...thStyle, width: 1 }} />
                   </tr>
                 </thead>
                 <tbody>
-                  {(activeTab === 'My Reports' ? myReports : reports).map(
-                    (r, i) => {
-                      const clickable = isEmployee || r.status === 'SUCCESS'
-                      return (
-                        <tr
-                          key={r.id}
-                          className={`${
-                            i <
-                            (activeTab === 'My Reports' ? myReports : reports)
-                              .length -
-                              1
-                              ? 'border-b border-gray-50'
-                              : ''
-                          } hover:bg-gray-50 transition-colors`}
+                  {activeReports.map((r, i) => {
+                    const clickable = isEmployee || r.status === 'SUCCESS'
+                    const isLast = i === activeReports.length - 1
+                    return (
+                      <tr
+                        key={r.id}
+                        onMouseEnter={() => setHoveredRowId(r.id)}
+                        onMouseLeave={() => setHoveredRowId(null)}
+                        style={{
+                          borderBottom: isLast ? 'none' : '1px solid #F9FAFB',
+                          background:
+                            hoveredRowId === r.id ? '#FAFAFA' : 'transparent',
+                          transition: 'background 0.1s',
+                        }}
+                      >
+                        <td
+                          style={{
+                            ...tdStyle,
+                            fontWeight: 500,
+                            color: '#0F172A',
+                          }}
                         >
-                          <td className="font-outfit font-medium text-[#2C2C2C] px-6 py-4">
-                            <span className="inline-flex items-center gap-2">
-                              {r.company_name || '—'}
-                              {r.is_alpha && <AlphaBadge />}
-                            </span>
-                          </td>
-                          <td className="px-6 py-4 text-gray-500 font-outfit">
+                          <span
+                            style={{
+                              display: 'inline-flex',
+                              alignItems: 'center',
+                              gap: 8,
+                            }}
+                          >
+                            {r.company_name || '—'}
+                            {r.is_alpha && <AlphaBadge />}
+                          </span>
+                        </td>
+                        {isEmployee && (
+                          <td style={{ ...tdStyle, color: '#6B7280' }}>
                             {r.requester_email || '—'}
                           </td>
-                          <td className="px-6 py-4">
+                        )}
+                        {isEmployee && (
+                          <td style={tdStyle}>
                             <RoleBadge role={r.requester_role} />
                           </td>
-                          <td className="px-6 py-4">
-                            <StatusBadge status={r.status} />
-                          </td>
-                          <td className="px-6 py-4 text-gray-400 font-outfit whitespace-nowrap">
-                            {formatDateTime(r.created_at)}
-                          </td>
-                          <td className="px-6 py-4 text-right">
-                            <div className="flex items-center justify-end gap-3">
-                              {clickable &&
-                                (navigatingId === r.id ? (
-                                  <span
+                        )}
+                        <td style={tdStyle}>
+                          <StatusBadge status={r.status} />
+                        </td>
+                        <td
+                          style={{
+                            ...tdStyle,
+                            color: '#9CA3AF',
+                            whiteSpace: 'nowrap',
+                          }}
+                        >
+                          {formatDateTime(r.created_at)}
+                        </td>
+                        <td
+                          style={{
+                            ...tdStyle,
+                            textAlign: 'right',
+                            paddingRight: 24,
+                          }}
+                        >
+                          <div
+                            style={{
+                              display: 'flex',
+                              alignItems: 'center',
+                              justifyContent: 'flex-end',
+                              gap: 12,
+                            }}
+                          >
+                            {clickable &&
+                              (navigatingId === r.id ? (
+                                <span
+                                  style={{
+                                    display: 'inline-block',
+                                    width: 14,
+                                    height: 14,
+                                    border: '2px solid #E5E7EB',
+                                    borderTopColor: '#5B48F8',
+                                    borderRadius: '50%',
+                                    animation: 'spin 0.75s linear infinite',
+                                    flexShrink: 0,
+                                  }}
+                                />
+                              ) : (
+                                <button
+                                  type="button"
+                                  onClick={() => goToReport(r.id)}
+                                  style={{
+                                    fontSize: 12,
+                                    fontWeight: 600,
+                                    color: '#5B48F8',
+                                    background: 'none',
+                                    border: 'none',
+                                    cursor: 'pointer',
+                                    fontFamily: FONT,
+                                    padding: 0,
+                                  }}
+                                >
+                                  View →
+                                </button>
+                              ))}
+                            {isEmployee &&
+                              (confirmingId === r.id ? (
+                                <span
+                                  style={{
+                                    display: 'flex',
+                                    alignItems: 'center',
+                                    gap: 8,
+                                  }}
+                                >
+                                  <button
+                                    type="button"
+                                    onClick={() => handleDelete(r.id)}
+                                    disabled={deletingId === r.id}
                                     style={{
-                                      display: 'inline-block',
-                                      width: 14,
-                                      height: 14,
-                                      border: '2px solid #e2e8f0',
-                                      borderTopColor: '#2957FF',
-                                      borderRadius: '50%',
-                                      animation: 'spin 0.75s linear infinite',
-                                      flexShrink: 0,
+                                      fontSize: 12,
+                                      fontWeight: 600,
+                                      color: '#DC2626',
+                                      background: 'none',
+                                      border: 'none',
+                                      cursor:
+                                        deletingId === r.id
+                                          ? 'not-allowed'
+                                          : 'pointer',
+                                      fontFamily: FONT,
+                                      padding: 0,
+                                      opacity: deletingId === r.id ? 0.5 : 1,
                                     }}
-                                  />
-                                ) : (
+                                  >
+                                    {deletingId === r.id
+                                      ? 'Deleting…'
+                                      : 'Confirm'}
+                                  </button>
                                   <button
                                     type="button"
-                                    onClick={() => goToReport(r.id)}
-                                    className="font-outfit text-xs font-semibold text-[#2957FF] hover:underline cursor-pointer"
+                                    onClick={() => setConfirmingId(null)}
+                                    style={{
+                                      fontSize: 12,
+                                      color: '#9CA3AF',
+                                      background: 'none',
+                                      border: 'none',
+                                      cursor: 'pointer',
+                                      fontFamily: FONT,
+                                      padding: 0,
+                                    }}
                                   >
-                                    View →
+                                    Cancel
                                   </button>
-                                ))}
-                              {isEmployee &&
-                                (confirmingId === r.id ? (
-                                  <span className="flex items-center gap-2">
-                                    <button
-                                      type="button"
-                                      onClick={() => handleDelete(r.id)}
-                                      disabled={deletingId === r.id}
-                                      className="text-xs font-semibold text-red-600 transition-colors font-outfit hover:text-red-800 disabled:opacity-50"
-                                    >
-                                      {deletingId === r.id
-                                        ? 'Deleting…'
-                                        : 'Confirm'}
-                                    </button>
-                                    <button
-                                      type="button"
-                                      onClick={() => setConfirmingId(null)}
-                                      className="text-xs text-gray-400 transition-colors font-outfit hover:text-gray-600"
-                                    >
-                                      Cancel
-                                    </button>
-                                  </span>
-                                ) : (
-                                  <button
-                                    type="button"
-                                    onClick={() => setConfirmingId(r.id)}
-                                    className="text-gray-300 transition-colors hover:text-red-500"
-                                    title="Delete report"
-                                  >
-                                    <FaTrash size={13} />
-                                  </button>
-                                ))}
-                            </div>
-                          </td>
-                        </tr>
-                      )
-                    },
-                  )}
+                                </span>
+                              ) : (
+                                <button
+                                  type="button"
+                                  onClick={() => setConfirmingId(r.id)}
+                                  style={{
+                                    color: '#D1D5DB',
+                                    background: 'none',
+                                    border: 'none',
+                                    cursor: 'pointer',
+                                    padding: 0,
+                                    display: 'flex',
+                                    alignItems: 'center',
+                                    transition: 'color 0.15s',
+                                  }}
+                                  onMouseEnter={(e) => {
+                                    e.currentTarget.style.color = '#EF4444'
+                                  }}
+                                  onMouseLeave={(e) => {
+                                    e.currentTarget.style.color = '#D1D5DB'
+                                  }}
+                                  title="Delete report"
+                                >
+                                  <FaTrash size={12} />
+                                </button>
+                              ))}
+                          </div>
+                        </td>
+                      </tr>
+                    )
+                  })}
                 </tbody>
               </table>
             </div>
@@ -515,25 +840,25 @@ function DashboardInner({
 
         {/* Users tab */}
         {isEmployee && activeTab === 'Users' && (
-          <div className="overflow-hidden bg-white border border-gray-100 shadow-sm rounded-2xl">
-            <table className="w-full text-sm">
+          <div
+            style={{
+              background: '#fff',
+              borderRadius: 12,
+              border: '1px solid #F3F4F6',
+              boxShadow: '0 1px 6px rgba(0,0,0,0.07)',
+              overflow: 'hidden',
+            }}
+          >
+            <table style={{ width: '100%', borderCollapse: 'collapse' }}>
               <thead>
-                <tr className="border-b border-gray-100">
-                  <th className="font-outfit font-semibold text-[11px] uppercase tracking-wider text-gray-400 text-left px-6 py-3.5">
-                    Email
-                  </th>
-                  <th className="font-outfit font-semibold text-[11px] uppercase tracking-wider text-gray-400 text-left px-6 py-3.5">
-                    Role
-                  </th>
-                  <th className="font-outfit font-semibold text-[11px] uppercase tracking-wider text-gray-400 text-left px-6 py-3.5">
-                    Reports
-                  </th>
-                  <th className="font-outfit font-semibold text-[11px] uppercase tracking-wider text-gray-400 text-left px-6 py-3.5">
-                    Joined
-                  </th>
-                  <th className="font-outfit font-semibold text-[11px] uppercase tracking-wider text-gray-400 text-left px-6 py-3.5">
-                    Recent Activity
-                  </th>
+                <tr style={{ borderBottom: '1px solid #F3F4F6' }}>
+                  {['Email', 'Role', 'Reports', 'Joined', 'Last Active'].map(
+                    (h) => (
+                      <th key={h} style={thStyle}>
+                        {h}
+                      </th>
+                    ),
+                  )}
                 </tr>
               </thead>
               <tbody>
@@ -541,7 +866,13 @@ function DashboardInner({
                   <tr>
                     <td
                       colSpan={5}
-                      className="px-6 py-12 text-sm text-center text-gray-400 font-outfit"
+                      style={{
+                        textAlign: 'center',
+                        padding: '48px 24px',
+                        fontSize: 13,
+                        color: '#9CA3AF',
+                        fontFamily: FONT,
+                      }}
                     >
                       No users found.
                     </td>
@@ -550,14 +881,21 @@ function DashboardInner({
                   users.map((u, i) => (
                     <tr
                       key={u.id}
-                      className={
-                        i < users.length - 1 ? 'border-b border-gray-50' : ''
-                      }
+                      style={{
+                        borderBottom:
+                          i < users.length - 1 ? '1px solid #F9FAFB' : 'none',
+                      }}
                     >
-                      <td className="font-outfit font-medium text-[#2C2C2C] px-6 py-4">
+                      <td
+                        style={{
+                          ...tdStyle,
+                          fontWeight: 500,
+                          color: '#0F172A',
+                        }}
+                      >
                         {u.email}
                       </td>
-                      <td className="px-6 py-4">
+                      <td style={tdStyle}>
                         <RoleBadge
                           role={
                             u.email?.endsWith('@lyrise.ai')
@@ -566,16 +904,13 @@ function DashboardInner({
                           }
                         />
                       </td>
-                      <td className="px-6 py-4 text-gray-500 font-outfit">
+                      <td style={{ ...tdStyle, color: '#6B7280' }}>
                         {u.report_count}
                       </td>
-                      <td className="px-6 py-4 text-gray-400 font-outfit">
+                      <td style={{ ...tdStyle, color: '#9CA3AF' }}>
                         {formatDate(u.created_at)}
                       </td>
-                      <td
-                        className="px-6 py-4 text-gray-400 font-outfit"
-                        suppressHydrationWarning
-                      >
+                      <td style={{ ...tdStyle, color: '#9CA3AF' }}>
                         {timeAgo(u.last_active)}
                       </td>
                     </tr>
@@ -588,32 +923,74 @@ function DashboardInner({
 
         {/* Activity tab */}
         {isEmployee && activeTab === 'Activity' && (
-          <div className="overflow-hidden bg-white border border-gray-100 shadow-sm rounded-2xl">
+          <div
+            style={{
+              background: '#fff',
+              borderRadius: 12,
+              border: '1px solid #F3F4F6',
+              boxShadow: '0 1px 6px rgba(0,0,0,0.07)',
+              overflow: 'hidden',
+            }}
+          >
             {recentEvents.length === 0 ? (
-              <p className="px-6 py-12 text-sm text-center text-gray-400 font-outfit">
+              <p
+                style={{
+                  padding: '48px 24px',
+                  textAlign: 'center',
+                  fontSize: 13,
+                  color: '#9CA3AF',
+                  fontFamily: FONT,
+                  margin: 0,
+                }}
+              >
                 No activity recorded yet.
               </p>
             ) : (
-              <ul className="divide-y divide-gray-50">
-                {recentEvents.map((e) => (
+              <ul style={{ margin: 0, padding: 0, listStyle: 'none' }}>
+                {recentEvents.map((e, i) => (
                   <li
                     key={`${e.user_id}-${e.created_at}-${e.type}`}
-                    className="flex items-center gap-4 px-6 py-3.5"
+                    style={{
+                      display: 'flex',
+                      alignItems: 'center',
+                      gap: 16,
+                      padding: '12px 24px',
+                      borderBottom:
+                        i < recentEvents.length - 1
+                          ? '1px solid #F9FAFB'
+                          : 'none',
+                    }}
                   >
                     <span
-                      className={`w-2 h-2 rounded-full flex-shrink-0 ${
-                        EVENT_COLORS[e.type] ?? 'bg-gray-300'
-                      }`}
+                      style={{
+                        width: 8,
+                        height: 8,
+                        borderRadius: '50%',
+                        flexShrink: 0,
+                        background: EVENT_DOT_COLORS[e.type] ?? '#D1D5DB',
+                      }}
                     />
-                    <span className="font-outfit text-sm text-[#2C2C2C] flex-1 min-w-0">
-                      <span className="font-medium">{e.user_email}</span>{' '}
-                      <span className="text-gray-500">
+                    <span
+                      style={{
+                        fontSize: 13,
+                        color: '#0F172A',
+                        flex: 1,
+                        minWidth: 0,
+                        fontFamily: FONT,
+                      }}
+                    >
+                      <span style={{ fontWeight: 500 }}>{e.user_email}</span>{' '}
+                      <span style={{ color: '#6B7280' }}>
                         {EVENT_LABELS[e.type] ?? e.type}
                       </span>
                     </span>
                     <span
-                      className="flex-shrink-0 text-xs text-gray-400 font-outfit"
-                      suppressHydrationWarning
+                      style={{
+                        flexShrink: 0,
+                        fontSize: 12,
+                        color: '#9CA3AF',
+                        fontFamily: FONT,
+                      }}
                     >
                       {timeAgo(e.created_at)}
                     </span>

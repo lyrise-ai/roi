@@ -120,9 +120,10 @@ export default function UsageDashboard() {
       <Box
         sx={{
           minHeight: '100vh',
-          bgcolor: '#f6f7fb',
+          bgcolor: '#E2DED8',
           p: { xs: 2, md: 4 },
-          fontFamily: 'inherit',
+          fontFamily:
+            "'Inter', -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif",
         }}
       >
         <Box
@@ -136,10 +137,26 @@ export default function UsageDashboard() {
           }}
         >
           <Box>
-            <Typography variant="h4" fontWeight={700} color="#1a1a2e">
+            <Typography
+              variant="h4"
+              fontWeight={700}
+              color="#0F172A"
+              sx={{
+                fontFamily:
+                  "'Inter', -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif",
+                letterSpacing: '-0.3px',
+              }}
+            >
               Usage Monitoring
             </Typography>
-            <Typography variant="body2" color="text.secondary">
+            <Typography
+              variant="body2"
+              color="#6B7280"
+              sx={{
+                fontFamily:
+                  "'Inter', -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif",
+              }}
+            >
               LLM cost &amp; time per report
             </Typography>
           </Box>
@@ -202,11 +219,13 @@ export default function UsageDashboard() {
                 '& .MuiTab-root': {
                   textTransform: 'none',
                   fontWeight: 600,
-                  fontSize: 15,
-                  color: '#6b7280',
+                  fontSize: 14,
+                  color: '#6B7280',
+                  fontFamily:
+                    "'Inter', -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif",
                 },
-                '& .Mui-selected': { color: '#1a1a2e' },
-                '& .MuiTabs-indicator': { backgroundColor: '#2957FF' },
+                '& .Mui-selected': { color: '#0F172A' },
+                '& .MuiTabs-indicator': { backgroundColor: '#5B48F8' },
               }}
             >
               <Tab label="Our reports" />
@@ -257,7 +276,7 @@ function ViewReportLink({ reportId, label = 'View' }) {
         display: 'inline-flex',
         alignItems: 'center',
         gap: 0.5,
-        color: '#2957FF',
+        color: '#5B48F8',
         fontWeight: 600,
         fontSize: 14,
         textDecoration: 'none',
@@ -298,7 +317,7 @@ function Dashboard({ data }) {
         <StatCard
           label="Total cost"
           value={usd(totals.costUsd)}
-          accent="#2957FF"
+          accent="#5B48F8"
         />
         <StatCard
           label="Reports"
@@ -337,7 +356,7 @@ function Dashboard({ data }) {
                 value: d.costUsd,
                 caption: `${usd(d.costUsd)} · ${d.count} rpt`,
               }))}
-              color="#2957FF"
+              color="#5B48F8"
             />
           </CardContent>
         </Card>
@@ -516,12 +535,39 @@ function AlphaBadge() {
 
 function StatCard({ label, value, accent }) {
   return (
-    <Card sx={{ borderTop: `3px solid ${accent}` }}>
+    <Card
+      sx={{
+        borderTop: `3px solid ${accent}`,
+        boxShadow: '0 1px 6px rgba(0,0,0,0.07)',
+        border: '1px solid #F3F4F6',
+        borderRadius: '12px',
+      }}
+    >
       <CardContent>
-        <Typography variant="body2" color="text.secondary">
+        <Typography
+          variant="body2"
+          sx={{
+            fontSize: 11,
+            textTransform: 'uppercase',
+            letterSpacing: '0.06em',
+            color: '#9CA3AF',
+            fontWeight: 600,
+            fontFamily:
+              "'Inter', -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif",
+          }}
+        >
           {label}
         </Typography>
-        <Typography variant="h5" fontWeight={700} sx={{ mt: 0.5 }}>
+        <Typography
+          variant="h5"
+          fontWeight={700}
+          sx={{
+            mt: 0.5,
+            color: '#0F172A',
+            fontFamily:
+              "'Inter', -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif",
+          }}
+        >
           {value}
         </Typography>
       </CardContent>
