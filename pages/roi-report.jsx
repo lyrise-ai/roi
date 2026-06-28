@@ -101,7 +101,7 @@ const DEV_STEP2_PRESET = {
   email: 'yousef@lyrise.ai',
   recipientName: 'Yousef',
   recipientTitle: 'COO',
-  currency: 'SAR – Saudi Riyal (SAR)',
+  currency: 'USD – US Dollar (USD)',
 }
 
 // ── Typewriter hook (alpha splash) ────────────────────────────────────────────
@@ -485,7 +485,6 @@ function Step1({ data, onChange, errors, isAlpha }) {
         value={data.website}
         onChange={(v) => onChange('website', v)}
         placeholder="e.g. acmecorp.com"
-        optional
         autoComplete="url"
       />
       <TextInput
@@ -494,7 +493,6 @@ function Step1({ data, onChange, errors, isAlpha }) {
         value={data.whatYouDo}
         onChange={(v) => onChange('whatYouDo', v)}
         placeholder="e.g. B2B management consulting for operations and strategy"
-        optional
       />
       <div className="space-y-2">
         <label className="text-[12.5px] font-semibold text-gray-800">
@@ -541,9 +539,6 @@ function Step1({ data, onChange, errors, isAlpha }) {
       <div className="space-y-2">
         <label className="text-[12.5px] font-semibold text-gray-800 flex items-center">
           Estimated annual revenue{' '}
-          <span className="font-normal text-gray-400 ml-1">
-            — sets the 5–20% Total Financial Gain band
-          </span>
           {isAlpha && (
             <Tooltip
               text="Used to estimate scale only — not shared externally. Pick the closest band."
@@ -612,7 +607,6 @@ function Step2({
         value={data.recipientName}
         onChange={(v) => onChange('recipientName', v)}
         placeholder="e.g. Sarah Al-Rashid"
-        optional
         autoComplete="name"
       />
       <TextInput
@@ -621,7 +615,6 @@ function Step2({
         value={data.recipientTitle}
         onChange={(v) => onChange('recipientTitle', v)}
         placeholder="e.g. COO, Head of Operations"
-        optional
       />
       <div className="space-y-2">
         <label className="text-[12.5px] font-semibold text-gray-800 flex items-center">
