@@ -440,7 +440,7 @@ export default function AlphaDashboardPanel() {
         .order('created_at', { ascending: false })
       if (sbError) throw sbError
       const externalOnly = (data ?? []).filter(
-        row => !isEmployeeEmail(row.user_email)
+        (row) => !isEmployeeEmail(row.user_email),
       )
       setRows(externalOnly)
       setLastFetched(new Date())
@@ -689,21 +689,30 @@ export default function AlphaDashboardPanel() {
             <table className="w-full text-sm">
               <thead className="bg-slate-50 border-b border-slate-100 sticky top-0">
                 <tr>
-                  {['Email', 'Company', 'Status', 'Started'].map((col) => (
-                    <th
-                      key={col}
-                      className="px-6 py-3 text-left text-xs font-semibold uppercase tracking-wider text-slate-400"
-                    >
-                      {col}
-                    </th>
-                  ))}
+                  <th className="px-6 py-3 text-left text-xs font-semibold uppercase tracking-wider text-slate-400">
+                    Email
+                  </th>
+                  <th className="px-6 py-3 text-left text-xs font-semibold uppercase tracking-wider text-slate-400">
+                    Company
+                  </th>
+                  <th className="px-6 py-3 text-left text-xs font-semibold uppercase tracking-wider text-slate-400">
+                    <span className="inline-flex items-center">
+                      Status
+                      <InfoIcon text="In progress: tester has started but hasn't submitted the PMF survey yet. Completed: tester finished all 4 steps — intake form, report generation, report exploration, and the PMF survey." />
+                    </span>
+                  </th>
+                  <th className="px-6 py-3 text-left text-xs font-semibold uppercase tracking-wider text-slate-400">
+                    Started
+                  </th>
                 </tr>
               </thead>
               <tbody className="divide-y divide-slate-100">
                 {rows.map((r, i) => (
                   <tr key={i} className="hover:bg-slate-50 transition-colors">
                     <td className="px-6 py-3 text-slate-500 text-xs whitespace-nowrap">
-                      {r.user_email || <span className="text-slate-300">—</span>}
+                      {r.user_email || (
+                        <span className="text-slate-300">—</span>
+                      )}
                     </td>
                     <td className="px-6 py-3 text-slate-600 text-xs whitespace-nowrap">
                       {r.company_name || '—'}
@@ -718,6 +727,32 @@ export default function AlphaDashboardPanel() {
                           In progress
                         </span>
                       )}
+                      <div className="flex items-center gap-1.5 mt-1.5">
+                        {[
+                          {
+                            key: 'step_intake_completed',
+                            label: 'Intake form',
+                          },
+                          {
+                            key: 'step_generation_completed',
+                            label: 'Report generated',
+                          },
+                          {
+                            key: 'step_report_completed',
+                            label: 'Report explored',
+                          },
+                          {
+                            key: 'step_survey_completed',
+                            label: 'Survey submitted',
+                          },
+                        ].map(({ key, label }) => (
+                          <span
+                            key={key}
+                            title={`${label}: ${r[key] ? 'done' : 'not yet'}`}
+                            className={`w-2 h-2 rounded-full ${r[key] ? 'bg-green-400' : 'bg-slate-200'}`}
+                          />
+                        ))}
+                      </div>
                     </td>
                     <td className="px-6 py-3 text-slate-600 tabular-nums whitespace-nowrap">
                       {fmtDate(r.created_at)}
