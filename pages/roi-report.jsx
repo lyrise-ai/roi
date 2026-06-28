@@ -105,7 +105,7 @@ const DEV_STEP2_PRESET = {
   email: 'yousef@lyrise.ai',
   recipientName: 'Yousef',
   recipientTitle: 'COO',
-  currency: 'SAR – Saudi Riyal (SAR)',
+  currency: 'USD – US Dollar (USD)',
 }
 
 // ── Typewriter hook (alpha splash) ────────────────────────────────────────────
@@ -489,7 +489,6 @@ function Step1({ data, onChange, errors, isAlpha }) {
         value={data.website}
         onChange={(v) => onChange('website', v)}
         placeholder="e.g. acmecorp.com"
-        optional
         autoComplete="url"
       />
       <TextInput
@@ -498,7 +497,6 @@ function Step1({ data, onChange, errors, isAlpha }) {
         value={data.whatYouDo}
         onChange={(v) => onChange('whatYouDo', v)}
         placeholder="e.g. B2B management consulting for operations and strategy"
-        optional
       />
       <div className="space-y-2">
         <label className="text-[12.5px] font-semibold text-gray-800">
@@ -545,9 +543,6 @@ function Step1({ data, onChange, errors, isAlpha }) {
       <div className="space-y-2">
         <label className="text-[12.5px] font-semibold text-gray-800 flex items-center">
           Estimated annual revenue{' '}
-          <span className="font-normal text-gray-400 ml-1">
-            — sets the 5–20% Total Financial Gain band
-          </span>
           {isAlpha && (
             <Tooltip
               text="Used to estimate scale only — not shared externally. Pick the closest band."
@@ -616,7 +611,6 @@ function Step2({
         value={data.recipientName}
         onChange={(v) => onChange('recipientName', v)}
         placeholder="e.g. Sarah Al-Rashid"
-        optional
         autoComplete="name"
       />
       <TextInput
@@ -625,7 +619,6 @@ function Step2({
         value={data.recipientTitle}
         onChange={(v) => onChange('recipientTitle', v)}
         placeholder="e.g. COO, Head of Operations"
-        optional
       />
       <div className="space-y-2">
         <label className="text-[12.5px] font-semibold text-gray-800 flex items-center">
@@ -678,12 +671,35 @@ function Step2({
 
 // ── Error view ────────────────────────────────────────────────────────────────
 
+const HIGH_DEMAND_MSG =
+  "We're experiencing high demand right now — please try again in a few minutes."
+
+function isQuotaOrRateLimitMessage(msg) {
+  if (!msg || typeof msg !== 'string') return false
+  return (
+    msg.includes('429') ||
+    msg.includes('quota') ||
+    msg.includes('rate limit') ||
+    msg.includes('rate_limit') ||
+    msg.includes('billing') ||
+    msg.includes('insufficient_quota') ||
+    msg.includes('exceeded your current quota') ||
+    msg.includes('[object') // catch-all for any un-serialised object leak
+  )
+}
+
 function ErrorView({ message, onRetry, onUseEstimates }) {
   const isResearchFailure =
     message?.includes('Stages done: none') ||
     message?.includes('no assembled report') ||
     message?.includes("couldn't research") ||
     message?.includes('retrieve specific web pages')
+  const safeMessage =
+    typeof message === 'string' && message.length > 0
+      ? isQuotaOrRateLimitMessage(message)
+        ? HIGH_DEMAND_MSG
+        : message
+      : 'Something went wrong. Please try again.'
   return (
     <div className="px-8 py-10 text-center">
       <div
@@ -724,7 +740,7 @@ function ErrorView({ message, onRetry, onUseEstimates }) {
       ) : (
         <>
           <p className="max-w-sm mx-auto mb-6 text-sm text-gray-500">
-            {message || 'Something went wrong. Please try again.'}
+            {safeMessage}
           </p>
           <div className="flex flex-col max-w-xs gap-3 mx-auto">
             <button
