@@ -43,6 +43,25 @@ export const config = {
 
 const IS_DEV = process.env.NODE_ENV === 'development'
 
+// Translate raw errors into user-facing messages. Quota/rate-limit errors
+// from OpenAI should never expose billing details to the end user.
+function friendlyErrorMessage(err) {
+  const msg = err?.message ?? ''
+  // Use the precise quota detector from openaiQuotaAlert if the error is an
+  // Error instance; fall back to keyword checks for plain objects / strings.
+  const isQuota =
+    isOpenAIQuotaError(err) ||
+    err?.status === 429 ||
+    err?.statusCode === 429 ||
+    msg.includes('429') ||
+    msg.includes('rate limit') ||
+    msg.includes('rate_limit')
+  if (isQuota) {
+    return "We're experiencing high demand right now — please try again in a few minutes."
+  }
+  return msg || 'Something went wrong. Please try again.'
+}
+
 function send(res, event) {
   // Once the connection is closed, writing throws (EPIPE) — silently drop.
   if (res.writableEnded || res.destroyed) return
@@ -435,7 +454,7 @@ export default async function handler(req, res) {
                 mode,
               })
             }
-            send(res, { type: 'error', message: err.message })
+            send(res, { type: 'error', message: friendlyErrorMessage(err) })
           },
         },
       })
@@ -704,7 +723,7 @@ export default async function handler(req, res) {
         mode: req.body?.mode ?? null,
       })
     }
-    send(res, { type: 'error', message: err?.message ?? 'Unknown error' })
+    send(res, { type: 'error', message: friendlyErrorMessage(err) })
   }
 
   res.end()

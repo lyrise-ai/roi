@@ -667,12 +667,35 @@ function Step2({
 
 // ── Error view ────────────────────────────────────────────────────────────────
 
+const HIGH_DEMAND_MSG =
+  "We're experiencing high demand right now — please try again in a few minutes."
+
+function isQuotaOrRateLimitMessage(msg) {
+  if (!msg || typeof msg !== 'string') return false
+  return (
+    msg.includes('429') ||
+    msg.includes('quota') ||
+    msg.includes('rate limit') ||
+    msg.includes('rate_limit') ||
+    msg.includes('billing') ||
+    msg.includes('insufficient_quota') ||
+    msg.includes('exceeded your current quota') ||
+    msg.includes('[object') // catch-all for any un-serialised object leak
+  )
+}
+
 function ErrorView({ message, onRetry, onUseEstimates }) {
   const isResearchFailure =
     message?.includes('Stages done: none') ||
     message?.includes('no assembled report') ||
     message?.includes("couldn't research") ||
     message?.includes('retrieve specific web pages')
+  const safeMessage =
+    typeof message === 'string' && message.length > 0
+      ? isQuotaOrRateLimitMessage(message)
+        ? HIGH_DEMAND_MSG
+        : message
+      : 'Something went wrong. Please try again.'
   return (
     <div className="px-8 py-10 text-center">
       <div
@@ -713,7 +736,7 @@ function ErrorView({ message, onRetry, onUseEstimates }) {
       ) : (
         <>
           <p className="max-w-sm mx-auto mb-6 text-sm text-gray-500">
-            {message || 'Something went wrong. Please try again.'}
+            {safeMessage}
           </p>
           <div className="flex flex-col max-w-xs gap-3 mx-auto">
             <button

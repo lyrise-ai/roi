@@ -240,11 +240,17 @@ function buildTools(
         })
         if (SALARY_SEARCH_RE.test(query)) {
           // eslint-disable-next-line security/detect-object-injection
-          callbacks.onPipelineLog?.(SALARY_SEARCH_POOL[salarySearchCount % SALARY_SEARCH_POOL.length])
+          callbacks.onPipelineLog?.(
+            SALARY_SEARCH_POOL[salarySearchCount % SALARY_SEARCH_POOL.length],
+          )
           salarySearchCount++
         } else {
           // eslint-disable-next-line security/detect-object-injection
-          callbacks.onPipelineLog?.(COMPANY_SEARCH_POOL[companySearchCount % COMPANY_SEARCH_POOL.length])
+          callbacks.onPipelineLog?.(
+            COMPANY_SEARCH_POOL[
+              companySearchCount % COMPANY_SEARCH_POOL.length
+            ],
+          )
           companySearchCount++
         }
         const response = await webSearch(query, maxResults ?? 3)
@@ -464,7 +470,9 @@ function buildTools(
       }),
       execute: async (input) => {
         const cp = input.company_profile
-        callbacks.onPipelineLog?.(`Research complete — ${input.workflows.length} workflows identified…`)
+        callbacks.onPipelineLog?.(
+          `Research complete — ${input.workflows.length} workflows identified…`,
+        )
         roiLog('tool:set_research', `locking research for ${cp.company}`, {
           industry: cp.industry,
           country: cp.country,
@@ -713,7 +721,8 @@ function buildTools(
             retryHint = `\n\nPREVIOUS ATTEMPT FAILED: ${lastError}.${prescription}`
           }
 
-          if (attempt > 0) callbacks.onPipelineLog?.('Refining model assumptions…')
+          if (attempt > 0)
+            callbacks.onPipelineLog?.('Refining model assumptions…')
           roiLog(
             'modeler',
             `attempt ${attempt + 1}/3${attempt > 0 ? ' (retry)' : ''}`,
@@ -969,7 +978,9 @@ function buildTools(
       }),
       execute: async (copy: ReportCopy) => {
         state.copy = copy
-        callbacks.onPipelineLog?.('Writing profit levers and executive summary…')
+        callbacks.onPipelineLog?.(
+          'Writing profit levers and executive summary…',
+        )
         reAssemble(state, execTemplateHtml, fullTemplateHtml, callbacks, [
           'thesis',
           'workflows',
@@ -1246,7 +1257,7 @@ function buildTools(
                 (s, w) => s + (w.rateOverride ?? state.globals!.laborRate),
                 0,
               ) / state.workflows.length
-            : state.globals?.laborRate ?? 45
+            : (state.globals?.laborRate ?? 45)
 
         const newWorkflow: WorkflowInput = {
           name: workflow.name,
@@ -1477,7 +1488,7 @@ function buildTools(
             ? 'all_workflows_and_global'
             : 'global_fallback_only',
           updated_workflow_rates: shouldSyncWorkflowRates
-            ? state.workflows?.length ?? 0
+            ? (state.workflows?.length ?? 0)
             : 0,
           new_od12: s?.operationalDividend12mo,
           new_tf12: s?.totalFinancialGain12mo,
@@ -1645,17 +1656,17 @@ function buildChatSystemPrompt(state: ReportState): string {
         : ''
       return `[${w.name}]
   Displayed: ${hrsBefore}→${hrsAfter} hrs/mo | ${
-        w.monthlyHours
-      } hrs saved | ${sym}${w.monthlyValue}/mo recaptured | ${sym}${
-        w.monthlyProfitUplift
-      }/mo profit uplift
+    w.monthlyHours
+  } hrs saved | ${sym}${w.monthlyValue}/mo recaptured | ${sym}${
+    w.monthlyProfitUplift
+  }/mo profit uplift
   Raw inputs (update_workflow): volume=${w.monthlyVolume}/mo | before=${
-        w.minutesPerItemBefore
-      }min | after=${w.minutesPerItemAfter}min | rate=${sym}${
-        w.effectiveRate
-      }/hr [${
-        w.seniorityLevel ?? 'mid'
-      }]${flooredNote}${sourceNote} | adoption=${w.adoptionRate}`
+    w.minutesPerItemBefore
+  }min | after=${w.minutesPerItemAfter}min | rate=${sym}${
+    w.effectiveRate
+  }/hr [${
+    w.seniorityLevel ?? 'mid'
+  }]${flooredNote}${sourceNote} | adoption=${w.adoptionRate}`
     })
     .join('\n\n')
 
@@ -1998,7 +2009,10 @@ ${
       if (part.type === 'text-delta') {
         callbacks.onTextDelta(part.text)
       } else if (part.type === 'tool-call') {
-        callbacks.onToolStart(part.toolName, part.input as Record<string, unknown>)
+        callbacks.onToolStart(
+          part.toolName,
+          part.input as Record<string, unknown>,
+        )
       } else if (part.type === 'error') {
         // An abort surfaces here as an error part — treat it as a clean stop,
         // not a generation failure, so the caller doesn't persist/email it.
@@ -2009,7 +2023,12 @@ ${
         callbacks.onError(
           part.error instanceof Error
             ? part.error
-            : new Error(String(part.error)),
+            : new Error(
+                part.error && typeof part.error === 'object'
+                  ? ((part.error as Record<string, unknown>)
+                      .message as string) || JSON.stringify(part.error)
+                  : String(part.error),
+              ),
         )
         return
       }
