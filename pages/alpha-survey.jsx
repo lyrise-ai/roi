@@ -171,12 +171,6 @@ export default function AlphaSurvey() {
     setCurrentQ((prev) => prev + 1)
   }
 
-  const handleSkip = () => {
-    setCurrentQ((prev) => prev + 1)
-    setCurrentValue('')
-    setCurrentStars(0)
-  }
-
   // Submit final answers to Supabase
   const handleSubmit = async () => {
     const finalValue = commitAnswer()
@@ -389,16 +383,6 @@ export default function AlphaSurvey() {
                 {/* Navigation buttons */}
                 {activeQuestion?.type !== 'radio' && (
                   <div className="flex gap-3 mt-8">
-                    {!isLastQuestion && (
-                      <button
-                        type="button"
-                        onClick={handleSkip}
-                        className="flex-1 py-2.5 text-sm font-medium text-slate-500 border border-slate-200 rounded-xl hover:border-slate-400 transition-colors"
-                      >
-                        Skip
-                      </button>
-                    )}
-
                     {isLastQuestion ? (
                       <button
                         type="button"
