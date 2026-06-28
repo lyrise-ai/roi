@@ -22,6 +22,10 @@ import {
   sendReportEmail,
   DEFAULT_REPORT_BCC,
 } from '@/src/lib/roi/services/email'
+import {
+  isOpenAIQuotaError,
+  alertOpenAIQuotaError,
+} from '@/src/lib/roi/services/openaiQuotaAlert'
 import { createClient, createAdminClient } from '../../src/lib/supabase-server'
 import {
   buildStateFromReportRow,
@@ -424,7 +428,15 @@ export default async function handler(req, res) {
           onUsage: (summary) => {
             capturedUsage = summary
           },
-          onError: (err) => send(res, { type: 'error', message: err.message }),
+          onError: (err) => {
+            if (isOpenAIQuotaError(err)) {
+              alertOpenAIQuotaError(err, {
+                company: state?.normInput?.companyName ?? null,
+                mode,
+              })
+            }
+            send(res, { type: 'error', message: err.message })
+          },
         },
       })
     }
@@ -685,6 +697,13 @@ export default async function handler(req, res) {
     }
   } catch (err) {
     console.error('[roi-agent] Error:', err)
+    if (isOpenAIQuotaError(err)) {
+      alertOpenAIQuotaError(err, {
+        company:
+          req.body?.formData?.companyName ?? req.body?.companyName ?? null,
+        mode: req.body?.mode ?? null,
+      })
+    }
     send(res, { type: 'error', message: err?.message ?? 'Unknown error' })
   }
 
