@@ -1,5 +1,6 @@
 import React, { useState, useCallback, useEffect, useRef } from 'react'
 import Head from 'next/head'
+import * as Sentry from '@sentry/nextjs'
 import { motion, AnimatePresence } from 'framer-motion'
 import { FaCheckCircle, FaStar } from 'react-icons/fa'
 import clsx from 'clsx'
@@ -1027,6 +1028,7 @@ export default function ROIReport({ isEmployee, isAlpha }) {
 
   const [isGenerationComplete, setIsGenerationComplete] = useState(false)
   const generationStartedAt = useRef(Date.now())
+  const questionnaireFeedbackRef = useRef(null)
   const [generationLog, setGenerationLog] = useState('')
   const [sseEvents, setSseEvents] = useState([])
   const [reportState, setReportState] = useState(null)
@@ -1321,6 +1323,17 @@ export default function ROIReport({ isEmployee, isAlpha }) {
     return () => clearTimeout(fallback)
   }, [viewState, reportId, router, isAlpha])
 
+  useEffect(() => {
+    if (step !== TOTAL_STEPS) return
+    const feedback = Sentry.getFeedback()
+    if (!feedback || !questionnaireFeedbackRef.current) return
+    const unsub = feedback.attachTo(questionnaireFeedbackRef.current, {
+      formTitle: 'How was that?',
+      tags: { 'feedback.source': 'roi-questionnaire' },
+    })
+    return () => unsub?.()
+  }, [step])
+
   const next = useCallback(
     async ({ skipLLM = false } = {}) => {
       const currentErrors = validateStep(step, s1, s2)
@@ -1611,32 +1624,43 @@ export default function ROIReport({ isEmployee, isAlpha }) {
                 ))}
               </div>
 
-              <div className="flex items-center gap-2">
-                {IS_DEV && step === TOTAL_STEPS && (
+              <div className="flex flex-col items-end gap-1">
+                <div className="flex items-center gap-2">
+                  {IS_DEV && step === TOTAL_STEPS && (
+                    <button
+                      type="button"
+                      onClick={() => next({ skipLLM: true })}
+                      className="px-5 py-2 text-sm font-semibold text-gray-700 transition-colors bg-gray-100 rounded-lg hover:bg-gray-200"
+                    >
+                      Fast mock preview
+                    </button>
+                  )}
                   <button
                     type="button"
-                    onClick={() => next({ skipLLM: true })}
-                    className="px-5 py-2 text-sm font-semibold text-gray-700 transition-colors bg-gray-100 rounded-lg hover:bg-gray-200"
+                    onClick={() => next()}
+                    className="px-5 py-2 text-sm font-semibold text-white transition-colors rounded-lg shadow-sm"
+                    style={
+                      step === TOTAL_STEPS && isAlpha
+                        ? { background: '#5B48F8' }
+                        : { background: '#111827' }
+                    }
                   >
-                    Fast mock preview
+                    {step === TOTAL_STEPS
+                      ? isAlpha
+                        ? 'Generate my Profit Map →'
+                        : 'Generate my report →'
+                      : 'Continue →'}
+                  </button>
+                </div>
+                {step === TOTAL_STEPS && (
+                  <button
+                    ref={questionnaireFeedbackRef}
+                    type="button"
+                    className="text-xs text-gray-400 hover:text-gray-600 transition-colors"
+                  >
+                    How was that?
                   </button>
                 )}
-                <button
-                  type="button"
-                  onClick={() => next()}
-                  className="px-5 py-2 text-sm font-semibold text-white transition-colors rounded-lg shadow-sm"
-                  style={
-                    step === TOTAL_STEPS && isAlpha
-                      ? { background: '#5B48F8' }
-                      : { background: '#111827' }
-                  }
-                >
-                  {step === TOTAL_STEPS
-                    ? isAlpha
-                      ? 'Generate my Profit Map →'
-                      : 'Generate my report →'
-                    : 'Continue →'}
-                </button>
               </div>
             </div>
           </motion.div>

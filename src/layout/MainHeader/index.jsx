@@ -1,6 +1,7 @@
 import React, { useEffect, useState } from 'react'
 import Image from 'next/legacy/image'
 import Link from 'next/link'
+import * as Sentry from '@sentry/nextjs'
 import Logo from '../../assets/rebranding/logo_black.svg'
 import { scrollToSection } from '../../utilities/helpers'
 import MainHeaderMobile from './MainHeaderMobile'
@@ -53,6 +54,11 @@ export default function MainHeader({ user = null }) {
       const employee = user?.email?.endsWith('@lyrise.ai') ?? false
       setIsClient(!!user && !employee)
       setIsEmployee(employee)
+      if (user) {
+        Sentry.setUser({ id: user.id, email: user.email })
+      } else {
+        Sentry.setUser(null)
+      }
     })
   }, [])
 
