@@ -1,4 +1,5 @@
 import React, { useState, useCallback, useEffect, useRef } from 'react'
+import * as Sentry from '@sentry/nextjs'
 import Head from 'next/head'
 import * as Sentry from '@sentry/nextjs'
 import { motion, AnimatePresence } from 'framer-motion'
@@ -1382,6 +1383,18 @@ export default function ROIReport({ isEmployee, isAlpha }) {
     setStep((prev) => Math.max(prev - 1, 1))
     setErrors({})
   }, [])
+
+  // Attach Sentry feedback to the questionnaire feedback button on the last step
+  useEffect(() => {
+    if (step !== TOTAL_STEPS) return
+    const feedback = Sentry.getFeedback()
+    if (!feedback || !questionnaireFeedbackRef.current) return
+    const cleanup = feedback.attachTo(questionnaireFeedbackRef.current, {
+      formTitle: 'How was that?',
+      tags: { 'feedback.source': 'roi-questionnaire' },
+    })
+    return () => cleanup?.()
+  }, [step])
 
   // ── Renders ───────────────────────────────────────────────────────────────
 

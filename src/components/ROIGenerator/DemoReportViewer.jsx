@@ -99,11 +99,10 @@ export default function DemoReportViewer({
   const [chipLoading, setChipLoading] = useState(false)
   const [tourStep, setTourStep] = useState(0)
   const [tourRect, setTourRect] = useState(null)
-  const [tourCompleted, setTourCompleted] = useState(false)
 
   const sessionIdRef = useRef(getSessionId())
   const stepStartTimeRef = useRef(Date.now())
-  const walkthroughFeedbackRef = useRef(null)
+  const tourCompletedRef = useRef(false)
   const execTabRef = useRef(null)
   const fullTabRef = useRef(null)
   const iframeContainerRef = useRef(null)
@@ -235,27 +234,61 @@ export default function DemoReportViewer({
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [tourStep])
 
+  // When the tour completes, open the Sentry feedback form before generating the report
+  useEffect(() => {
+    if (tourStep !== -1 || !tourCompletedRef.current) return
+    tourCompletedRef.current = false
+
+    const feedback = Sentry.getFeedback()
+    if (!feedback) {
+      onFinish?.()
+      return
+    }
+
+    let cleanup
+    feedback
+      .createForm({
+        formTitle: 'How was getting started?',
+        tags: { 'feedback.source': 'walkthrough' },
+      })
+      .then((form) => {
+        form.appendToDom()
+        form.open()
+        const done = () => {
+          form.removeFromDom()
+          onFinish?.()
+        }
+        form.on('formSubmitted', done)
+        form.on('dialogClosed', done)
+        cleanup = () => form.removeFromDom()
+      })
+      .catch(() => onFinish?.())
+
+    return () => cleanup?.()
+  }, [tourStep, onFinish])
+
   const advanceTour = useCallback(() => {
     const timeSpentMs = Date.now() - stepStartTimeRef.current
     stepStartTimeRef.current = Date.now()
-    const next = tourStep + 1
-    if (next >= TOUR_LENGTH) {
-      trackEvent('demo_tour_completed', { time_spent_ms: timeSpentMs })
-      try {
-        localStorage.setItem('lyrise_tour_seen', '1')
-      } catch {
-        /* private browsing */
+    setTourStep((s) => {
+      const next = s + 1
+      if (next >= TOUR_LENGTH) {
+        trackEvent('demo_tour_completed', { time_spent_ms: timeSpentMs })
+        try {
+          localStorage.setItem('lyrise_tour_seen', '1')
+        } catch {
+          /* private browsing */
+        }
+        tourCompletedRef.current = true
+        return -1
       }
-      setTourCompleted(true)
-      setTourStep(-1)
-    } else {
       trackEvent('demo_tour_step_view', {
         step_index: next,
         time_spent_ms: timeSpentMs,
       })
-      setTourStep(next)
-    }
-  }, [tourStep, trackEvent])
+      return next
+    })
+  }, [trackEvent])
 
   const skipTour = useCallback(() => {
     const timeSpentMs = Date.now() - stepStartTimeRef.current
@@ -266,17 +299,6 @@ export default function DemoReportViewer({
     setTourStep(-1)
     onSkip?.()
   }, [tourStep, onSkip, trackEvent])
-
-  useEffect(() => {
-    if (!tourCompleted) return
-    const feedback = Sentry.getFeedback()
-    if (!feedback || !walkthroughFeedbackRef.current) return
-    const unsub = feedback.attachTo(walkthroughFeedbackRef.current, {
-      formTitle: 'How was getting started?',
-      tags: { 'feedback.source': 'walkthrough' },
-    })
-    return () => unsub?.()
-  }, [tourCompleted])
 
   const drainHighlight = useCallback(() => {
     const section = pendingHighlightRef.current
@@ -1005,80 +1027,6 @@ export default function DemoReportViewer({
             </div>
           </div>
         </>
-      )}
-
-      {tourCompleted && (
-        <div
-          style={{
-            position: 'fixed',
-            inset: 0,
-            background: 'rgba(15,23,42,0.6)',
-            zIndex: 1000,
-            display: 'flex',
-            alignItems: 'center',
-            justifyContent: 'center',
-          }}
-        >
-          <div
-            style={{
-              background: '#fff',
-              borderRadius: 12,
-              padding: '28px 32px',
-              width: 400,
-              boxShadow: '0 24px 60px rgba(0,0,0,0.3)',
-              display: 'flex',
-              flexDirection: 'column',
-              gap: 16,
-            }}
-          >
-            <div
-              style={{
-                fontSize: 17,
-                fontWeight: 700,
-                color: '#0a2540',
-                lineHeight: 1.4,
-              }}
-            >
-              Ready to see your numbers?
-            </div>
-            <div style={{ display: 'flex', flexDirection: 'column', gap: 8 }}>
-              <button
-                type="button"
-                onClick={() => onFinish?.()}
-                style={{
-                  padding: '11px 14px',
-                  background: '#2957FF',
-                  color: '#fff',
-                  border: 'none',
-                  borderRadius: 8,
-                  fontSize: 13,
-                  fontWeight: 600,
-                  cursor: 'pointer',
-                  fontFamily: 'inherit',
-                }}
-              >
-                Generate my report →
-              </button>
-              <button
-                ref={walkthroughFeedbackRef}
-                type="button"
-                style={{
-                  padding: '11px 14px',
-                  background: '#fff',
-                  color: '#475569',
-                  border: '1px solid #e2e8f0',
-                  borderRadius: 8,
-                  fontSize: 13,
-                  fontWeight: 500,
-                  cursor: 'pointer',
-                  fontFamily: 'inherit',
-                }}
-              >
-                Share your thoughts first →
-              </button>
-            </div>
-          </div>
-        </div>
       )}
 
       <style>{`

@@ -1,4 +1,5 @@
 import React, { useState, useRef, useCallback, useEffect } from 'react'
+import * as Sentry from '@sentry/nextjs'
 import Link from 'next/link'
 import { drainSSE } from '@/src/lib/drainSSE'
 import { REPORT_CHAT_MESSAGE_LIMIT } from '@/src/lib/roi/constants'
@@ -150,6 +151,18 @@ export default function ReportViewer({
   const [userSentCount, setUserSentCount] = useState(initialMessagesUsed)
   const [showCallPrompt, setShowCallPrompt] = useState(false)
   const [downloadStatus, setDownloadStatus] = useState('idle')
+
+  useEffect(() => {
+    if (!showCallPrompt) return
+    const el = document.getElementById('proposal-feedback-btn')
+    const feedback = Sentry.getFeedback()
+    if (!feedback || !el) return
+    const cleanup = feedback.attachTo(el, {
+      formTitle: 'Before you decide — anything unclear?',
+      tags: { 'feedback.source': 'proposal' },
+    })
+    return () => cleanup?.()
+  }, [showCallPrompt])
   const [tourStep, setTourStep] = useState(-1)
   const [tourRect, setTourRect] = useState(null)
 
@@ -1172,23 +1185,41 @@ export default function ReportViewer({
                   through your Profit Map and identify the first workflow to
                   fix.
                 </p>
-                <a
-                  href="https://api.leadconnectorhq.com/widget/bookings/strategy-call-with-lyrisesivto9"
-                  target="_blank"
-                  rel="noopener noreferrer"
-                  style={{
-                    display: 'inline-block',
-                    padding: '8px 16px',
-                    background: '#5B48F8',
-                    color: '#fff',
-                    borderRadius: 10,
-                    fontSize: 13,
-                    fontWeight: 600,
-                    textDecoration: 'none',
-                  }}
-                >
-                  Book a validation call →
-                </a>
+                <div style={{ display: 'flex', alignItems: 'center', gap: 10 }}>
+                  <a
+                    href="https://api.leadconnectorhq.com/widget/bookings/strategy-call-with-lyrisesivto9"
+                    target="_blank"
+                    rel="noopener noreferrer"
+                    style={{
+                      display: 'inline-block',
+                      padding: '8px 16px',
+                      background: '#5B48F8',
+                      color: '#fff',
+                      borderRadius: 10,
+                      fontSize: 13,
+                      fontWeight: 600,
+                      textDecoration: 'none',
+                    }}
+                  >
+                    Book a validation call →
+                  </a>
+                  <button
+                    id="proposal-feedback-btn"
+                    type="button"
+                    style={{
+                      padding: '8px 14px',
+                      background: 'transparent',
+                      color: '#6B7280',
+                      border: '1px solid #E5E7EB',
+                      borderRadius: 10,
+                      fontSize: 13,
+                      fontWeight: 500,
+                      cursor: 'pointer',
+                    }}
+                  >
+                    Anything unclear?
+                  </button>
+                </div>
               </div>
             )}
 

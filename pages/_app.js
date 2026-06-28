@@ -4,11 +4,13 @@ import { useRouter } from 'next/router'
 import { ThemeProvider } from '@mui/material/styles'
 import CssBaseline from '@mui/material/CssBaseline'
 import { CacheProvider } from '@emotion/react'
+import * as Sentry from '@sentry/nextjs'
 import theme from '../src/theme'
 import createEmotionCache from '../src/utilities/createEmotionCache'
 import '../styles/global.css'
 import { initAmplitude } from '../src/utilities/amplitude'
 import posthog from 'posthog-js'
+import { createClient as createBrowserClient } from '../src/lib/supabase-browser'
 
 const clientSideEmotionCache = createEmotionCache()
 
@@ -83,6 +85,20 @@ export default function MyApp(props) {
         api_host: process.env.NEXT_PUBLIC_POSTHOG_HOST,
       })
     }
+  }, [])
+
+  React.useEffect(() => {
+    const supabase = createBrowserClient()
+    const {
+      data: { subscription },
+    } = supabase.auth.onAuthStateChange((_, session) => {
+      if (session?.user) {
+        Sentry.setUser({ id: session.user.id, email: session.user.email })
+      } else {
+        Sentry.setUser(null)
+      }
+    })
+    return () => subscription.unsubscribe()
   }, [])
 
   return (
