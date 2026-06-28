@@ -292,12 +292,27 @@ export default function DemoReportViewer({
         trackEvent('demo_tour_post_feedback', {
           feedback_response: option.label,
         })
+        fetch('/api/linear/triage', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({
+            title: `[Demo Tour] ${option.label}`,
+            description: [
+              email ? `**Email:** ${email}` : null,
+              companyName ? `**Company:** ${companyName}` : null,
+            ]
+              .filter(Boolean)
+              .join('\n'),
+            source: 'Demo Tour — post-tour feedback prompt',
+            priority: 4,
+          }),
+        }).catch(() => {})
         onFinish?.()
       } else {
         setSelectedPostOption(option)
       }
     },
-    [trackEvent, onFinish],
+    [trackEvent, onFinish, email, companyName],
   )
 
   const handlePostTourSubmit = useCallback(() => {
@@ -305,6 +320,26 @@ export default function DemoReportViewer({
       feedback_response: selectedPostOption.label,
       ...(followUpText.trim() ? { feedback_detail: followUpText.trim() } : {}),
     })
+
+    const triageDescription = [
+      email ? `**Email:** ${email}` : null,
+      companyName ? `**Company:** ${companyName}` : null,
+      followUpText.trim() ? `**Their message:** ${followUpText.trim()}` : null,
+    ]
+      .filter(Boolean)
+      .join('\n')
+
+    fetch('/api/linear/triage', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({
+        title: `[Demo Tour] ${selectedPostOption.label}`,
+        description: triageDescription,
+        source: 'Demo Tour — post-tour feedback prompt',
+        priority: selectedPostOption.notifyTeam ? 2 : 3,
+      }),
+    }).catch(() => {})
+
     if (selectedPostOption.notifyTeam) {
       setPostTourSubmitted(true)
       fetch('/api/analytics/tour-question', {
