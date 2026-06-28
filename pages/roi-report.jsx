@@ -11,6 +11,7 @@ import { drainSSE } from '../src/lib/drainSSE'
 import { PIPELINE_LOG_TOOL_NAMES } from '../src/lib/roi/constants'
 import { useRouter } from 'next/router'
 import { createClient as createBrowserClient } from '../src/lib/supabase-browser'
+import DemoReportViewer from '../src/components/ROIGenerator/DemoReportViewer'
 
 // ── Constants ─────────────────────────────────────────────────────────────────
 
@@ -81,6 +82,8 @@ const MIN_VISIBLE_DURATION =
 const VIEW_STATES = {
   FORM: 'form',
   LOADING: 'loading',
+  CHOICE: 'choice',
+  DEMO: 'demo',
   GENERATING: 'generating',
   FINALISING: 'finalising',
   COMPLETE: 'complete',
@@ -1327,7 +1330,21 @@ export default function ROIReport({ isEmployee, isAlpha }) {
         setStep((prev) => prev + 1)
         return
       }
-      await runGeneration({ skipLLM })
+      if (skipLLM) {
+        await runGeneration({ skipLLM: true })
+        return
+      }
+      let tourSeen = false
+      try {
+        tourSeen = !!localStorage.getItem('lyrise_tour_seen')
+      } catch {
+        /* private browsing */
+      }
+      if (tourSeen) {
+        await runGeneration()
+      } else {
+        setViewState(VIEW_STATES.CHOICE)
+      }
     },
     [step, s1, s2, runGeneration],
   )
@@ -1395,6 +1412,61 @@ export default function ROIReport({ isEmployee, isAlpha }) {
               reportId={reportId}
               isEmployee={isEmployee}
             />
+          </div>
+        </div>
+      </div>
+    )
+  }
+
+  if (viewState === VIEW_STATES.DEMO) {
+    return (
+      <DemoReportViewer
+        email={s2.email}
+        companyName={s1.companyName}
+        onFinish={() => runGeneration()}
+        onSkip={() => runGeneration()}
+      />
+    )
+  }
+
+  if (viewState === VIEW_STATES.CHOICE) {
+    return (
+      <div className="rebranding-landing-page -mt-[12px]">
+        <MainHeader />
+        <div className="flex flex-col items-center justify-center min-h-screen p-4">
+          <div className="w-full max-w-lg bg-white border border-gray-100 shadow-xl rounded-2xl overflow-hidden">
+            <div className="px-8 pt-8 pb-6 text-center border-b border-gray-100">
+              <div
+                className="inline-flex items-center justify-center w-12 h-12 rounded-full mb-4"
+                style={{ background: '#EBF0F8' }}
+              >
+                <span style={{ fontSize: 22 }}>📊</span>
+              </div>
+              <h2 className="text-xl font-bold text-gray-900 mb-2">
+                Want to explore a sample report first?
+              </h2>
+              <p className="text-sm text-gray-500 leading-relaxed max-w-sm mx-auto">
+                See exactly what your report will look like — built with real
+                data for a sample consulting firm. Takes about 2 minutes.
+              </p>
+            </div>
+            <div className="p-6 flex flex-col gap-3">
+              <button
+                type="button"
+                onClick={() => setViewState(VIEW_STATES.DEMO)}
+                className="w-full px-5 py-3 text-sm font-semibold text-white rounded-lg transition-colors"
+                style={{ background: '#003f87' }}
+              >
+                Show me the demo →
+              </button>
+              <button
+                type="button"
+                onClick={() => runGeneration()}
+                className="w-full px-5 py-3 text-sm font-medium text-gray-700 border border-gray-200 rounded-lg hover:border-gray-400 transition-colors"
+              >
+                Skip — generate my report now
+              </button>
+            </div>
           </div>
         </div>
       </div>

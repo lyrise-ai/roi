@@ -20,6 +20,20 @@ const SCRIPTED_CHAT = [
   },
 ]
 
+const POST_TOUR_OPTIONS = [
+  { label: 'Impressed — I want to see my own numbers', followUp: null },
+  {
+    label: 'Interesting, but I have questions',
+    followUp: 'What questions do you have?',
+    notifyTeam: true,
+  },
+  {
+    label: 'The numbers seemed off for my company',
+    followUp: 'What seemed off?',
+  },
+  { label: 'Not what I was expecting', followUp: 'What were you expecting?' },
+]
+
 const CHIP_LABEL = 'What if we focused only on Proposal Writing?'
 
 const CHIP_REPLY =
@@ -98,8 +112,13 @@ export default function DemoReportViewer({
   const [chipLoading, setChipLoading] = useState(false)
   const [tourStep, setTourStep] = useState(0)
   const [tourRect, setTourRect] = useState(null)
+  const [showPostTourPrompt, setShowPostTourPrompt] = useState(false)
+  const [selectedPostOption, setSelectedPostOption] = useState(null)
+  const [followUpText, setFollowUpText] = useState('')
+  const [postTourSubmitted, setPostTourSubmitted] = useState(false)
 
   const sessionIdRef = useRef(getSessionId())
+  const stepStartTimeRef = useRef(Date.now())
   const execTabRef = useRef(null)
   const fullTabRef = useRef(null)
   const iframeContainerRef = useRef(null)
@@ -232,31 +251,83 @@ export default function DemoReportViewer({
   }, [tourStep])
 
   const advanceTour = useCallback(() => {
+    const timeSpentMs = Date.now() - stepStartTimeRef.current
+    stepStartTimeRef.current = Date.now()
     setTourStep((s) => {
       const next = s + 1
       if (next >= TOUR_LENGTH) {
-        trackEvent('demo_tour_completed')
+        trackEvent('demo_tour_completed', { time_spent_ms: timeSpentMs })
         try {
           localStorage.setItem('lyrise_tour_seen', '1')
         } catch {
           /* private browsing */
         }
-        onFinish?.()
+        setShowPostTourPrompt(true)
         return -1
       }
-      trackEvent('demo_tour_step_view', { step_index: next })
+      trackEvent('demo_tour_step_view', {
+        step_index: next,
+        time_spent_ms: timeSpentMs,
+      })
       return next
     })
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [onFinish, trackEvent])
+  }, [trackEvent])
 
   const skipTour = useCallback(() => {
+    const timeSpentMs = Date.now() - stepStartTimeRef.current
     setTourStep((s) => {
-      trackEvent('demo_tour_skipped', { step_index: s })
+      trackEvent('demo_tour_skipped', {
+        step_index: s,
+        time_spent_ms: timeSpentMs,
+      })
       return -1
     })
     onSkip?.()
   }, [onSkip, trackEvent])
+
+  const handlePostTourOption = useCallback(
+    (option) => {
+      if (option.followUp === null) {
+        trackEvent('demo_tour_post_feedback', {
+          feedback_response: option.label,
+        })
+        onFinish?.()
+      } else {
+        setSelectedPostOption(option)
+      }
+    },
+    [trackEvent, onFinish],
+  )
+
+  const handlePostTourSubmit = useCallback(() => {
+    trackEvent('demo_tour_post_feedback', {
+      feedback_response: selectedPostOption.label,
+      ...(followUpText.trim() ? { feedback_detail: followUpText.trim() } : {}),
+    })
+    if (selectedPostOption.notifyTeam) {
+      setPostTourSubmitted(true)
+      fetch('/api/analytics/tour-question', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          email: email || null,
+          companyName: companyName || null,
+          question: followUpText.trim() || null,
+        }),
+      }).catch(() => {})
+      setTimeout(() => onFinish?.(), 2000)
+    } else {
+      onFinish?.()
+    }
+  }, [
+    trackEvent,
+    onFinish,
+    selectedPostOption,
+    followUpText,
+    email,
+    companyName,
+  ])
 
   const drainHighlight = useCallback(() => {
     const section = pendingHighlightRef.current
@@ -985,6 +1056,227 @@ export default function DemoReportViewer({
             </div>
           </div>
         </>
+      )}
+
+      {showPostTourPrompt && (
+        <div
+          style={{
+            position: 'fixed',
+            inset: 0,
+            background: 'rgba(15,23,42,0.6)',
+            zIndex: 1000,
+            display: 'flex',
+            alignItems: 'center',
+            justifyContent: 'center',
+          }}
+        >
+          <div
+            style={{
+              background: '#fff',
+              borderRadius: 12,
+              padding: '28px 32px',
+              width: 400,
+              boxShadow: '0 24px 60px rgba(0,0,0,0.3)',
+            }}
+          >
+            <div
+              style={{
+                fontSize: 11,
+                fontWeight: 700,
+                color: '#2957FF',
+                textTransform: 'uppercase',
+                letterSpacing: '0.08em',
+                marginBottom: 8,
+              }}
+            >
+              Quick question
+            </div>
+
+            {postTourSubmitted ? (
+              <div style={{ textAlign: 'center', padding: '16px 0 8px' }}>
+                <div
+                  style={{
+                    width: 44,
+                    height: 44,
+                    borderRadius: '50%',
+                    background: '#eef2ff',
+                    display: 'flex',
+                    alignItems: 'center',
+                    justifyContent: 'center',
+                    margin: '0 auto 14px',
+                    fontSize: 20,
+                  }}
+                >
+                  ✓
+                </div>
+                <div
+                  style={{
+                    fontSize: 16,
+                    fontWeight: 700,
+                    color: '#0a2540',
+                    marginBottom: 6,
+                  }}
+                >
+                  Got it — we'll follow up
+                </div>
+                <div style={{ fontSize: 13, color: '#64748b' }}>
+                  We'll reach out to <strong>{email || 'you'}</strong> with
+                  answers shortly.
+                </div>
+              </div>
+            ) : selectedPostOption === null ? (
+              <>
+                <div
+                  style={{
+                    fontSize: 17,
+                    fontWeight: 700,
+                    color: '#0a2540',
+                    lineHeight: 1.4,
+                    marginBottom: 20,
+                  }}
+                >
+                  What was your first reaction to the demo?
+                </div>
+                <div
+                  style={{
+                    display: 'flex',
+                    flexDirection: 'column',
+                    gap: 8,
+                    marginBottom: 20,
+                  }}
+                >
+                  {POST_TOUR_OPTIONS.map((opt) => (
+                    <button
+                      key={opt.label}
+                      type="button"
+                      onClick={() => handlePostTourOption(opt)}
+                      style={{
+                        textAlign: 'left',
+                        padding: '11px 14px',
+                        borderRadius: 8,
+                        border: '1px solid #e2e8f0',
+                        background: '#fff',
+                        color: '#1a1a1a',
+                        fontSize: 13,
+                        fontWeight: 500,
+                        cursor: 'pointer',
+                        fontFamily: 'inherit',
+                      }}
+                    >
+                      {opt.label}
+                    </button>
+                  ))}
+                </div>
+                <button
+                  type="button"
+                  onClick={() => onFinish?.()}
+                  style={{
+                    background: 'none',
+                    border: 'none',
+                    color: '#94a3b8',
+                    fontSize: 12,
+                    cursor: 'pointer',
+                    fontFamily: 'inherit',
+                    padding: 0,
+                  }}
+                >
+                  Skip and continue →
+                </button>
+              </>
+            ) : (
+              <>
+                <div
+                  style={{
+                    fontSize: 12,
+                    color: '#2957FF',
+                    background: '#eef2ff',
+                    border: '1px solid #c7d2fe',
+                    borderRadius: 6,
+                    padding: '6px 10px',
+                    marginBottom: 16,
+                    fontWeight: 500,
+                  }}
+                >
+                  {selectedPostOption.label}
+                </div>
+                <div
+                  style={{
+                    fontSize: 15,
+                    fontWeight: 600,
+                    color: '#0a2540',
+                    lineHeight: 1.4,
+                    marginBottom: 10,
+                  }}
+                >
+                  {selectedPostOption.followUp}
+                </div>
+                <textarea
+                  value={followUpText}
+                  onChange={(e) => setFollowUpText(e.target.value)}
+                  placeholder="Optional — share as much or as little as you'd like"
+                  rows={3}
+                  style={{
+                    width: '100%',
+                    padding: '9px 12px',
+                    border: '1px solid #d0d0d0',
+                    borderRadius: 8,
+                    fontSize: 13,
+                    lineHeight: 1.5,
+                    resize: 'none',
+                    outline: 'none',
+                    fontFamily: 'inherit',
+                    color: '#1a1a1a',
+                    marginBottom: 16,
+                    boxSizing: 'border-box',
+                  }}
+                />
+                <div
+                  style={{
+                    display: 'flex',
+                    alignItems: 'center',
+                    justifyContent: 'space-between',
+                  }}
+                >
+                  <button
+                    type="button"
+                    onClick={() => {
+                      setSelectedPostOption(null)
+                      setFollowUpText('')
+                    }}
+                    style={{
+                      background: 'none',
+                      border: 'none',
+                      color: '#64748b',
+                      fontSize: 12,
+                      cursor: 'pointer',
+                      fontFamily: 'inherit',
+                      padding: 0,
+                    }}
+                  >
+                    ← Back
+                  </button>
+                  <button
+                    type="button"
+                    onClick={handlePostTourSubmit}
+                    style={{
+                      padding: '9px 20px',
+                      background: '#2957FF',
+                      color: '#fff',
+                      border: 'none',
+                      borderRadius: 8,
+                      fontSize: 13,
+                      fontWeight: 600,
+                      cursor: 'pointer',
+                      fontFamily: 'inherit',
+                    }}
+                  >
+                    Continue →
+                  </button>
+                </div>
+              </>
+            )}
+          </div>
+        </div>
       )}
 
       <style>{`
