@@ -78,6 +78,7 @@ export default function ReportLoadingScreen({
   generationLog,
   sseEvents = [],
   viewState = 'generating',
+  onOpen,
 }) {
   const [phaseIndex, setPhaseIndex] = useState(0)
   const [logs, setLogs] = useState([])
