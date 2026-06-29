@@ -1,11 +1,13 @@
 // POST /api/linear/triage
 // Creates a Linear issue in the team's Triage state.
-// All feedback (Sentry widget, in-app prompts) is routed here.
+// Used by in-app feedback prompts (not the Sentry widget — that goes through
+// the native Sentry → Linear integration configured in the Sentry dashboard).
 //
 // Required env vars:
-//   LINEAR_API_KEY          — Linear personal or workspace API key
-//   LINEAR_TEAM_ID          — ID of the team that owns the Triage workflow
-//   LINEAR_TRIAGE_STATE_ID  — ID of the Triage workflow state on that team
+//   LINEAR_API_KEY            — Linear personal or workspace API key
+//   LINEAR_TEAM_ID            — ID of the team that owns the Triage workflow
+//   LINEAR_TRIAGE_STATE_ID    — ID of the Triage workflow state on that team
+//   LINEAR_FEEDBACK_LABEL_ID  — ID of the "Feedback" label to apply automatically
 
 const LINEAR_API = 'https://api.linear.app/graphql'
 
@@ -30,6 +32,7 @@ export default async function handler(req, res) {
   const apiKey = process.env.LINEAR_API_KEY
   const teamId = process.env.LINEAR_TEAM_ID
   const triageStateId = process.env.LINEAR_TRIAGE_STATE_ID
+  const feedbackLabelId = process.env.LINEAR_FEEDBACK_LABEL_ID
 
   if (!apiKey || !teamId) {
     console.warn(
@@ -53,6 +56,7 @@ export default async function handler(req, res) {
     description: buildDescription(description, source),
     priority: clampedPriority,
     ...(triageStateId ? { stateId: triageStateId } : {}),
+    ...(feedbackLabelId ? { labelIds: [feedbackLabelId] } : {}),
   }
 
   try {
