@@ -2,7 +2,11 @@ import * as Sentry from '@sentry/nextjs'
 Sentry.init({
   dsn: 'https://35bc0693cb1fdcd1e6e5d2c146ca5c0b@o4511621876678656.ingest.de.sentry.io/4511621883428944',
   integrations: [
-    Sentry.replayIntegration(),
+    Sentry.replayIntegration({
+      maskAllText: false,
+      blockAllMedia: false,
+      maskAllInputs: false,
+    }),
     Sentry.feedbackIntegration({
       colorScheme: 'system',
       buttonLabel: 'Feedback',
