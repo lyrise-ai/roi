@@ -3,6 +3,16 @@ const { withSentryConfig } = require('@sentry/nextjs')
 
 const nextConfig = {
   reactStrictMode: false,
+  transpilePackages: [
+    '@mui/material',
+    '@mui/system',
+    '@mui/styled-engine',
+    '@mui/icons-material',
+    '@mui/base',
+    '@mui/utils',
+    '@mui/private-theming',
+    '@mui/types',
+  ],
   eslint: {
     ignoreDuringBuilds: true,
   },

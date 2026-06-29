@@ -1,4 +1,5 @@
 import React, { useState, useRef, useCallback, useEffect } from 'react'
+import * as Sentry from '@sentry/nextjs'
 
 const TOUR_LENGTH = 6
 
@@ -100,6 +101,8 @@ export default function DemoReportViewer({
   const [tourRect, setTourRect] = useState(null)
 
   const sessionIdRef = useRef(getSessionId())
+  const stepStartTimeRef = useRef(Date.now())
+  const tourCompletedRef = useRef(false)
   const execTabRef = useRef(null)
   const fullTabRef = useRef(null)
   const iframeContainerRef = useRef(null)
@@ -231,32 +234,71 @@ export default function DemoReportViewer({
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [tourStep])
 
+  // When the tour completes, open the Sentry feedback form before generating the report
+  useEffect(() => {
+    if (tourStep !== -1 || !tourCompletedRef.current) return
+    tourCompletedRef.current = false
+
+    const feedback = Sentry.getFeedback()
+    if (!feedback) {
+      onFinish?.()
+      return
+    }
+
+    let cleanup
+    feedback
+      .createForm({
+        formTitle: 'How was getting started?',
+        tags: { 'feedback.source': 'walkthrough' },
+      })
+      .then((form) => {
+        form.appendToDom()
+        form.open()
+        const done = () => {
+          form.removeFromDom()
+          onFinish?.()
+        }
+        form.on('formSubmitted', done)
+        form.on('dialogClosed', done)
+        cleanup = () => form.removeFromDom()
+      })
+      .catch(() => onFinish?.())
+
+    return () => cleanup?.()
+  }, [tourStep, onFinish])
+
   const advanceTour = useCallback(() => {
+    const timeSpentMs = Date.now() - stepStartTimeRef.current
+    stepStartTimeRef.current = Date.now()
     setTourStep((s) => {
       const next = s + 1
       if (next >= TOUR_LENGTH) {
-        trackEvent('demo_tour_completed')
+        trackEvent('demo_tour_completed', { time_spent_ms: timeSpentMs })
         try {
           localStorage.setItem('lyrise_tour_seen', '1')
         } catch {
           /* private browsing */
         }
-        onFinish?.()
+        tourCompletedRef.current = true
         return -1
       }
-      trackEvent('demo_tour_step_view', { step_index: next })
+      trackEvent('demo_tour_step_view', {
+        step_index: next,
+        time_spent_ms: timeSpentMs,
+      })
       return next
     })
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [onFinish, trackEvent])
+  }, [trackEvent])
 
   const skipTour = useCallback(() => {
-    setTourStep((s) => {
-      trackEvent('demo_tour_skipped', { step_index: s })
-      return -1
+    const timeSpentMs = Date.now() - stepStartTimeRef.current
+    trackEvent('demo_tour_skipped', {
+      step_index: tourStep,
+      time_spent_ms: timeSpentMs,
     })
+    setTourStep(-1)
     onSkip?.()
-  }, [onSkip, trackEvent])
+  }, [tourStep, onSkip, trackEvent])
 
   const drainHighlight = useCallback(() => {
     const section = pendingHighlightRef.current

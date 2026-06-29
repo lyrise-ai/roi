@@ -1,5 +1,6 @@
 import React, { useState, useCallback, useEffect, useMemo, useRef } from 'react'
 import Head from 'next/head'
+import * as Sentry from '@sentry/nextjs'
 import { motion, AnimatePresence } from 'framer-motion'
 import { FaCheckCircle } from 'react-icons/fa'
 import clsx from 'clsx'
@@ -11,6 +12,7 @@ import { PIPELINE_LOG_TOOL_NAMES } from '../src/lib/roi/constants'
 import { roiCalculator } from '../src/lib/roi/pipeline/roiCalculator'
 import { useRouter } from 'next/router'
 import ErrorBoundary from '../src/components/shared/ErrorBoundary'
+import DemoReportViewer from '../src/components/ROIGenerator/DemoReportViewer'
 
 // ── Constants ─────────────────────────────────────────────────────────────────
 
@@ -95,6 +97,8 @@ const MIN_VISIBLE_DURATION =
 const VIEW_STATES = {
   FORM: 'form',
   LOADING: 'loading',
+  CHOICE: 'choice',
+  DEMO: 'demo',
   GENERATING: 'generating',
   VERIFYING: 'verifying',
   FINALISING: 'finalising',
@@ -115,7 +119,7 @@ const DEV_STEP2_PRESET = {
   email: 'yousef@lyrise.ai',
   recipientName: 'Yousef',
   recipientTitle: 'COO',
-  currency: 'SAR – Saudi Riyal (SAR)',
+  currency: 'USD – US Dollar (USD)',
 }
 
 // ── Helpers ───────────────────────────────────────────────────────────────────
@@ -225,8 +229,8 @@ function Pill({ label, active, onClick, dimmed }) {
         active
           ? 'bg-gray-900 border-gray-900 text-white'
           : dimmed
-          ? 'border-gray-200 text-gray-400 opacity-40 cursor-not-allowed'
-          : 'border-gray-200 text-gray-500 hover:border-gray-400 hover:text-gray-900 cursor-pointer',
+            ? 'border-gray-200 text-gray-400 opacity-40 cursor-not-allowed'
+            : 'border-gray-200 text-gray-500 hover:border-gray-400 hover:text-gray-900 cursor-pointer',
       )}
     >
       {label}
@@ -321,7 +325,6 @@ function Step1({ data, onChange, errors }) {
         value={data.website}
         onChange={(v) => onChange('website', v)}
         placeholder="e.g. acmecorp.com"
-        optional
         autoComplete="url"
       />
       <TextInput
@@ -330,7 +333,6 @@ function Step1({ data, onChange, errors }) {
         value={data.whatYouDo}
         onChange={(v) => onChange('whatYouDo', v)}
         placeholder="e.g. B2B management consulting for operations and strategy"
-        optional
       />
       <div className="space-y-2">
         <label className="text-[12.5px] font-semibold text-gray-800">
@@ -427,7 +429,6 @@ function Step2({ data, onChange, errors, isDev }) {
         value={data.recipientName}
         onChange={(v) => onChange('recipientName', v)}
         placeholder="e.g. Sarah Al-Rashid"
-        optional
         autoComplete="name"
       />
       <TextInput
@@ -436,7 +437,6 @@ function Step2({ data, onChange, errors, isDev }) {
         value={data.recipientTitle}
         onChange={(v) => onChange('recipientTitle', v)}
         placeholder="e.g. COO, Head of Operations"
-        optional
       />
       <div className="space-y-2">
         <label className="text-[12.5px] font-semibold text-gray-800">
@@ -455,6 +455,23 @@ function Step2({ data, onChange, errors, isDev }) {
 
 // ── Generating & Success views ────────────────────────────────────────────────
 
+const HIGH_DEMAND_MSG =
+  "We're experiencing high demand right now — please try again in a few minutes."
+
+function isQuotaOrRateLimitMessage(msg) {
+  if (!msg || typeof msg !== 'string') return false
+  return (
+    msg.includes('429') ||
+    msg.includes('quota') ||
+    msg.includes('rate limit') ||
+    msg.includes('rate_limit') ||
+    msg.includes('billing') ||
+    msg.includes('insufficient_quota') ||
+    msg.includes('exceeded your current quota') ||
+    msg.includes('[object') // catch-all for any un-serialised object leak
+  )
+}
+
 function ErrorView({ message, onRetry, onUseEstimates, isEmployee }) {
   const isResearchFailure =
     message?.includes('Stages done: none') ||
@@ -462,10 +479,14 @@ function ErrorView({ message, onRetry, onUseEstimates, isEmployee }) {
     message?.includes("couldn't research") ||
     message?.includes('retrieve specific web pages')
 
-  const displayMessage =
+  const safeMessage =
     isEmployee || isResearchFailure
-      ? message
-      : 'Something went wrong. Our team has been notified and will look into it.'
+      ? message || 'Something went wrong. Please try again.'
+      : typeof message === 'string' && message.length > 0
+        ? isQuotaOrRateLimitMessage(message)
+          ? HIGH_DEMAND_MSG
+          : 'Something went wrong. Our team has been notified and will look into it.'
+        : 'Something went wrong. Please try again.'
 
   return (
     <div className="px-8 py-10 text-center">
@@ -507,7 +528,7 @@ function ErrorView({ message, onRetry, onUseEstimates, isEmployee }) {
       ) : (
         <>
           <p className="max-w-sm mx-auto mb-6 text-sm text-gray-500">
-            {displayMessage || 'Something went wrong. Please try again.'}
+            {safeMessage}
           </p>
           <div className="flex flex-col max-w-xs gap-3 mx-auto">
             <button
@@ -741,9 +762,8 @@ function SuccessView({ email, reportId, isEmployee }) {
 // ── Main ──────────────────────────────────────────────────────────────────────
 
 export async function getServerSideProps({ req, res }) {
-  const { createClient, createAdminClient } = await import(
-    '../src/lib/supabase-server'
-  )
+  const { createClient, createAdminClient } =
+    await import('../src/lib/supabase-server')
   const supabase = createClient(req, res)
   const {
     data: { user },
@@ -793,6 +813,7 @@ function ROIReportInner({ isEmployee }) {
   const [viewState, setViewState] = useState(VIEW_STATES.FORM)
 
   const loaderStartedAt = useRef(Date.now())
+  const questionnaireFeedbackRef = useRef(null)
   const [generationLog, setGenerationLog] = useState('')
   const [sseEvents, setSseEvents] = useState([])
   const [reportState, setReportState] = useState(null)
@@ -887,9 +908,8 @@ function ROIReportInner({ isEmployee }) {
       throw new Error('Prepared report not found.')
     }
 
-    const { buildStateFromReportRow } = await import(
-      '../src/lib/roi/reportState'
-    )
+    const { buildStateFromReportRow } =
+      await import('../src/lib/roi/reportState')
     const builtState = buildStateFromReportRow(existingData.report)
 
     if (existingData.report.status === 'PENDING_VERIFICATION') {
@@ -1160,7 +1180,21 @@ function ROIReportInner({ isEmployee }) {
         setStep((prev) => prev + 1)
         return
       }
-      await runGeneration({ skipLLM })
+      if (skipLLM) {
+        await runGeneration({ skipLLM: true })
+        return
+      }
+      let tourSeen = false
+      try {
+        tourSeen = !!localStorage.getItem('lyrise_tour_seen')
+      } catch {
+        /* private browsing */
+      }
+      if (tourSeen) {
+        await runGeneration()
+      } else {
+        setViewState(VIEW_STATES.CHOICE)
+      }
     },
     [step, s1, s2, runGeneration],
   )
@@ -1203,6 +1237,18 @@ function ROIReportInner({ isEmployee }) {
         : prev,
     )
   }, [])
+
+  // Attach Sentry feedback to the questionnaire feedback button on the last step
+  useEffect(() => {
+    if (step !== TOTAL_STEPS) return
+    const feedback = Sentry.getFeedback()
+    if (!feedback || !questionnaireFeedbackRef.current) return
+    const cleanup = feedback.attachTo(questionnaireFeedbackRef.current, {
+      formTitle: 'How was that?',
+      tags: { 'feedback.source': 'roi-questionnaire' },
+    })
+    return () => cleanup?.()
+  }, [step])
 
   const changeVerificationWorkflowField = useCallback((index, field, value) => {
     setVerificationDraft((prev) => {
@@ -1277,6 +1323,61 @@ function ROIReportInner({ isEmployee }) {
               reportId={reportId}
               isEmployee={isEmployee}
             />
+          </div>
+        </div>
+      </div>
+    )
+  }
+
+  if (viewState === VIEW_STATES.DEMO) {
+    return (
+      <DemoReportViewer
+        email={s2.email}
+        companyName={s1.companyName}
+        onFinish={() => runGeneration()}
+        onSkip={() => runGeneration()}
+      />
+    )
+  }
+
+  if (viewState === VIEW_STATES.CHOICE) {
+    return (
+      <div className="rebranding-landing-page -mt-[12px]">
+        <MainHeader />
+        <div className="flex flex-col items-center justify-center min-h-screen p-4">
+          <div className="w-full max-w-lg bg-white border border-gray-100 shadow-xl rounded-2xl overflow-hidden">
+            <div className="px-8 pt-8 pb-6 text-center border-b border-gray-100">
+              <div
+                className="inline-flex items-center justify-center w-12 h-12 rounded-full mb-4"
+                style={{ background: '#EBF0F8' }}
+              >
+                <span style={{ fontSize: 22 }}>📊</span>
+              </div>
+              <h2 className="text-xl font-bold text-gray-900 mb-2">
+                Want to explore a sample report first?
+              </h2>
+              <p className="text-sm text-gray-500 leading-relaxed max-w-sm mx-auto">
+                See exactly what your report will look like — built with real
+                data for a sample consulting firm. Takes about 2 minutes.
+              </p>
+            </div>
+            <div className="p-6 flex flex-col gap-3">
+              <button
+                type="button"
+                onClick={() => setViewState(VIEW_STATES.DEMO)}
+                className="w-full px-5 py-3 text-sm font-semibold text-white rounded-lg transition-colors"
+                style={{ background: '#003f87' }}
+              >
+                Show me the demo →
+              </button>
+              <button
+                type="button"
+                onClick={() => runGeneration()}
+                className="w-full px-5 py-3 text-sm font-medium text-gray-700 border border-gray-200 rounded-lg hover:border-gray-400 transition-colors"
+              >
+                Skip — generate my report now
+              </button>
+            </div>
           </div>
         </div>
       </div>
@@ -1427,28 +1528,41 @@ function ROIReportInner({ isEmployee }) {
                 ))}
               </div>
 
-              <div className="flex items-center gap-2">
-                {IS_DEV && step === TOTAL_STEPS && (
+              <div className="flex flex-col items-end gap-1">
+                <div className="flex items-center gap-2">
+                  {IS_DEV && step === TOTAL_STEPS && (
+                    <button
+                      type="button"
+                      onClick={() => next({ skipLLM: true })}
+                      className="px-5 py-2 text-sm font-semibold text-gray-700 transition-colors bg-gray-100 rounded-lg hover:bg-gray-200"
+                    >
+                      Fast mock preview
+                    </button>
+                  )}
                   <button
                     type="button"
-                    onClick={() => next({ skipLLM: true })}
-                    className="px-5 py-2 text-sm font-semibold text-gray-700 transition-colors bg-gray-100 rounded-lg hover:bg-gray-200"
+                    onClick={() => next()}
+                    className="px-5 py-2 text-sm font-semibold text-white transition-colors rounded-lg shadow-sm"
+                    style={{ background: '#111827' }}
                   >
-                    Prepare mock assumptions
+                    {step === TOTAL_STEPS
+                      ? 'Review assumptions →'
+                      : 'Continue →'}
+                  </button>
+                </div>
+                {step === TOTAL_STEPS && (
+                  <button
+                    ref={questionnaireFeedbackRef}
+                    type="button"
+                    className="text-xs text-gray-400 hover:text-gray-600 transition-colors"
+                  >
+                    How was that?
                   </button>
                 )}
-                <button
-                  type="button"
-                  onClick={() => next()}
-                  className="px-5 py-2 text-sm font-semibold text-white transition-colors bg-gray-900 rounded-lg shadow-sm hover:bg-gray-700"
-                >
-                  {step === TOTAL_STEPS ? 'Review assumptions →' : 'Continue →'}
-                </button>
               </div>
             </div>
           </motion.div>
         </div>
-
       </div>
     </div>
   )

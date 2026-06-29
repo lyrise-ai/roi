@@ -1257,7 +1257,7 @@ function buildTools(
                 (s, w) => s + (w.rateOverride ?? state.globals!.laborRate),
                 0,
               ) / state.workflows.length
-            : state.globals?.laborRate ?? 45
+            : (state.globals?.laborRate ?? 45)
 
         const newWorkflow: WorkflowInput = {
           name: workflow.name,
@@ -1488,7 +1488,7 @@ function buildTools(
             ? 'all_workflows_and_global'
             : 'global_fallback_only',
           updated_workflow_rates: shouldSyncWorkflowRates
-            ? state.workflows?.length ?? 0
+            ? (state.workflows?.length ?? 0)
             : 0,
           new_od12: s?.operationalDividend12mo,
           new_tf12: s?.totalFinancialGain12mo,
@@ -1769,17 +1769,17 @@ function buildChatSystemPrompt(state: ReportState): string {
         : ''
       return `[${w.name}]
   Displayed: ${hrsBefore}→${hrsAfter} hrs/mo | ${
-        w.monthlyHours
-      } hrs saved | ${sym}${w.monthlyValue}/mo recaptured | ${sym}${
-        w.monthlyProfitUplift
-      }/mo profit uplift
+    w.monthlyHours
+  } hrs saved | ${sym}${w.monthlyValue}/mo recaptured | ${sym}${
+    w.monthlyProfitUplift
+  }/mo profit uplift
   Raw inputs (update_workflow): volume=${w.monthlyVolume}/mo | before=${
-        w.minutesPerItemBefore
-      }min | after=${w.minutesPerItemAfter}min | rate=${sym}${
-        w.effectiveRate
-      }/hr [${
-        w.seniorityLevel ?? 'mid'
-      }]${flooredNote}${sourceNote} | adoption=${w.adoptionRate}`
+    w.minutesPerItemBefore
+  }min | after=${w.minutesPerItemAfter}min | rate=${sym}${
+    w.effectiveRate
+  }/hr [${
+    w.seniorityLevel ?? 'mid'
+  }]${flooredNote}${sourceNote} | adoption=${w.adoptionRate}`
     })
     .join('\n\n')
 
@@ -2065,8 +2065,8 @@ export async function runReportAgent(params: {
     mode === 'finalize'
       ? { set_report_copy: allTools.set_report_copy }
       : (mode === 'generate' || mode === 'prepare') && stopAfterFinancialModel
-      ? (({ set_report_copy, ...prepareTools }) => prepareTools)(allTools)
-      : allTools
+        ? (({ set_report_copy, ...prepareTools }) => prepareTools)(allTools)
+        : allTools
 
   let system: string
   let messages: ModelMessage[]
@@ -2169,7 +2169,12 @@ ${
         callbacks.onError(
           part.error instanceof Error
             ? part.error
-            : new Error(String(part.error)),
+            : new Error(
+                part.error && typeof part.error === 'object'
+                  ? ((part.error as Record<string, unknown>)
+                      .message as string) || JSON.stringify(part.error)
+                  : String(part.error),
+              ),
         )
         return
       }

@@ -6,4 +6,4 @@ export const PIPELINE_LOG_TOOL_NAMES = [
   'set_report_copy',
 ] as const
 
-export const REPORT_CHAT_MESSAGE_LIMIT = 5
+export const REPORT_CHAT_MESSAGE_LIMIT = 10

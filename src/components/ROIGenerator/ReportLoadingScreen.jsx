@@ -1,4 +1,5 @@
 import { useEffect, useLayoutEffect, useMemo, useRef, useState } from 'react'
+import * as Sentry from '@sentry/nextjs'
 import { motion, AnimatePresence } from 'framer-motion'
 
 const PHASES = [
@@ -86,6 +87,7 @@ export default function ReportLoadingScreen({
   const startTime = useRef(new Date())
   const lastProcessedSseIndex = useRef(0)
   const lastLogAppendAt = useRef(0)
+  const proposalFeedbackRef = useRef(null)
 
   useEffect(() => {
     if (sseEvents.length === 0) {
@@ -304,6 +306,17 @@ export default function ReportLoadingScreen({
     }
   }, [isComplete, isFinalising, activePhase])
 
+  useEffect(() => {
+    if (!isComplete || !onOpen) return
+    const feedback = Sentry.getFeedback()
+    if (!feedback || !proposalFeedbackRef.current) return
+    const unsub = feedback.attachTo(proposalFeedbackRef.current, {
+      formTitle: 'Before you decide — anything unclear?',
+      tags: { 'feedback.source': 'proposal' },
+    })
+    return () => unsub?.()
+  }, [isComplete, onOpen])
+
   return (
     <div className="relative min-h-screen w-full bg-gray-50">
       {/* Progress bar */}
@@ -341,8 +354,8 @@ export default function ReportLoadingScreen({
                 {isComplete
                   ? 'Complete'
                   : isFinalising
-                  ? 'Finalising'
-                  : 'Processing'}
+                    ? 'Finalising'
+                    : 'Processing'}
               </span>
             </div>
             <span className="text-gray-200">|</span>
@@ -420,6 +433,32 @@ export default function ReportLoadingScreen({
             />
           </div>
 
+          {/* Open Profit Map CTA — shown when complete and a handler is provided */}
+          {isComplete && onOpen && (
+            <motion.div
+              initial={{ opacity: 0, y: 6 }}
+              animate={{ opacity: 1, y: 0 }}
+              transition={{ duration: 0.35, ease: [0.22, 1, 0.36, 1] }}
+              className="mt-5 flex flex-col items-stretch gap-2"
+            >
+              <button
+                type="button"
+                onClick={onOpen}
+                className="w-full rounded-lg py-3 text-sm font-semibold text-white transition-opacity hover:opacity-90"
+                style={{ background: '#5B48F8' }}
+              >
+                Open my Profit Map →
+              </button>
+              <button
+                ref={proposalFeedbackRef}
+                type="button"
+                className="text-xs text-gray-400 hover:text-gray-600 transition-colors py-1"
+              >
+                Before you decide — anything unclear?
+              </button>
+            </motion.div>
+          )}
+
           {/* Footer note */}
           <p className="font-poppins mt-1.5 text-[10px] text-gray-400 opacity-50">
             Your data is encrypted in transit and at rest.
@@ -447,8 +486,8 @@ function PhasePipeline({ phaseIndex }) {
                     (state === 'done'
                       ? 'text-gray-400'
                       : state === 'active'
-                      ? 'text-navy'
-                      : 'text-gray-300')
+                        ? 'text-navy'
+                        : 'text-gray-300')
                   }
                 >
                   {p.label}

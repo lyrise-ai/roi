@@ -26,6 +26,10 @@ import {
   sendReportEmail,
   DEFAULT_REPORT_BCC,
 } from '@/src/lib/roi/services/email'
+import {
+  isOpenAIQuotaError,
+  alertOpenAIQuotaError,
+} from '@/src/lib/roi/services/openaiQuotaAlert'
 import { createClient, createAdminClient } from '../../src/lib/supabase-server'
 import {
   buildStateFromReportRow,
@@ -40,6 +44,25 @@ export const config = {
 }
 
 const IS_DEV = process.env.NODE_ENV === 'development'
+
+// Translate raw errors into user-facing messages. Quota/rate-limit errors
+// from OpenAI should never expose billing details to the end user.
+function friendlyErrorMessage(err) {
+  const msg = err?.message ?? ''
+  // Use the precise quota detector from openaiQuotaAlert if the error is an
+  // Error instance; fall back to keyword checks for plain objects / strings.
+  const isQuota =
+    isOpenAIQuotaError(err) ||
+    err?.status === 429 ||
+    err?.statusCode === 429 ||
+    msg.includes('429') ||
+    msg.includes('rate limit') ||
+    msg.includes('rate_limit')
+  if (isQuota) {
+    return "We're experiencing high demand right now — please try again in a few minutes."
+  }
+  return msg || 'Something went wrong. Please try again.'
+}
 
 function send(res, event) {
   // Once the connection is closed, writing throws (EPIPE) — silently drop.
@@ -406,7 +429,7 @@ export default async function handler(req, res) {
       .limit(20)
     if (!isEmployeeChat) msgQuery = msgQuery.eq('user_id', user.id)
     const { data: messages } = await msgQuery
-    chatUserRole = isEmployeeChat ? 'EMPLOYEE' : userData?.role ?? 'CLIENT'
+    chatUserRole = isEmployeeChat ? 'EMPLOYEE' : (userData?.role ?? 'CLIENT')
 
     if (!report || (report.user_id !== user.id && !isEmployeeChat)) {
       res.status(403).json({ error: 'Unauthorized' })
@@ -671,7 +694,15 @@ export default async function handler(req, res) {
           onUsage: (summary) => {
             capturedUsage = summary
           },
-          onError: (err) => send(res, { type: 'error', message: err.message }),
+          onError: (err) => {
+            if (isOpenAIQuotaError(err)) {
+              alertOpenAIQuotaError(err, {
+                company: state?.normInput?.companyName ?? null,
+                mode,
+              })
+            }
+            send(res, { type: 'error', message: friendlyErrorMessage(err) })
+          },
         },
       })
     }
@@ -1072,7 +1103,14 @@ export default async function handler(req, res) {
     }
   } catch (err) {
     console.error('[roi-agent] Error:', err)
-    send(res, { type: 'error', message: err?.message ?? 'Unknown error' })
+    if (isOpenAIQuotaError(err)) {
+      alertOpenAIQuotaError(err, {
+        company:
+          req.body?.formData?.companyName ?? req.body?.companyName ?? null,
+        mode: req.body?.mode ?? null,
+      })
+    }
+    send(res, { type: 'error', message: friendlyErrorMessage(err) })
   }
 
   res.end()

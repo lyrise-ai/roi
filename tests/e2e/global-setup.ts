@@ -28,7 +28,7 @@ export default async function globalSetup(_config: FullConfig) {
 
   try {
     await page.goto('http://localhost:3777/auth/login')
-    await page.fill('[placeholder="Email"]', email)
+    await page.fill('[placeholder="Work email"]', email)
     await page.fill('[placeholder="Password"]', password)
     await page.click('button[type="submit"]')
     // Wait for the post-login redirect — dashboard is the standard destination

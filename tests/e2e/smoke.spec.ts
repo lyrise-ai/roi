@@ -41,12 +41,12 @@ test.describe('login page @smoke', () => {
   })
 
   test('shows email and password inputs', async ({ page }) => {
-    await expect(page.getByPlaceholder('Email')).toBeVisible()
+    await expect(page.getByPlaceholder('Work email')).toBeVisible()
     await expect(page.getByPlaceholder('Password')).toBeVisible()
   })
 
   test('log-in button is present and enabled', async ({ page }) => {
-    const btn = page.getByRole('button', { name: /log in/i })
+    const btn = page.getByRole('button', { name: /sign in/i })
     await expect(btn).toBeVisible()
     await expect(btn).toBeEnabled()
   })
