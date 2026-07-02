@@ -518,22 +518,61 @@ export default function ReportPage({
             <div
               style={{
                 position: 'absolute',
-                bottom: '110%',
-                left: 0,
-                textAlign: 'left',
-                whiteSpace: 'nowrap',
-                background: 'none',
-                border: 'none',
-                color: '#5B48F8',
-                fontFamily: 'ui-monospace, SFMono-Regular, monospace',
-                fontSize: '11px',
-                fontWeight: 600,
-                letterSpacing: '0.06em',
+                bottom: 'calc(100% + 8px)',
+                left: '50%',
                 opacity: showNudge ? 1 : 0,
                 transition: 'opacity 0.3s ease',
               }}
             >
-              share your feedback ↑
+              <svg
+                width="44"
+                height="38"
+                viewBox="0 0 44 38"
+                fill="none"
+                style={{
+                  animation: 'alpha-bubble-float 1.8s ease-in-out infinite',
+                }}
+              >
+                <rect
+                  x="1"
+                  y="1"
+                  width="42"
+                  height="28"
+                  rx="8"
+                  fill="#5B48F8"
+                />
+                <polygon points="16,28 22,36 28,28" fill="#5B48F8" />
+                <circle
+                  cx="12"
+                  cy="15"
+                  r="3"
+                  fill="#fff"
+                  style={{
+                    animation: 'alpha-dot-bounce 1.4s ease-in-out infinite',
+                    animationDelay: '0s',
+                  }}
+                />
+                <circle
+                  cx="22"
+                  cy="15"
+                  r="3"
+                  fill="#fff"
+                  style={{
+                    animation: 'alpha-dot-bounce 1.4s ease-in-out infinite',
+                    animationDelay: '0.15s',
+                  }}
+                />
+                <circle
+                  cx="32"
+                  cy="15"
+                  r="3"
+                  fill="#fff"
+                  style={{
+                    animation: 'alpha-dot-bounce 1.4s ease-in-out infinite',
+                    animationDelay: '0.3s',
+                  }}
+                />
+              </svg>
             </div>
             <button
               ref={feedbackButtonRef}
@@ -566,7 +605,15 @@ export default function ReportPage({
           <style>{`
             @keyframes alpha-btn-glow {
               0%, 100% { box-shadow: 0 4px 14px rgba(91,72,248,0.35); }
-              50% { box-shadow: 0 4px 24px rgba(91,72,248,0.7), 0 0 0 6px rgba(91,72,248,0.15); }
+              50% { box-shadow: 0 4px 32px rgba(91,72,248,0.85), 0 0 0 10px rgba(91,72,248,0.2); }
+            }
+            @keyframes alpha-dot-bounce {
+              0%, 80%, 100% { transform: translateY(0); }
+              40% { transform: translateY(-4px); }
+            }
+            @keyframes alpha-bubble-float {
+              0%, 100% { transform: translateX(-50%) translateY(0); }
+              50% { transform: translateX(-50%) translateY(-5px); }
             }
           `}</style>
 
