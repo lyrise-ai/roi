@@ -220,6 +220,8 @@ export default function ReportPage({
   const [clarityHover, setClarityHover] = useState(0)
   const [chatHover, setChatHover] = useState(0)
   const [tourExitSubmitting, setTourExitSubmitting] = useState(false)
+  const [showNudge, setShowNudge] = useState(false)
+  const [scrolled, setScrolled] = useState(false)
 
   // FIX 1 — Inject "📖 Terminology Guide" button into the ReportViewer toolbar,
   // next to the existing "Take a tour" (?) button. Uses a window bridge so the
@@ -272,6 +274,75 @@ export default function ReportPage({
       document.querySelector('button[title="Take a tour"]')?.click()
     }, 800)
     return () => clearTimeout(t)
+  }, [isAlpha])
+
+  // Periodically nudge the tester to share feedback via a small tooltip
+  // above the Share feedback button.
+  useEffect(() => {
+    if (!isAlpha) return undefined
+    const interval = setInterval(() => {
+      setShowNudge(true)
+      setTimeout(() => setShowNudge(false), 3000)
+    }, 20000)
+    return () => clearInterval(interval)
+  }, [isAlpha])
+
+  // Trigger a glow on the Share feedback button once the tester has
+  // scrolled through most of the report. The report itself scrolls inside
+  // the iframe (the outer window doesn't), so we reach into the iframe's
+  // document once it's loaded rather than listening on window.
+  useEffect(() => {
+    if (!isAlpha) return undefined
+
+    let scrollEl = null
+
+    const onScroll = () => {
+      if (!scrollEl) return
+      if (
+        (scrollEl.scrollTop + scrollEl.clientHeight) / scrollEl.scrollHeight >=
+        0.8
+      ) {
+        console.log('scroll threshold reached')
+        setScrolled(true)
+        scrollEl.ownerDocument?.removeEventListener('scroll', onScroll)
+      }
+    }
+
+    const attachToIframe = (iframe) => {
+      const onLoad = () => {
+        const doc = iframe.contentDocument
+        if (!doc) return
+        scrollEl = doc.documentElement
+        doc.addEventListener('scroll', onScroll)
+      }
+      iframe.addEventListener('load', onLoad)
+      // The iframe may already be loaded by the time we find it
+      if (iframe.contentDocument?.readyState === 'complete') onLoad()
+      return () => iframe.removeEventListener('load', onLoad)
+    }
+
+    let detachLoadListener = null
+    const findIframe = () => {
+      const iframe = document.querySelector(
+        'iframe[title="ROI Report Preview"]',
+      )
+      if (!iframe) return false
+      detachLoadListener = attachToIframe(iframe)
+      return true
+    }
+
+    let poll = null
+    if (!findIframe()) {
+      poll = setInterval(() => {
+        if (findIframe()) clearInterval(poll)
+      }, 300)
+    }
+
+    return () => {
+      if (poll) clearInterval(poll)
+      detachLoadListener?.()
+      scrollEl?.ownerDocument?.removeEventListener('scroll', onScroll)
+    }
   }, [isAlpha])
 
   // Track that the tester reached and loaded the report page
@@ -436,14 +507,68 @@ export default function ReportPage({
           )}
 
           {/* Finish tour button — left side, clear of chat panel */}
-          <button
-            ref={feedbackButtonRef}
-            type="button"
-            onClick={() => setShowTourExit(true)}
-            className="fixed left-4 bottom-24 z-50 bg-blue-600 text-white rounded-xl px-4 py-3 shadow-lg text-sm font-semibold hover:bg-blue-700 transition-colors"
+          <div
+            style={{
+              position: 'fixed',
+              left: '16px',
+              bottom: '96px',
+              zIndex: 50,
+            }}
           >
-            Share feedback →
-          </button>
+            <div
+              style={{
+                position: 'absolute',
+                bottom: '110%',
+                left: 0,
+                textAlign: 'left',
+                whiteSpace: 'nowrap',
+                background: 'none',
+                border: 'none',
+                color: '#5B48F8',
+                fontFamily: 'ui-monospace, SFMono-Regular, monospace',
+                fontSize: '11px',
+                fontWeight: 600,
+                letterSpacing: '0.06em',
+                opacity: showNudge ? 1 : 0,
+                transition: 'opacity 0.3s ease',
+              }}
+            >
+              share your feedback ↑
+            </div>
+            <button
+              ref={feedbackButtonRef}
+              type="button"
+              onClick={() => setShowTourExit(true)}
+              style={{
+                background: '#5B48F8',
+                color: '#fff',
+                borderRadius: '12px',
+                padding: '10px 16px',
+                fontSize: '14px',
+                fontWeight: 600,
+                border: 'none',
+                cursor: 'pointer',
+                boxShadow: '0 4px 14px rgba(91,72,248,0.35)',
+                ...(scrolled
+                  ? { animation: 'alpha-btn-glow 2s ease-in-out infinite' }
+                  : {}),
+              }}
+              onMouseEnter={(e) => {
+                e.currentTarget.style.background = '#4a3ce8'
+              }}
+              onMouseLeave={(e) => {
+                e.currentTarget.style.background = '#5B48F8'
+              }}
+            >
+              Share feedback →
+            </button>
+          </div>
+          <style>{`
+            @keyframes alpha-btn-glow {
+              0%, 100% { box-shadow: 0 4px 14px rgba(91,72,248,0.35); }
+              50% { box-shadow: 0 4px 24px rgba(91,72,248,0.7), 0 0 0 6px rgba(91,72,248,0.15); }
+            }
+          `}</style>
 
           {/* Tour-exit modal — collect report clarity + chat rating before redirecting */}
           {showTourExit && (
