@@ -1,4 +1,4 @@
-import { useEffect, useState } from 'react'
+import { useEffect, useRef, useState } from 'react'
 import Head from 'next/head'
 import { createClient, createAdminClient } from '../../src/lib/supabase-server'
 import { createClient as createBrowserClient } from '../../src/lib/supabase-browser'
@@ -211,8 +211,10 @@ export default function ReportPage({
   // Controls the terminology guide dropdown panel
   const [guideOpen, setGuideOpen] = useState(false)
 
-  // Tour-exit modal state — shown when tester clicks "Finish tour"
+  // Tour-exit modal state — shown when tester clicks "Share feedback"
   const [showTourExit, setShowTourExit] = useState(false)
+  // Shared with ReportViewer so tour step 5 can spotlight this exact button
+  const feedbackButtonRef = useRef(null)
   const [reportClarity, setReportClarity] = useState(0)
   const [chatRating, setChatRating] = useState(0)
   const [clarityHover, setClarityHover] = useState(0)
@@ -392,6 +394,7 @@ export default function ReportPage({
           shareToken={shareToken}
           forceTour={isShareLink}
           backHref={isShareLink ? null : '/dashboard'}
+          feedbackButtonRef={feedbackButtonRef}
         />
       </motion.div>
 
@@ -434,11 +437,12 @@ export default function ReportPage({
 
           {/* Finish tour button — left side, clear of chat panel */}
           <button
+            ref={feedbackButtonRef}
             type="button"
             onClick={() => setShowTourExit(true)}
             className="fixed left-4 bottom-24 z-50 bg-blue-600 text-white rounded-xl px-4 py-3 shadow-lg text-sm font-semibold hover:bg-blue-700 transition-colors"
           >
-            🎉 Finish tour →
+            Share feedback →
           </button>
 
           {/* Tour-exit modal — collect report clarity + chat rating before redirecting */}

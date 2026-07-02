@@ -131,6 +131,7 @@ export default function ReportViewer({
   isShareLink = false,
   shareToken = null,
   forceTour = false,
+  feedbackButtonRef: feedbackButtonRefProp = null,
 }) {
   const [reportState, setReportState] = useState(initialState)
   const [htmlLoading, setHtmlLoading] = useState(
@@ -174,6 +175,8 @@ export default function ReportViewer({
   const downloadRef = useRef(null)
   const resendEmailRef = useRef(null)
   const chatPanelRef = useRef(null)
+  const localFeedbackButtonRef = useRef(null)
+  const feedbackButtonRef = feedbackButtonRefProp ?? localFeedbackButtonRef
 
   // Share-link recipient tracking: when a prospect opens "Edit with chat" from
   // the email, record the open and how long they spend on the page (the chat
@@ -219,6 +222,7 @@ export default function ReportViewer({
     'Full Analysis',
     'Export & Share',
     'Refine with AI',
+    'Share Feedback',
   ]
 
   const TOUR_STEPS = [
@@ -247,6 +251,12 @@ export default function ReportViewer({
       body: 'Ask the assistant to change the currency, add a workflow, adjust an assumption, or rewrite any section. The report updates in real time — every edit is tracked so you can resend the latest version.',
       placement: 'left',
       targetRef: chatPanelRef,
+    },
+    {
+      title: 'Share your feedback',
+      body: 'Once you finish exploring the report, click "Share feedback" below. Your thoughts help us improve the product before launch.',
+      placement: 'top',
+      targetRef: feedbackButtonRef,
     },
   ]
 
@@ -640,6 +650,12 @@ export default function ReportViewer({
       return {
         top: Math.max(8, rect.top + 24),
         left: Math.max(16, rect.left - w - gap),
+      }
+    }
+    if (placement === 'top') {
+      return {
+        bottom: window.innerHeight - rect.top + gap,
+        left: Math.max(8, rect.left),
       }
     }
     return { top: rect.top + rect.height + gap, left: rect.left }
