@@ -140,7 +140,7 @@ export default function AlphaSurvey() {
     ? isDisappointed
       ? 1 + FOLLOW_UP_QUESTIONS.length // 5 total
       : 2 // Q1 + alt
-    : 1
+    : 1 + FOLLOW_UP_QUESTIONS.length // before Q1 is answered, show the max possible total
 
   const activeQuestion = questions[currentQ]
   const isLastQuestion = currentQ === questions.length - 1
