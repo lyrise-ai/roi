@@ -3,6 +3,8 @@ import Link from 'next/link'
 import { useState, useEffect } from 'react'
 import { useRouter } from 'next/router'
 import { FaTrash } from 'react-icons/fa'
+import { toast, ToastContainer } from 'react-toastify'
+import 'react-toastify/dist/ReactToastify.css'
 import {
   createClient as createServerClient,
   createAdminClient,
@@ -12,9 +14,9 @@ import MainHeader from '../src/layout/MainHeader/index'
 import { getRoleForUser } from '../src/lib/authHelpers'
 import AlphaDashboardPanel from '../src/components/AlphaDashboardPanel'
 import ErrorBoundary from '../src/components/shared/ErrorBoundary'
+import { INTER_FONT_FAMILY } from '../src/utilities/fonts'
 
-const FONT =
-  "'Inter', -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif"
+const FONT = INTER_FONT_FAMILY
 
 const STATUS_STYLES = {
   SUCCESS: { bg: '#F0FDF4', color: '#15803D', label: 'Done' },
@@ -335,7 +337,6 @@ function DashboardInner({
   const router = useRouter()
   const [reports, setReports] = useState(initialReports)
   const [confirmingId, setConfirmingId] = useState(null)
-  const [deletingId, setDeletingId] = useState(null)
   const [navigatingId, setNavigatingId] = useState(null)
   const [activeTab, setActiveTab] = useState('Reports')
   const [hoveredRowId, setHoveredRowId] = useState(null)
@@ -348,7 +349,7 @@ function DashboardInner({
   useEffect(() => {
     if (localStorage.getItem('alpha_redirect_pending') === 'true') {
       localStorage.removeItem('alpha_redirect_pending')
-      window.location.href = '/roi-report?alpha=alpha123'
+      router.push('/roi-report?alpha=alpha123')
     }
   }, [])
 
@@ -362,15 +363,24 @@ function DashboardInner({
   }
 
   const handleDelete = async (id) => {
-    setDeletingId(id)
+    setConfirmingId(null)
+    const removedIndex = reports.findIndex((r) => r.id === id)
+    const removedReport = reports[removedIndex]
+    // Optimistic: remove the row immediately and roll back if the request
+    // fails, instead of leaving it in a disabled "Deleting…" state for the
+    // full round trip.
+    setReports((prev) => prev.filter((r) => r.id !== id))
     try {
       const res = await fetch(`/api/reports/${id}`, { method: 'DELETE' })
-      if (res.ok) {
-        setReports((prev) => prev.filter((r) => r.id !== id))
-      }
-    } finally {
-      setDeletingId(null)
-      setConfirmingId(null)
+      if (!res.ok) throw new Error('Delete failed')
+    } catch {
+      setReports((prev) => {
+        if (prev.some((r) => r.id === id)) return prev
+        const next = [...prev]
+        next.splice(removedIndex, 0, removedReport)
+        return next
+      })
+      toast.error('Failed to delete report. Please try again.')
     }
   }
 
@@ -381,6 +391,7 @@ function DashboardInner({
       style={{ minHeight: '100vh', background: '#E2DED8', fontFamily: FONT }}
     >
       <style>{`@keyframes spin { to { transform: rotate(360deg); } }`}</style>
+      <ToastContainer position="top-right" autoClose={5000} theme="light" />
       <MainHeader />
       <Head>
         <title>
@@ -767,25 +778,18 @@ function DashboardInner({
                                   <button
                                     type="button"
                                     onClick={() => handleDelete(r.id)}
-                                    disabled={deletingId === r.id}
                                     style={{
                                       fontSize: 12,
                                       fontWeight: 600,
                                       color: '#DC2626',
                                       background: 'none',
                                       border: 'none',
-                                      cursor:
-                                        deletingId === r.id
-                                          ? 'not-allowed'
-                                          : 'pointer',
+                                      cursor: 'pointer',
                                       fontFamily: FONT,
                                       padding: 0,
-                                      opacity: deletingId === r.id ? 0.5 : 1,
                                     }}
                                   >
-                                    {deletingId === r.id
-                                      ? 'Deleting…'
-                                      : 'Confirm'}
+                                    Confirm
                                   </button>
                                   <button
                                     type="button"

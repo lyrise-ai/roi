@@ -26,6 +26,7 @@ import KeyboardArrowUpIcon from '@mui/icons-material/KeyboardArrowUp'
 import { createRouteClient } from '../../src/lib/supabaseRouteClient'
 import { createAdminClient } from '../../src/lib/supabase-server'
 import { fmtDateTime } from '../../src/utilities/formatDateTime'
+import { INTER_FONT_FAMILY } from '../../src/utilities/fonts'
 
 // ── Server-side employee gate ─────────────────────────────────────────────────
 // Non-employees never receive the page (redirected to login). Mirrors the auth
@@ -122,8 +123,7 @@ export default function UsageDashboard() {
           minHeight: '100vh',
           bgcolor: '#E2DED8',
           p: { xs: 2, md: 4 },
-          fontFamily:
-            "'Inter', -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif",
+          fontFamily: INTER_FONT_FAMILY,
         }}
       >
         <Box
@@ -142,8 +142,7 @@ export default function UsageDashboard() {
               fontWeight={700}
               color="#0F172A"
               sx={{
-                fontFamily:
-                  "'Inter', -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif",
+                fontFamily: INTER_FONT_FAMILY,
                 letterSpacing: '-0.3px',
               }}
             >
@@ -153,8 +152,7 @@ export default function UsageDashboard() {
               variant="body2"
               color="#6B7280"
               sx={{
-                fontFamily:
-                  "'Inter', -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif",
+                fontFamily: INTER_FONT_FAMILY,
               }}
             >
               LLM cost &amp; time per report
@@ -221,8 +219,7 @@ export default function UsageDashboard() {
                   fontWeight: 600,
                   fontSize: 14,
                   color: '#6B7280',
-                  fontFamily:
-                    "'Inter', -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif",
+                  fontFamily: INTER_FONT_FAMILY,
                 },
                 '& .Mui-selected': { color: '#0F172A' },
                 '& .MuiTabs-indicator': { backgroundColor: '#5B48F8' },
@@ -552,8 +549,7 @@ function StatCard({ label, value, accent }) {
             letterSpacing: '0.06em',
             color: '#9CA3AF',
             fontWeight: 600,
-            fontFamily:
-              "'Inter', -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif",
+            fontFamily: INTER_FONT_FAMILY,
           }}
         >
           {label}
@@ -564,8 +560,7 @@ function StatCard({ label, value, accent }) {
           sx={{
             mt: 0.5,
             color: '#0F172A',
-            fontFamily:
-              "'Inter', -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif",
+            fontFamily: INTER_FONT_FAMILY,
           }}
         >
           {value}

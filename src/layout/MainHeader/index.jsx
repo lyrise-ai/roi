@@ -1,13 +1,12 @@
-import React, { useEffect, useState } from 'react'
+import React from 'react'
 import Image from 'next/legacy/image'
 import Link from 'next/link'
-import * as Sentry from '@sentry/nextjs'
 import Logo from '../../assets/rebranding/logo_black.svg'
 import { scrollToSection } from '../../utilities/helpers'
 import MainHeaderMobile from './MainHeaderMobile'
 import { useRouter, usePathname } from 'next/navigation'
 import styles from './styles.module.css'
-import { createClient } from '../../lib/supabase-browser'
+import { useAuthSession } from '../../context/AuthSessionContext'
 
 const BUTTONS = [
   {
@@ -26,15 +25,15 @@ const NAVIGATIONS = [
   },
 ]
 
-export default function MainHeader({ user = null }) {
+export default function MainHeader() {
   const router = useRouter()
 
-  const handleSignOut = async () => {
-    await fetch('/api/auth/logout', {
-      method: 'POST',
-      credentials: 'include',
-    })
-    window.location.href = '/'
+  const handleSignOut = () => {
+    // Optimistic: leave the page immediately via client-side navigation and
+    // let the logout request clear the session cookie in the background —
+    // the user is navigating away regardless of its result.
+    fetch('/api/auth/logout', { method: 'POST', credentials: 'include' })
+    router.push('/')
   }
 
   const navigate = (path) => {
@@ -45,22 +44,9 @@ export default function MainHeader({ user = null }) {
   const isRoiPage =
     pathname === '/roi-report' || pathname?.startsWith('/report/')
 
-  const [isClient, setIsClient] = useState(false)
-  const [isEmployee, setIsEmployee] = useState(false)
-
-  useEffect(() => {
-    const supabase = createClient()
-    supabase.auth.getUser().then(({ data: { user } }) => {
-      const employee = user?.email?.endsWith('@lyrise.ai') ?? false
-      setIsClient(!!user && !employee)
-      setIsEmployee(employee)
-      if (user) {
-        Sentry.setUser({ id: user.id, email: user.email })
-      } else {
-        Sentry.setUser(null)
-      }
-    })
-  }, [])
+  const { user } = useAuthSession()
+  const isEmployee = user?.email?.endsWith('@lyrise.ai') ?? false
+  const isClient = !!user && !isEmployee
 
   return (
     <header className="px-2 py-4 mt-3 mb-10 sm:px-10 lg:mb-0">
