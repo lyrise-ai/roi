@@ -23,5 +23,13 @@ create unique index if not exists alpha_invites_token_key
 create index if not exists alpha_invites_email_idx
   on public.alpha_invites (email);
 
+-- At most one active (non-revoked) invite per email. The API also checks
+-- this before inserting, but the partial unique index is what actually
+-- closes the race between two concurrent "generate" clicks for the same
+-- email.
+create unique index if not exists alpha_invites_active_email_key
+  on public.alpha_invites (email)
+  where revoked_at is null;
+
 -- Service-role only (admin API routes) — no client-facing policies.
 alter table public.alpha_invites enable row level security;

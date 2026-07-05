@@ -94,6 +94,7 @@ export default function AlphaInvite() {
 
       if (!res.ok) {
         setError(data.error || 'Something went wrong.')
+        if (res.status === 409) await loadInvites()
         return
       }
       setEmail('')

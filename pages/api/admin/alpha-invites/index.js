@@ -3,13 +3,19 @@ import { createRouteClient } from '../../../../src/lib/supabaseRouteClient'
 import { getRoleForUser } from '../../../../src/lib/authHelpers'
 import { supabaseAdmin } from '../../../../src/lib/supabaseAdmin'
 
+// Prefer the request's own host over NEXT_PUBLIC_BASE_URL: the header always
+// matches whatever domain actually served this request (production, a Vercel
+// preview deploy, or localhost), whereas the env var is one fixed value per
+// environment and easy to leave stale (e.g. copied from .env.local).
 function buildBaseUrl(req) {
-  const explicit = process.env.NEXT_PUBLIC_BASE_URL
-  const host = req.headers?.host
-  const proto =
-    req.headers?.['x-forwarded-proto'] ||
-    (host && host.startsWith('localhost') ? 'http' : 'https')
-  return explicit ?? (host ? `${proto}://${host}` : 'https://lyrise.ai')
+  const host = req.headers?.['x-forwarded-host'] || req.headers?.host
+  if (host) {
+    const proto =
+      req.headers?.['x-forwarded-proto'] ||
+      (host.startsWith('localhost') ? 'http' : 'https')
+    return `${proto}://${host}`
+  }
+  return process.env.NEXT_PUBLIC_BASE_URL ?? 'https://lyrise.ai'
 }
 
 export default async function handler(req, res) {
@@ -60,6 +66,21 @@ export default async function handler(req, res) {
 
     const normalizedEmail = email.trim().toLowerCase()
     const trimmedName = fullName ? String(fullName).trim() : null
+
+    const { data: existingActive } = await supabaseAdmin
+      .from('alpha_invites')
+      .select('id')
+      .eq('email', normalizedEmail)
+      .is('revoked_at', null)
+      .maybeSingle()
+
+    if (existingActive) {
+      res.status(409).json({
+        error:
+          'An active invite already exists for this email. Revoke it below before creating a new one.',
+      })
+      return
+    }
 
     // generateLink creates the auth user if they don't exist yet and returns
     // their id either way. We don't use the link it returns (it's a
@@ -112,6 +133,15 @@ export default async function handler(req, res) {
       .single()
 
     if (insertError) {
+      // 23505 = unique_violation — caught by alpha_invites_active_email_key
+      // when two requests for the same email race past the check above.
+      if (insertError.code === '23505') {
+        res.status(409).json({
+          error:
+            'An active invite already exists for this email. Revoke it below before creating a new one.',
+        })
+        return
+      }
       res.status(500).json({ error: insertError.message })
       return
     }
