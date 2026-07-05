@@ -997,24 +997,7 @@ function sseEventToLogLine(event) {
 
 // ── Server-side auth / alpha detection ───────────────────────────────────────
 
-export async function getServerSideProps({ req, res, query }) {
-  if (query.alpha) {
-    const { createClient } = await import('../src/lib/supabase-server')
-    const supabase = createClient(req, res)
-    const {
-      data: { user },
-    } = await supabase.auth.getUser()
-    if (!user) {
-      return {
-        redirect: {
-          destination: '/auth/login?next=%2Froi-report%3Falpha%3Dalpha123',
-          permanent: false,
-        },
-      }
-    }
-    return { props: { isEmployee: false, isAlpha: true } }
-  }
-
+export async function getServerSideProps({ req, res }) {
   const { createClient, createAdminClient } =
     await import('../src/lib/supabase-server')
   const supabase = createClient(req, res)
@@ -1024,6 +1007,14 @@ export async function getServerSideProps({ req, res, query }) {
 
   if (!user) {
     return { redirect: { destination: '/auth/login', permanent: false } }
+  }
+
+  // Alpha status lives on the Supabase user (set at magic-link generation
+  // time, see /api/admin/generate-alpha-link) rather than a URL param, so it
+  // survives sign-in redirects and the whole form -> generate -> report flow.
+  const isAlpha = user.user_metadata?.alpha === true
+  if (isAlpha) {
+    return { props: { isEmployee: false, isAlpha: true } }
   }
 
   const admin = createAdminClient()
@@ -1179,13 +1170,9 @@ export default function ROIReport({ isEmployee, isAlpha }) {
         })
 
         if (response.status === 401) {
-          // Set localStorage flag as last-resort fallback for dashboard recovery.
-          // Primary recovery is the auth_next cookie set by login.js.
-          if (isAlpha) {
-            try {
-              localStorage.setItem('alpha_redirect_pending', 'true')
-            } catch {}
-          }
+          // Alpha status lives on the user record, so re-authenticating and
+          // landing back on this page (via `next`) is enough to resume —
+          // no need to round-trip anything through the URL or localStorage.
           const next = encodeURIComponent(
             window.location.pathname + window.location.search,
           )
@@ -1226,11 +1213,7 @@ export default function ROIReport({ isEmployee, isAlpha }) {
                 err,
               )
             }
-            router.push(
-              isAlpha
-                ? `/report/${data.report_id}?alpha=true`
-                : `/report/${data.report_id}`,
-            )
+            router.push(`/report/${data.report_id}`)
           }
           return
         }
@@ -1432,7 +1415,7 @@ export default function ROIReport({ isEmployee, isAlpha }) {
             viewState={viewState}
             onOpen={
               isAlpha && reportId
-                ? () => router.push(`/report/${reportId}?alpha=true`)
+                ? () => router.push(`/report/${reportId}`)
                 : undefined
             }
           />

@@ -51,3 +51,31 @@ export async function createUserRecord(
   if (error) return { error: error.message }
   return { error: null }
 }
+
+// Bootstraps the public.users row for a freshly-authenticated Supabase auth
+// user (first login via OAuth or magic link). Rolls back the auth user if
+// the app-level signup checks fail, since we don't want an orphaned auth
+// user with no matching users row.
+export async function ensureUserRecord(
+  userId: string,
+  email: string,
+  options: { skipWhitelist?: boolean } = {},
+): Promise<{ role: Role | null; error: string | null }> {
+  const { role: existingRole, error: roleError } = await getRoleForUser(userId)
+  if (roleError) return { role: null, error: roleError }
+  if (existingRole) return { role: existingRole, error: null }
+
+  const { allowed, role, error: checkError } = await canSignUp(email, options)
+  if (!allowed || checkError) {
+    await supabaseAdmin.auth.admin.deleteUser(userId)
+    return { role: null, error: checkError || 'email not authorized' }
+  }
+
+  const { error: insertError } = await createUserRecord(email, userId, role)
+  if (insertError) {
+    await supabaseAdmin.auth.admin.deleteUser(userId)
+    return { role: null, error: insertError }
+  }
+
+  return { role, error: null }
+}

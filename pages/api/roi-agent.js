@@ -161,7 +161,6 @@ export default async function handler(req, res) {
     reportId,
     emailOverride,
     shareToken,
-    isAlpha,
   } = req.body
 
   if (!mode || !['generate', 'chat'].includes(mode)) {
@@ -205,6 +204,11 @@ export default async function handler(req, res) {
       return
     }
   }
+
+  // Alpha status is derived from the authenticated user's own metadata, not
+  // client input — it's set once at magic-link generation time and can't be
+  // spoofed via the request body.
+  const isAlpha = user?.user_metadata?.alpha === true
 
   if (mode === 'chat' && !isShareLinkChat) {
     if (!reportId) {
