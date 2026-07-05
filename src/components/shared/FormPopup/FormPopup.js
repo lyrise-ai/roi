@@ -29,6 +29,7 @@ import { useRouter } from 'next/router'
 import * as api from '../../../services/employer.services'
 import styles from './FormPopup.module.css'
 import MyTypography from './MyTypography'
+import LoadingButton from '../Button/LoadingButton'
 
 const MuiTelComp = styled(MuiTelInput)`
   & .MuiInputBase-root {
@@ -82,7 +83,10 @@ export default function FormPopup({ open, handleClose, location }) {
     resolver: yupResolver(signupSchema),
   })
 
+  const [isSubmitting, setIsSubmitting] = React.useState(false)
+
   const onSubmitHandler = async (signupData) => {
+    setIsSubmitting(true)
     try {
       await api.employerSignUp(signupData)
       toast.success('Successfully signed up!', {
@@ -113,6 +117,8 @@ export default function FormPopup({ open, handleClose, location }) {
           position: messagePosition,
         })
       }
+    } finally {
+      setIsSubmitting(false)
     }
   }
   return (
@@ -397,10 +403,12 @@ export default function FormPopup({ open, handleClose, location }) {
             </Button>
           </Grid>
           <Grid item>
-            <Button
+            <LoadingButton
+              as={Button}
               autoFocus
               disableElevation
               variant="contained"
+              loading={isSubmitting}
               sx={{
                 width: '113px',
                 height: '52px',
@@ -414,7 +422,7 @@ export default function FormPopup({ open, handleClose, location }) {
               onClick={handleSubmit(onSubmitHandler)}
             >
               <Typography className={styles.form__button}>Submit</Typography>
-            </Button>
+            </LoadingButton>
           </Grid>
         </Grid>
       </DialogActions>

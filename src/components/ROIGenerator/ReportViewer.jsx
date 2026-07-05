@@ -4,6 +4,7 @@ import Link from 'next/link'
 import { drainSSE } from '@/src/lib/drainSSE'
 import { REPORT_CHAT_MESSAGE_LIMIT } from '@/src/lib/roi/constants'
 import { trackShareEvent } from '@/src/lib/trackShareEvent'
+import { INTER_FONT_FAMILY } from '@/src/utilities/fonts'
 
 const SUGGEST_RE = /\[SUGGEST:\s*([^\]]+)\]$/
 function parseSuggestions(content) {
@@ -670,8 +671,7 @@ export default function ReportViewer({
         display: 'flex',
         flexDirection: 'column',
         height: '100vh',
-        fontFamily:
-          "'Inter', -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif",
+        fontFamily: INTER_FONT_FAMILY,
         WebkitFontSmoothing: 'antialiased',
         MozOsxFontSmoothing: 'grayscale',
         textRendering: 'optimizeLegibility',

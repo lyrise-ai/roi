@@ -11,6 +11,7 @@ import '../styles/global.css'
 import { initAmplitude } from '../src/utilities/amplitude'
 import posthog from 'posthog-js'
 import { createClient as createBrowserClient } from '../src/lib/supabase-browser'
+import { AuthSessionContext } from '../src/context/AuthSessionContext'
 
 const clientSideEmotionCache = createEmotionCache()
 
@@ -87,11 +88,16 @@ export default function MyApp(props) {
     }
   }, [])
 
+  const [authUser, setAuthUser] = React.useState(null)
+  const [authReady, setAuthReady] = React.useState(false)
+
   React.useEffect(() => {
     const supabase = createBrowserClient()
     const {
       data: { subscription },
     } = supabase.auth.onAuthStateChange((_, session) => {
+      setAuthUser(session?.user ?? null)
+      setAuthReady(true)
       if (session?.user) {
         Sentry.setUser({ id: session.user.id, email: session.user.email })
       } else {
@@ -100,6 +106,11 @@ export default function MyApp(props) {
     })
     return () => subscription.unsubscribe()
   }, [])
+
+  const authSessionValue = React.useMemo(
+    () => ({ user: authUser, isReady: authReady }),
+    [authUser, authReady],
+  )
 
   return (
     <CacheProvider value={emotionCache}>
@@ -124,7 +135,9 @@ export default function MyApp(props) {
       <ThemeProvider theme={theme}>
         <CssBaseline />
         <NavigationProgress />
-        <Component {...pageProps} />
+        <AuthSessionContext.Provider value={authSessionValue}>
+          <Component {...pageProps} />
+        </AuthSessionContext.Provider>
       </ThemeProvider>
     </CacheProvider>
   )

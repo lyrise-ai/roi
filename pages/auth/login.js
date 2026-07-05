@@ -3,6 +3,8 @@ import { useRouter } from 'next/router'
 import Head from 'next/head'
 import { createRouteClient } from '../../src/lib/supabaseRouteClient'
 import { supabase } from '../../src/lib/supabase'
+import { INTER_FONT_FAMILY } from '../../src/utilities/fonts'
+import LoadingButton from '../../src/components/shared/Button/LoadingButton'
 
 export async function getServerSideProps({ req, res, query }) {
   const supabase = createRouteClient(req, res)
@@ -40,18 +42,24 @@ export default function Login({ next = '/dashboard' }) {
   const [email, setEmail] = useState('')
   const [password, setPassword] = useState('')
   const [loading, setLoading] = useState(false)
+  const [googleLoading, setGoogleLoading] = useState(false)
   const [error, setError] = useState('')
 
   const handleGoogleAuth = async () => {
+    setGoogleLoading(true)
     try {
       document.cookie = `auth_next=${encodeURIComponent(next)}; path=/; max-age=300; SameSite=Lax`
     } catch {}
-    await supabase.auth.signInWithOAuth({
-      provider: 'google',
-      options: {
-        redirectTo: `${window.location.origin}/auth/callback`,
-      },
-    })
+    try {
+      await supabase.auth.signInWithOAuth({
+        provider: 'google',
+        options: {
+          redirectTo: `${window.location.origin}/auth/callback`,
+        },
+      })
+    } finally {
+      setGoogleLoading(false)
+    }
   }
 
   const handleSubmit = async (e) => {
@@ -97,8 +105,7 @@ export default function Login({ next = '/dashboard' }) {
           justifyContent: 'center',
           background: '#E2DED8',
           padding: '24px 16px',
-          fontFamily:
-            "'Inter', -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif",
+          fontFamily: INTER_FONT_FAMILY,
         }}
       >
         <div
@@ -176,9 +183,11 @@ export default function Login({ next = '/dashboard' }) {
           </div>
 
           {/* Google OAuth */}
-          <button
+          <LoadingButton
             type="button"
             onClick={handleGoogleAuth}
+            loading={googleLoading}
+            loadingText="Connecting…"
             style={{
               width: '100%',
               display: 'flex',
@@ -192,11 +201,12 @@ export default function Login({ next = '/dashboard' }) {
               fontWeight: 500,
               color: '#0F172A',
               background: '#fff',
-              cursor: 'pointer',
+              cursor: googleLoading ? 'not-allowed' : 'pointer',
               fontFamily: 'inherit',
               marginBottom: 20,
               boxSizing: 'border-box',
               transition: 'border-color 0.15s',
+              opacity: googleLoading ? 0.7 : 1,
             }}
             onMouseEnter={(e) =>
               (e.currentTarget.style.borderColor = '#9CA3AF')
@@ -207,7 +217,7 @@ export default function Login({ next = '/dashboard' }) {
           >
             <GoogleIcon />
             Continue with Google
-          </button>
+          </LoadingButton>
 
           {/* Divider */}
           <div
@@ -296,9 +306,10 @@ export default function Login({ next = '/dashboard' }) {
               </p>
             )}
 
-            <button
+            <LoadingButton
               type="submit"
-              disabled={loading}
+              loading={loading}
+              loadingText="Please wait…"
               style={{
                 width: '100%',
                 background: loading ? '#A49CF4' : '#5B48F8',
@@ -315,12 +326,8 @@ export default function Login({ next = '/dashboard' }) {
                 transition: 'background 0.15s',
               }}
             >
-              {loading
-                ? 'Please wait…'
-                : mode === 'signup'
-                  ? 'Create account'
-                  : 'Sign in'}
-            </button>
+              {mode === 'signup' ? 'Create account' : 'Sign in'}
+            </LoadingButton>
           </form>
 
           {/* Mode toggle */}

@@ -1,18 +1,26 @@
 import React, { useState, useCallback, useEffect, useRef } from 'react'
 import Head from 'next/head'
+import dynamic from 'next/dynamic'
 import * as Sentry from '@sentry/nextjs'
 import { motion, AnimatePresence } from 'framer-motion'
 import { FaCheckCircle, FaStar } from 'react-icons/fa'
 import clsx from 'clsx'
 import MainHeader from '../src/layout/MainHeader'
-import ReportLoadingScreen from '../src/components/ROIGenerator/ReportLoadingScreen'
-import ReportViewer from '../src/components/ROIGenerator/ReportViewer'
-import GeneratingView from '../src/components/ROIGenerator/GeneratingView'
 import { drainSSE } from '../src/lib/drainSSE'
 import { PIPELINE_LOG_TOOL_NAMES } from '../src/lib/roi/constants'
 import { useRouter } from 'next/router'
 import { createClient as createBrowserClient } from '../src/lib/supabase-browser'
-import DemoReportViewer from '../src/components/ROIGenerator/DemoReportViewer'
+
+// Only one of these views is ever mounted at a time (see viewState below) —
+// dynamic-import them so a visitor only downloads the one they land on.
+const ReportLoadingScreen = dynamic(
+  () => import('../src/components/ROIGenerator/ReportLoadingScreen'),
+  { ssr: false },
+)
+const DemoReportViewer = dynamic(
+  () => import('../src/components/ROIGenerator/DemoReportViewer'),
+  { ssr: false },
+)
 
 // ── Constants ─────────────────────────────────────────────────────────────────
 
@@ -1181,7 +1189,7 @@ export default function ROIReport({ isEmployee, isAlpha }) {
           const next = encodeURIComponent(
             window.location.pathname + window.location.search,
           )
-          window.location.href = `/auth/login?next=${next}`
+          router.push(`/auth/login?next=${next}`)
           return
         }
 
@@ -1218,9 +1226,11 @@ export default function ROIReport({ isEmployee, isAlpha }) {
                 err,
               )
             }
-            window.location.href = isAlpha
-              ? `/report/${data.report_id}?alpha=true`
-              : `/report/${data.report_id}`
+            router.push(
+              isAlpha
+                ? `/report/${data.report_id}?alpha=true`
+                : `/report/${data.report_id}`,
+            )
           }
           return
         }
@@ -1486,6 +1496,12 @@ export default function ROIReport({ isEmployee, isAlpha }) {
                 onClick={() => setViewState(VIEW_STATES.DEMO)}
                 className="w-full px-5 py-3 text-sm font-semibold text-white rounded-lg transition-colors"
                 style={{ background: '#003f87' }}
+                onMouseEnter={(e) => {
+                  e.currentTarget.style.background = '#0a5bab'
+                }}
+                onMouseLeave={(e) => {
+                  e.currentTarget.style.background = '#003f87'
+                }}
               >
                 Show me the demo →
               </button>
@@ -1661,6 +1677,14 @@ export default function ROIReport({ isEmployee, isAlpha }) {
                         ? { background: '#5B48F8' }
                         : { background: '#111827' }
                     }
+                    onMouseEnter={(e) => {
+                      e.currentTarget.style.background =
+                        step === TOTAL_STEPS && isAlpha ? '#7A6BFA' : '#374151'
+                    }}
+                    onMouseLeave={(e) => {
+                      e.currentTarget.style.background =
+                        step === TOTAL_STEPS && isAlpha ? '#5B48F8' : '#111827'
+                    }}
                   >
                     {step === TOTAL_STEPS
                       ? isAlpha
