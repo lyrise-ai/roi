@@ -15,7 +15,7 @@ export async function getServerSideProps({ req, res, params, query }) {
   const admin = createAdminClient()
 
   const token = typeof query?.t === 'string' ? query.t : null
-  const isAlpha = query?.alpha === 'true'
+  let isAlpha = false
 
   // Always fetch the report once with its share fields so we can decide
   // whether to grant share-link access before requiring a Supabase session.
@@ -59,6 +59,7 @@ export async function getServerSideProps({ req, res, params, query }) {
     isEmployee = isEmployeeUser(user, userData)
     viewerUserId = user.id
     viewerEmail = user.email ?? null
+    isAlpha = user.user_metadata?.alpha === true
 
     if (!isEmployee && report.user_id !== user.id) {
       return { redirect: { destination: '/dashboard', permanent: false } }
@@ -129,6 +130,7 @@ export async function getServerSideProps({ req, res, params, query }) {
       email: report.email,
       reportId: report.id,
       isEmployee,
+      isAlpha,
       initialMessagesUsed,
       initialChatHistory,
       isShareLink,
@@ -138,7 +140,7 @@ export async function getServerSideProps({ req, res, params, query }) {
 }
 
 // ── Alpha terminology guide data ─────────────────────────────────────────────
-// Rendered in a toolbar dropdown when ?alpha=true is in the URL.
+// Rendered in a toolbar dropdown when the viewer is an alpha tester.
 const ALPHA_TERMS = [
   {
     term: 'Hours Returned',
@@ -198,15 +200,13 @@ export default function ReportPage({
   email,
   reportId,
   isEmployee,
+  isAlpha,
   initialMessagesUsed,
   initialChatHistory,
   isShareLink,
   shareToken,
 }) {
-  // Read the alpha flag from the URL client-side so we don't need to touch
-  // getServerSideProps. When present, show alpha-specific UI overlays.
-  const { query, push } = useRouter()
-  const isAlpha = query.alpha === 'true'
+  const { push } = useRouter()
 
   // Controls the terminology guide dropdown panel
   const [guideOpen, setGuideOpen] = useState(false)
@@ -265,7 +265,7 @@ export default function ReportPage({
     }
   }, [isAlpha])
 
-  // FIX 2 — Auto-trigger the existing product tour when ?alpha=true.
+  // FIX 2 — Auto-trigger the existing product tour for alpha testers.
   // Simulates a click on the "Take a tour" button after the page has rendered.
   // The button itself is unchanged so users can replay the tour manually.
   useEffect(() => {

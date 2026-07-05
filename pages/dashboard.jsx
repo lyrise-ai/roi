@@ -346,13 +346,6 @@ function DashboardInner({
       setActiveTab('My Reports')
   }, [isEmployee, router.query.tab])
 
-  useEffect(() => {
-    if (localStorage.getItem('alpha_redirect_pending') === 'true') {
-      localStorage.removeItem('alpha_redirect_pending')
-      router.push('/roi-report?alpha=alpha123')
-    }
-  }, [])
-
   const myReports = reports.filter((r) => r.user_id === userId)
   const activeReports = activeTab === 'My Reports' ? myReports : reports
 
@@ -453,6 +446,24 @@ function DashboardInner({
                 }}
               >
                 Usage
+              </Link>
+            )}
+            {isEmployee && (
+              <Link
+                href="/admin/alpha-invite"
+                style={{
+                  fontSize: 13,
+                  fontWeight: 600,
+                  color: '#374151',
+                  border: '1px solid #E5E7EB',
+                  borderRadius: 999,
+                  padding: '9px 18px',
+                  textDecoration: 'none',
+                  background: '#fff',
+                  fontFamily: FONT,
+                }}
+              >
+                Alpha Invites
               </Link>
             )}
             {isEmployee && (
