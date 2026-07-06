@@ -36,7 +36,7 @@ function esc(s: string | null | undefined): string {
 
 // ── Case studies ──────────────────────────────────────────────────────────────
 
-const CASE_STUDIES = [
+export const CASE_STUDIES = [
   {
     client: 'Quantrax Corporation',
     industry: 'Financial Services',
@@ -175,14 +175,14 @@ function buildCompanySnapshotTableBody(
       item.sourceType === 'scraped'
         ? 'badge-scraped'
         : item.sourceType === 'benchmarked'
-        ? 'badge-benchmarked'
-        : 'badge-assumed'
+          ? 'badge-benchmarked'
+          : 'badge-assumed'
     const label =
       item.sourceType === 'scraped'
         ? 'Scraped'
         : item.sourceType === 'benchmarked'
-        ? 'Benchmarked'
-        : 'Assumed'
+          ? 'Benchmarked'
+          : 'Assumed'
     rows.push(
       `<tr><td>${esc(
         item.text,
@@ -427,10 +427,10 @@ function buildProvenanceTableBody(
     const rateSourceLabel = isFallback
       ? 'Benchmarked'
       : safeUrl
-      ? `Scraped — <a href="${esc(safeUrl)}" style="color:#003f87">${esc(
-          wf.rateSource ?? '',
-        )}</a>`
-      : `Scraped — ${esc(wf.rateSource ?? '')}`
+        ? `Scraped — <a href="${esc(safeUrl)}" style="color:#003f87">${esc(
+            wf.rateSource ?? '',
+          )}</a>`
+        : `Scraped — ${esc(wf.rateSource ?? '')}`
     const rateStatus = isFallback ? 'Needs validation' : 'Validated'
     rows.push({
       input: `${wf.name} — blended rate`,
@@ -448,8 +448,8 @@ function buildProvenanceTableBody(
         wf.sourceType === 'user_stated'
           ? 'User-stated'
           : wf.sourceType === 'research_derived'
-          ? 'Scraped'
-          : 'Benchmarked',
+            ? 'Scraped'
+            : 'Benchmarked',
       status:
         wf.sourceType === 'user_stated' ? 'Validated' : 'Needs validation',
     })
@@ -479,8 +479,8 @@ function buildProvenanceTableBody(
     s === 'Validated'
       ? 'color:#166534;font-weight:bold'
       : s === 'Industry standard'
-      ? 'color:#1d4ed8'
-      : 'color:#92400e'
+        ? 'color:#1d4ed8'
+        : 'color:#92400e'
 
   return rows
     .map(
@@ -714,14 +714,14 @@ export function assembleReport(state: ReportState): AssembleReportOutput {
           wf.sourceType === 'user_stated'
             ? 'badge-scraped'
             : wf.sourceType === 'research_derived'
-            ? 'badge-scraped'
-            : 'badge-benchmarked'
+              ? 'badge-scraped'
+              : 'badge-benchmarked'
         const srcLabel =
           wf.sourceType === 'user_stated'
             ? 'User-stated'
             : wf.sourceType === 'research_derived'
-            ? 'Scraped'
-            : 'Benchmarked'
+              ? 'Scraped'
+              : 'Benchmarked'
         const detailParts: string[] = []
         if (wf.expectedOutcome) {
           detailParts.push(
@@ -797,8 +797,8 @@ export function assembleReport(state: ReportState): AssembleReportOutput {
     revenueBase > 0 && revPct <= 500
       ? `This represents approximately ${revPct}% of your estimated annual revenue returned through operational efficiency — without adding headcount.`
       : !revenueRangeKnown && revenueBase === 0
-      ? 'Annual revenue was not provided — financial gain percentages against a revenue base are unavailable.'
-      : ''
+        ? 'Annual revenue was not provided — financial gain percentages against a revenue base are unavailable.'
+        : ''
 
   const confLevel = confidenceLevel ?? 'low'
   const confidenceBadge =

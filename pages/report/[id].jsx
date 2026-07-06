@@ -139,31 +139,6 @@ export async function getServerSideProps({ req, res, params, query }) {
   }
 }
 
-// ── Alpha terminology guide data ─────────────────────────────────────────────
-// Rendered in a toolbar dropdown when the viewer is an alpha tester.
-const ALPHA_TERMS = [
-  {
-    term: 'Hours Returned',
-    def: 'Total hours/year your team gets back when AI handles repetitive tasks',
-  },
-  {
-    term: 'Operational Dividend',
-    def: 'Dollar value of those freed hours at your blended rate. Measurable from day one.',
-  },
-  {
-    term: 'Profit Uplift',
-    def: 'What freed hours produce when redirected to higher-value work.',
-  },
-  {
-    term: 'Total Financial Gain',
-    def: 'Operational Dividend + Profit Uplift. Full annual value.',
-  },
-  {
-    term: 'Hypothesis-Driven Projection',
-    def: 'Estimated from benchmarks, not your internal data. Needs validation.',
-  },
-]
-
 function categorizeChatMessages(messages) {
   if (!messages || messages.length === 0) return []
   return messages
@@ -208,9 +183,6 @@ export default function ReportPage({
 }) {
   const { push } = useRouter()
 
-  // Controls the terminology guide dropdown panel
-  const [guideOpen, setGuideOpen] = useState(false)
-
   // Tour-exit modal state — shown when tester clicks "Share feedback"
   const [showTourExit, setShowTourExit] = useState(false)
   // Shared with ReportViewer so tour step 5 can spotlight this exact button
@@ -222,48 +194,6 @@ export default function ReportPage({
   const [tourExitSubmitting, setTourExitSubmitting] = useState(false)
   const [showNudge, setShowNudge] = useState(false)
   const [scrolled, setScrolled] = useState(false)
-
-  // FIX 1 — Inject "📖 Terminology Guide" button into the ReportViewer toolbar,
-  // next to the existing "Take a tour" (?) button. Uses a window bridge so the
-  // DOM-injected button can toggle guideOpen React state.
-  useEffect(() => {
-    if (!isAlpha) return undefined
-
-    // Expose toggle function so the DOM-injected button can reach React state
-    window.__alphaGuideToggle = () => setGuideOpen((v) => !v)
-
-    const injectBtn = () => {
-      if (document.getElementById('alpha-guide-btn')) return true
-      const tourBtn = document.querySelector('button[title="Take a tour"]')
-      if (!tourBtn) return false
-      const btn = document.createElement('button')
-      btn.id = 'alpha-guide-btn'
-      btn.type = 'button'
-      btn.textContent = '📖 Terminology Guide'
-      btn.style.cssText = [
-        'padding:6px 12px;font-size:13px;font-weight:500;',
-        'border:1px solid #e2e8f0;border-radius:6px;',
-        'background:#fff;color:#374151;cursor:pointer;font-family:inherit;',
-      ].join('')
-      btn.onclick = () => window.__alphaGuideToggle?.()
-      tourBtn.parentNode.insertBefore(btn, tourBtn)
-      return true
-    }
-
-    // Try immediately; if the toolbar hasn't mounted yet, retry after a short delay
-    if (!injectBtn()) {
-      const t = setTimeout(injectBtn, 600)
-      return () => {
-        clearTimeout(t)
-        document.getElementById('alpha-guide-btn')?.remove()
-        delete window.__alphaGuideToggle
-      }
-    }
-    return () => {
-      document.getElementById('alpha-guide-btn')?.remove()
-      delete window.__alphaGuideToggle
-    }
-  }, [isAlpha])
 
   // FIX 2 — Auto-trigger the existing product tour for alpha testers.
   // Simulates a click on the "Take a tour" button after the page has rendered.
@@ -287,61 +217,40 @@ export default function ReportPage({
     return () => clearInterval(interval)
   }, [isAlpha])
 
-  // Trigger a glow on the Share feedback button once the tester has
-  // scrolled through most of the report. The report itself scrolls inside
-  // the iframe (the outer window doesn't), so we reach into the iframe's
-  // document once it's loaded rather than listening on window.
+  // Trigger a glow on the Share feedback button once the tester has scrolled
+  // through most of the report. The report scrolls inside its own container
+  // (id="report-scroll-container", rendered by ReportContent) rather than
+  // the outer window, so we poll for that element and listen on it directly.
   useEffect(() => {
     if (!isAlpha) return undefined
 
-    let scrollEl = null
-
-    const onScroll = () => {
-      if (!scrollEl) return
-      if (
-        (scrollEl.scrollTop + scrollEl.clientHeight) / scrollEl.scrollHeight >=
-        0.8
-      ) {
-        console.log('scroll threshold reached')
+    const onScroll = (e) => {
+      const el = e.target
+      if ((el.scrollTop + el.clientHeight) / el.scrollHeight >= 0.8) {
         setScrolled(true)
-        scrollEl.ownerDocument?.removeEventListener('scroll', onScroll)
+        el.removeEventListener('scroll', onScroll)
       }
     }
 
-    const attachToIframe = (iframe) => {
-      const onLoad = () => {
-        const doc = iframe.contentDocument
-        if (!doc) return
-        scrollEl = doc.documentElement
-        doc.addEventListener('scroll', onScroll)
-      }
-      iframe.addEventListener('load', onLoad)
-      // The iframe may already be loaded by the time we find it
-      if (iframe.contentDocument?.readyState === 'complete') onLoad()
-      return () => iframe.removeEventListener('load', onLoad)
-    }
-
-    let detachLoadListener = null
-    const findIframe = () => {
-      const iframe = document.querySelector(
-        'iframe[title="ROI Report Preview"]',
-      )
-      if (!iframe) return false
-      detachLoadListener = attachToIframe(iframe)
+    let scrollEl = null
+    let poll = null
+    const findScrollContainer = () => {
+      const el = document.getElementById('report-scroll-container')
+      if (!el) return false
+      scrollEl = el
+      el.addEventListener('scroll', onScroll)
       return true
     }
 
-    let poll = null
-    if (!findIframe()) {
+    if (!findScrollContainer()) {
       poll = setInterval(() => {
-        if (findIframe()) clearInterval(poll)
+        if (findScrollContainer()) clearInterval(poll)
       }, 300)
     }
 
     return () => {
       if (poll) clearInterval(poll)
-      detachLoadListener?.()
-      scrollEl?.ownerDocument?.removeEventListener('scroll', onScroll)
+      scrollEl?.removeEventListener('scroll', onScroll)
     }
   }, [isAlpha])
 
@@ -472,40 +381,6 @@ export default function ReportPage({
       {/* Alpha-only overlays — all use fixed positioning clear of the chat panel */}
       {isAlpha && (
         <>
-          {/* Terminology guide dropdown — toggled by the injected toolbar button */}
-          {guideOpen && (
-            <div
-              className="fixed z-50 bg-white border border-slate-200 rounded-xl shadow-xl w-80 overflow-hidden"
-              style={{ top: '54px', right: '16px' }}
-            >
-              <div className="px-4 py-3 border-b border-slate-100 flex items-center justify-between">
-                <span className="font-semibold text-slate-800 text-sm">
-                  📖 Terminology Guide
-                </span>
-                <button
-                  type="button"
-                  onClick={() => setGuideOpen(false)}
-                  className="text-slate-400 hover:text-slate-600 text-xl leading-none"
-                  aria-label="Close guide"
-                >
-                  &times;
-                </button>
-              </div>
-              <div className="px-4 py-3 space-y-4 max-h-80 overflow-y-auto">
-                {ALPHA_TERMS.map(({ term, def }) => (
-                  <div key={term}>
-                    <p className="font-semibold text-slate-800 text-xs">
-                      {term}
-                    </p>
-                    <p className="text-slate-500 text-xs mt-0.5 leading-relaxed">
-                      {def}
-                    </p>
-                  </div>
-                ))}
-              </div>
-            </div>
-          )}
-
           {/* Finish tour button — left side, clear of chat panel */}
           <div
             style={{
