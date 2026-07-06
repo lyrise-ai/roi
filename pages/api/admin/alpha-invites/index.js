@@ -1,7 +1,7 @@
 import crypto from 'node:crypto'
 import { createRouteClient } from '../../../../src/lib/supabaseRouteClient'
 import { getRoleForUser } from '../../../../src/lib/authHelpers'
-import { supabaseAdmin } from '../../../../src/lib/supabaseAdmin'
+import { getSupabaseAdmin } from '../../../../src/lib/supabaseAdmin'
 
 // Prefer the request's own host over NEXT_PUBLIC_BASE_URL: the header always
 // matches whatever domain actually served this request (production, a Vercel
@@ -33,6 +33,8 @@ export default async function handler(req, res) {
     res.status(403).json({ error: 'Forbidden' })
     return
   }
+
+  const supabaseAdmin = getSupabaseAdmin()
 
   if (req.method === 'GET') {
     const { data: invites, error } = await supabaseAdmin

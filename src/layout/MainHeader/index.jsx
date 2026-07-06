@@ -1,7 +1,7 @@
 import Image from 'next/legacy/image'
 import Link from 'next/link'
 import Logo from '../../assets/rebranding/logo_black.svg'
-import { useRouter, usePathname } from 'next/navigation'
+import { useRouter } from 'next/router'
 import styles from './styles.module.css'
 import { useAuthSession } from '../../context/AuthSessionContext'
 
@@ -16,7 +16,7 @@ export default function MainHeader() {
     router.push('/')
   }
 
-  const pathname = usePathname()
+  const pathname = router.asPath?.split(/[?#]/)[0] ?? router.pathname
   const isRoiPage =
     pathname === '/roi-report' || pathname?.startsWith('/report/')
 

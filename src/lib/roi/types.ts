@@ -392,13 +392,3 @@ export interface AgentCallbacks {
   // roi_usage once a report_id is available (see usageStore.persistUsage).
   onUsage?(summary: import('./services/usageTracker').UsageSummary): void
 }
-
-// ── SSE event types ──────────────────────────────────────────────────────────
-
-export type AgentEvent =
-  | { type: 'text_delta'; delta: string }
-  | { type: 'tool_start'; tool: string; args?: Record<string, unknown> }
-  | { type: 'pipeline_log'; message: string }
-  | { type: 'report_update'; state: ReportState }
-  | { type: 'done'; messages?: import('ai').ModelMessage[] }
-  | { type: 'error'; message: string }

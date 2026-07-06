@@ -1,6 +1,6 @@
 import { useEffect, useLayoutEffect, useMemo, useRef, useState } from 'react'
-import * as Sentry from '@sentry/nextjs'
 import { motion, AnimatePresence } from 'framer-motion'
+import { loadSentryFeedback } from '@/src/lib/sentryFeedback'
 
 const PHASES = [
   {
@@ -282,14 +282,24 @@ export default function ReportLoadingScreen({
   }, [isComplete, isFinalising, activePhase])
 
   useEffect(() => {
-    if (!isComplete || !onOpen) return
-    const feedback = Sentry.getFeedback()
-    if (!feedback || !proposalFeedbackRef.current) return
-    const unsub = feedback.attachTo(proposalFeedbackRef.current, {
-      formTitle: 'Before you decide — anything unclear?',
-      tags: { 'feedback.source': 'proposal' },
-    })
-    return () => unsub?.()
+    if (!isComplete || !onOpen) return undefined
+    let unsub
+    let cancelled = false
+
+    loadSentryFeedback()
+      .then((feedback) => {
+        if (cancelled || !feedback || !proposalFeedbackRef.current) return
+        unsub = feedback.attachTo(proposalFeedbackRef.current, {
+          formTitle: 'Before you decide — anything unclear?',
+          tags: { 'feedback.source': 'proposal' },
+        })
+      })
+      .catch(() => {})
+
+    return () => {
+      cancelled = true
+      unsub?.()
+    }
   }, [isComplete, onOpen])
 
   return (

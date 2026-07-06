@@ -18,7 +18,7 @@ import {
 } from 'ai'
 import { z } from 'zod'
 
-import { researchModel, fastModel } from '@/src/lib/roi/llm'
+import { getResearchModel, getFastModel } from '@/src/lib/roi/llm'
 import { UsageTracker } from '@/src/lib/roi/services/usageTracker'
 import { webSearch } from '@/src/lib/roi/tools/webSearch'
 import { fetchPage } from '@/src/lib/roi/tools/fetchPage'
@@ -729,7 +729,7 @@ function buildTools(
           )
 
           const result = await generateObject({
-            model: fastModel,
+            model: getFastModel(),
             schema: jsonSchema(ROI_MODELER_SCHEMA as object),
             system: ROI_MODELER_SYSTEM_PROMPT,
             prompt: retryHint
@@ -1996,7 +1996,7 @@ ${
   }
 
   const result = streamText({
-    model: researchModel,
+    model: getResearchModel(),
     system,
     messages,
     tools,

@@ -1,6 +1,6 @@
 import { generateText } from 'ai'
 import { createAdminClient, createClient } from '../../src/lib/supabase-server'
-import { fastModel } from '@/src/lib/roi/llm'
+import { getFastModel } from '@/src/lib/roi/llm'
 import { isEmployeeUser } from '@/src/lib/isEmployee'
 import { REPORT_CHAT_MESSAGE_LIMIT } from '@/src/lib/roi/constants'
 
@@ -182,7 +182,7 @@ Company details from the report: ${JSON.stringify(report.input_data)}
 Answer questions about this ROI analysis, AI automation opportunities, and how LyRise can help implement them. Be concise, specific, and helpful. Do not invent numbers that are not in the report data.`
 
   const { text } = await generateText({
-    model: fastModel,
+    model: getFastModel(),
     system: systemPrompt,
     messages: dbMessages ?? [],
   })

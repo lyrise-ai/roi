@@ -9,8 +9,15 @@ import { useRouter } from 'next/router'
 import { trackReportAccess } from '@/src/lib/roi/services/reportAccess'
 import ErrorBoundary from '../../src/components/shared/ErrorBoundary'
 import { isEmployeeUser } from '@/src/lib/isEmployee'
+import { ROUTES, loginRedirect } from '@/src/lib/routes'
 
-export async function getServerSideProps({ req, res, params, query }) {
+export async function getServerSideProps({
+  req,
+  res,
+  params,
+  query,
+  resolvedUrl,
+}) {
   const supabase = createClient(req, res)
   const admin = createAdminClient()
 
@@ -47,7 +54,9 @@ export async function getServerSideProps({ req, res, params, query }) {
     } = await supabase.auth.getUser()
 
     if (!user) {
-      return { redirect: { destination: '/login', permanent: false } }
+      return {
+        redirect: { destination: loginRedirect(resolvedUrl), permanent: false },
+      }
     }
 
     const { data: userData } = await admin
@@ -62,11 +71,11 @@ export async function getServerSideProps({ req, res, params, query }) {
     isAlpha = user.user_metadata?.alpha === true
 
     if (!isEmployee && report.user_id !== user.id) {
-      return { redirect: { destination: '/dashboard', permanent: false } }
+      return { redirect: { destination: ROUTES.dashboard, permanent: false } }
     }
 
     if (!isEmployee && report.status !== 'SUCCESS') {
-      return { redirect: { destination: '/dashboard', permanent: false } }
+      return { redirect: { destination: ROUTES.dashboard, permanent: false } }
     }
   }
 

@@ -358,7 +358,6 @@ export default function AlphaSurvey() {
                     rows={3}
                     placeholder={activeQuestion.placeholder}
                     className="w-full border border-slate-200 rounded-xl px-4 py-3 text-sm text-slate-900 placeholder-slate-400 outline-none focus:border-slate-500 resize-none transition-colors"
-                    autoFocus
                   />
                 )}
 

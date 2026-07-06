@@ -1,8 +1,8 @@
 import React, { useState, useRef, useCallback, useEffect } from 'react'
-import * as Sentry from '@sentry/nextjs'
 import Link from 'next/link'
 import { drainSSE } from '@/src/lib/drainSSE'
 import { REPORT_CHAT_MESSAGE_LIMIT } from '@/src/lib/roi/constants'
+import { loadSentryFeedback } from '@/src/lib/sentryFeedback'
 import { trackShareEvent } from '@/src/lib/trackShareEvent'
 import { INTER_FONT_FAMILY } from '@/src/utilities/fonts'
 import ReportContent from './Report/ReportContent'
@@ -145,15 +145,26 @@ export default function ReportViewer({
   const [downloadStatus, setDownloadStatus] = useState('idle')
 
   useEffect(() => {
-    if (!showCallPrompt) return
-    const el = document.getElementById('proposal-feedback-btn')
-    const feedback = Sentry.getFeedback()
-    if (!feedback || !el) return
-    const cleanup = feedback.attachTo(el, {
-      formTitle: 'Before you decide — anything unclear?',
-      tags: { 'feedback.source': 'proposal' },
-    })
-    return () => cleanup?.()
+    if (!showCallPrompt) return undefined
+    let cleanup
+    let cancelled = false
+
+    loadSentryFeedback()
+      .then((feedback) => {
+        if (cancelled || !feedback) return
+        const el = document.getElementById('proposal-feedback-btn')
+        if (!el) return
+        cleanup = feedback.attachTo(el, {
+          formTitle: 'Before you decide — anything unclear?',
+          tags: { 'feedback.source': 'proposal' },
+        })
+      })
+      .catch(() => {})
+
+    return () => {
+      cancelled = true
+      cleanup?.()
+    }
   }, [showCallPrompt])
   const [tourStep, setTourStep] = useState(-1)
   const [tourRect, setTourRect] = useState(null)

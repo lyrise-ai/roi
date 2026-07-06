@@ -1,0 +1,34 @@
+{
+  "$schema": "https://unpkg.com/knip@latest/schema.json",
+  "entry": [
+    "pages/**/*.{js,jsx,ts,tsx}",
+    "pages/api/**/*.{js,jsx,ts,tsx}",
+    "src/lib/roi/pipeline/__tests__/*.test.mjs",
+    "tests/e2e/**/*.ts",
+    "sentry.*.config.ts",
+    "evals/roi/*.mjs"
+  ],
+  "project": [
+    "pages/**/*.{js,jsx,ts,tsx}",
+    "src/**/*.{js,jsx,ts,tsx,mjs}",
+    "tests/**/*.ts",
+    "evals/**/*.mjs",
+    "*.ts"
+  ],
+  "ignore": ["src/lib/roi/pipeline/__tests__/fixtures.ts"],
+  "ignoreDependencies": [
+    "amplitude-js",
+    "posthog-js",
+    "eslint-config-airbnb",
+    "eslint-config-next",
+    "eslint-config-prettier",
+    "eslint-plugin-jsx-a11y",
+    "eslint-plugin-prettier",
+    "eslint-plugin-react",
+    "eslint-plugin-react-hooks",
+    "eslint-plugin-security",
+    "eslint-plugin-simple-import-sort",
+    "eslint-plugin-sonarjs"
+  ],
+  "ignoreExportsUsedInFile": true
+}

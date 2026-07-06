@@ -74,9 +74,17 @@ export default function MyApp(props) {
       process.env.NEXT_PUBLIC_AMPLITUDE
     ) {
       let cancelled = false
-      import('../src/utilities/amplitude')
-        .then(({ initAmplitude }) => {
-          if (!cancelled) initAmplitude()
+      import('amplitude-js')
+        .then((module) => {
+          const amplitude = module.default ?? module
+          if (!cancelled) {
+            amplitude
+              .getInstance()
+              .init(process.env.NEXT_PUBLIC_AMPLITUDE, null, {
+                includeReferrer: true,
+                includeUtm: true,
+              })
+          }
         })
         .catch(() => {})
       return () => {

@@ -1,6 +1,5 @@
 import * as React from 'react'
 import CircularProgress from '@mui/material/CircularProgress'
-import PropTypes from 'prop-types'
 
 // Thin wrapper that gives any button a consistent "in flight" affordance:
 // disables itself and swaps its children for a spinner (or `loadingText`)
@@ -25,13 +24,4 @@ export default function LoadingButton({
         : children}
     </Component>
   )
-}
-
-LoadingButton.propTypes = {
-  as: PropTypes.elementType,
-  loading: PropTypes.bool,
-  disabled: PropTypes.bool,
-  loadingText: PropTypes.node,
-  spinnerSize: PropTypes.number,
-  children: PropTypes.node,
 }

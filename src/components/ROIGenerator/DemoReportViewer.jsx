@@ -1,5 +1,5 @@
 import React, { useState, useRef, useCallback, useEffect } from 'react'
-import * as Sentry from '@sentry/nextjs'
+import { loadSentryFeedback } from '@/src/lib/sentryFeedback'
 
 const TOUR_LENGTH = 6
 
@@ -236,35 +236,49 @@ export default function DemoReportViewer({
 
   // When the tour completes, open the Sentry feedback form before generating the report
   useEffect(() => {
-    if (tourStep !== -1 || !tourCompletedRef.current) return
+    if (tourStep !== -1 || !tourCompletedRef.current) return undefined
     tourCompletedRef.current = false
 
-    const feedback = Sentry.getFeedback()
-    if (!feedback) {
-      onFinish?.()
-      return
-    }
-
     let cleanup
-    feedback
-      .createForm({
-        formTitle: 'How was getting started?',
-        tags: { 'feedback.source': 'walkthrough' },
-      })
-      .then((form) => {
-        form.appendToDom()
-        form.open()
-        const done = () => {
-          form.removeFromDom()
-          onFinish?.()
-        }
-        form.on('formSubmitted', done)
-        form.on('dialogClosed', done)
-        cleanup = () => form.removeFromDom()
-      })
-      .catch(() => onFinish?.())
+    let cancelled = false
 
-    return () => cleanup?.()
+    loadSentryFeedback()
+      .then((feedback) => {
+        if (cancelled) return
+        if (!feedback) {
+          onFinish?.()
+          return
+        }
+
+        return feedback
+          .createForm({
+            formTitle: 'How was getting started?',
+            tags: { 'feedback.source': 'walkthrough' },
+          })
+          .then((form) => {
+            if (cancelled) {
+              form.removeFromDom()
+              return
+            }
+            form.appendToDom()
+            form.open()
+            const done = () => {
+              form.removeFromDom()
+              onFinish?.()
+            }
+            form.on('formSubmitted', done)
+            form.on('dialogClosed', done)
+            cleanup = () => form.removeFromDom()
+          })
+      })
+      .catch(() => {
+        if (!cancelled) onFinish?.()
+      })
+
+    return () => {
+      cancelled = true
+      cleanup?.()
+    }
   }, [tourStep, onFinish])
 
   const advanceTour = useCallback(() => {

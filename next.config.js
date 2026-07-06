@@ -18,8 +18,14 @@ const nextConfig = {
       '@': path.resolve(__dirname),
     },
   },
-  eslint: {
-    ignoreDuringBuilds: true,
+  async redirects() {
+    return [
+      {
+        source: '/login',
+        destination: '/auth/login',
+        permanent: false,
+      },
+    ]
   },
   async headers() {
     return [

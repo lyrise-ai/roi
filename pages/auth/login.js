@@ -2,7 +2,7 @@ import { useState } from 'react'
 import { useRouter } from 'next/router'
 import Head from 'next/head'
 import { createRouteClient } from '../../src/lib/supabaseRouteClient'
-import { supabase } from '../../src/lib/supabase'
+import { createClient as createBrowserClient } from '../../src/lib/supabase-browser'
 import { INTER_FONT_FAMILY } from '../../src/utilities/fonts'
 import LoadingButton from '../../src/components/shared/Button/LoadingButton'
 
@@ -51,6 +51,7 @@ export default function Login({ next = '/dashboard' }) {
       document.cookie = `auth_next=${encodeURIComponent(next)}; path=/; max-age=300; SameSite=Lax`
     } catch {}
     try {
+      const supabase = createBrowserClient()
       await supabase.auth.signInWithOAuth({
         provider: 'google',
         options: {

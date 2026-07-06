@@ -1,5 +1,5 @@
 /* eslint-disable no-console */
-import { supabaseAdmin } from '@/src/lib/supabaseAdmin'
+import { getSupabaseAdmin } from '@/src/lib/supabaseAdmin'
 
 const ALERT_TYPE = 'roi_usage_cost_threshold'
 const LEASE_SECONDS = 5 * 60
@@ -159,6 +159,7 @@ export async function maybeSendUsageCostAlert(args: {
   ).toISOString()
 
   try {
+    const supabaseAdmin = getSupabaseAdmin()
     const { data: rows, error } = await supabaseAdmin
       .from('roi_usage')
       .select('cost_usd, company, mode, created_at')
