@@ -120,8 +120,8 @@ export default function ReportViewer({
   batchContext,
   isShareLink = false,
   shareToken = null,
-  forceTour = false,
-  feedbackButtonRef: feedbackButtonRefProp = null,
+  // forceTour = false,
+  // feedbackButtonRef: feedbackButtonRefProp = null,
 }) {
   const [reportState, setReportState] = useState(initialState)
   const [chatHistory, setChatHistory] = useState(initialChatHistory)
@@ -166,17 +166,17 @@ export default function ReportViewer({
       cleanup?.()
     }
   }, [showCallPrompt])
-  const [tourStep, setTourStep] = useState(-1)
-  const [tourRect, setTourRect] = useState(null)
+  // const [tourStep, setTourStep] = useState(-1)
+  // const [tourRect, setTourRect] = useState(null)
 
   const messagesEndRef = useRef(null)
-  const sectionNavRef = useRef(null)
-  const terminologyGuideRef = useRef(null)
-  const downloadRef = useRef(null)
-  const resendEmailRef = useRef(null)
-  const chatPanelRef = useRef(null)
-  const localFeedbackButtonRef = useRef(null)
-  const feedbackButtonRef = feedbackButtonRefProp ?? localFeedbackButtonRef
+  // const sectionNavRef = useRef(null)
+  // const terminologyGuideRef = useRef(null)
+  // const downloadRef = useRef(null)
+  // const resendEmailRef = useRef(null)
+  // const chatPanelRef = useRef(null)
+  // const localFeedbackButtonRef = useRef(null)
+  // const feedbackButtonRef = feedbackButtonRefProp ?? localFeedbackButtonRef
   const scrollToSectionRef = useRef(null)
 
   // Share-link recipient tracking: when a prospect opens "Edit with chat" from
@@ -218,6 +218,7 @@ export default function ReportViewer({
     }
   }, [isShareLink, shareToken, reportId])
 
+  /*
   const TOUR_JOURNEY = [
     'Your Report',
     'Every Number, Explained',
@@ -265,15 +266,16 @@ export default function ReportViewer({
     if (forceTour) {
       // Share-link visitors should always see the tour on first arrival
       // from the email, even if a prior anon visit dismissed it.
-      setTourStep(0)
+      // setTourStep(0)
       return
     }
     try {
-      if (!localStorage.getItem('lyrise_tour_seen')) setTourStep(0)
+      // if (!localStorage.getItem('lyrise_tour_seen')) setTourStep(0)
     } catch {
-      /* private browsing */
+      // private browsing
     }
   }, [forceTour])
+  */
 
   useEffect(() => {
     messagesEndRef.current?.scrollIntoView({ behavior: 'smooth' })
@@ -296,6 +298,7 @@ export default function ReportViewer({
     return () => clearTimeout(t)
   }, [flashSections])
 
+  /*
   useEffect(() => {
     if (tourStep < 0 || tourStep >= TOUR_STEPS.length) {
       setTourRect(null)
@@ -328,7 +331,7 @@ export default function ReportViewer({
         try {
           localStorage.setItem('lyrise_tour_seen', '1')
         } catch {
-          /* private browsing */
+          // private browsing
         }
       }
       return next
@@ -340,10 +343,11 @@ export default function ReportViewer({
     try {
       localStorage.setItem('lyrise_tour_seen', '1')
     } catch {
-      /* private browsing */
+      // private browsing
     }
     setTourStep(-1)
   }, [])
+  */
 
   const company = reportState?.assembled?.roi_data?.company ?? ''
 
@@ -569,6 +573,7 @@ export default function ReportViewer({
     },
   }
 
+  /*
   const popoverPositionFor = (placement, rect) => {
     const w = 300
     const gap = 14
@@ -598,6 +603,7 @@ export default function ReportViewer({
   const isTourOpen =
     tourStep >= 0 && tourStep < TOUR_STEPS.length && tourRect !== null
   const isLastStep = tourStep === TOUR_STEPS.length - 1
+  */
 
   return (
     <div
@@ -660,7 +666,7 @@ export default function ReportViewer({
         </div>
         <div style={{ display: 'flex', gap: 8, alignItems: 'center' }}>
           <button
-            ref={downloadRef}
+            // ref={downloadRef}
             type="button"
             onClick={handleDownload}
             disabled={!reportId || downloadStatus === 'downloading'}
@@ -685,6 +691,7 @@ export default function ReportViewer({
                 ? 'Download failed — retry'
                 : 'Download PDF'}
           </button>
+          {/*
           <button
             type="button"
             onClick={() => setTourStep(0)}
@@ -704,10 +711,13 @@ export default function ReportViewer({
           >
             ?
           </button>
-          <TerminologyGuide triggerRef={terminologyGuideRef} />
+          */}
+          <TerminologyGuide
+          // triggerRef={terminologyGuideRef}
+          />
           {!isShareLink && (
             <button
-              ref={resendEmailRef}
+              // ref={resendEmailRef}
               type="button"
               onClick={handleResendEmail}
               disabled={!reportId || emailStatus === 'sending'}
@@ -818,13 +828,13 @@ export default function ReportViewer({
         <ReportContent
           reportState={reportState}
           highlightedSections={flashSections}
-          navRef={sectionNavRef}
+          // navRef={sectionNavRef}
           onReady={handleReportContentReady}
         />
 
         {/* Chat panel */}
         <div
-          ref={chatPanelRef}
+          // ref={chatPanelRef}
           style={{
             flex: '0 0 334px',
             display: 'flex',
@@ -1276,9 +1286,9 @@ export default function ReportViewer({
         </div>
       </div>
 
+      {/*
       {isTourOpen && (
         <>
-          {/* Top dim */}
           <div
             style={{
               position: 'fixed',
@@ -1291,7 +1301,6 @@ export default function ReportViewer({
               transition: 'all 0.25s ease',
             }}
           />
-          {/* Bottom dim */}
           <div
             style={{
               position: 'fixed',
@@ -1304,7 +1313,6 @@ export default function ReportViewer({
               transition: 'all 0.25s ease',
             }}
           />
-          {/* Left dim */}
           <div
             style={{
               position: 'fixed',
@@ -1317,7 +1325,6 @@ export default function ReportViewer({
               transition: 'all 0.25s ease',
             }}
           />
-          {/* Right dim */}
           <div
             style={{
               position: 'fixed',
@@ -1330,7 +1337,6 @@ export default function ReportViewer({
               transition: 'all 0.25s ease',
             }}
           />
-          {/* Spotlight outline */}
           <div
             style={{
               position: 'fixed',
@@ -1346,7 +1352,6 @@ export default function ReportViewer({
               transition: 'all 0.25s ease',
             }}
           />
-          {/* Popover */}
           <div
             style={{
               position: 'fixed',
@@ -1403,7 +1408,6 @@ export default function ReportViewer({
             >
               {TOUR_STEPS[tourStep].body}
             </div>
-            {/* Named journey progress bar */}
             <div style={{ display: 'flex', gap: 4, marginBottom: 5 }}>
               {TOUR_JOURNEY.map((label, i) => (
                 <div
@@ -1456,6 +1460,7 @@ export default function ReportViewer({
           </div>
         </>
       )}
+      */}
 
       <style>{`
         @keyframes pulse {
