@@ -1,5 +1,6 @@
-import { Menu as MenuIcon } from '@mui/icons-material'
-import { Drawer, IconButton } from '@mui/material'
+import MenuIcon from '@mui/icons-material/Menu'
+import Drawer from '@mui/material/Drawer'
+import IconButton from '@mui/material/IconButton'
 import { useState } from 'react'
 import logo from '../../assets/rebranding/logo_black.svg'
 import Image from 'next/legacy/image'

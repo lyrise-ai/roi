@@ -3,7 +3,7 @@
   "version": "0.1.0",
   "private": true,
   "scripts": {
-    "dev": "next dev",
+    "dev": "next dev --turbo",
     "build": "next build",
     "start": "next start",
     "lint": "next lint",
@@ -14,7 +14,7 @@
     "eval:roi:scaffold": "node evals/roi/scaffoldCasesFromPdf.mjs",
     "test:e2e": "playwright test",
     "test:e2e:smoke": "playwright test --grep @smoke",
-    "dev:test": "next dev -p 3777",
+    "dev:test": "next dev --turbo -p 3777",
     "prepare": "husky install"
   },
   "dependencies": {

@@ -1,6 +1,6 @@
 const enableClientSentry = process.env.NEXT_PUBLIC_SENTRY_ENABLED !== 'false'
 const enableReplay = process.env.NEXT_PUBLIC_SENTRY_REPLAY === 'true'
-const enableFeedback = process.env.NEXT_PUBLIC_SENTRY_FEEDBACK === 'true'
+const enableFeedback = process.env.NEXT_PUBLIC_SENTRY_FEEDBACK !== 'false'
 
 let sentryPromise = null
 
@@ -55,11 +55,11 @@ function loadSentry() {
 }
 
 if (typeof window !== 'undefined') {
-  const schedule =
-    window.requestIdleCallback ?? ((callback) => window.setTimeout(callback, 1))
-  schedule(() => {
-    loadSentry()
-  })
+  if (window.requestIdleCallback) {
+    window.requestIdleCallback(() => loadSentry(), { timeout: 1500 })
+  } else {
+    window.setTimeout(() => loadSentry(), 1)
+  }
 }
 
 export const onRouterTransitionStart = (...args) => {
