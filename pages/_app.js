@@ -4,13 +4,9 @@ import { useRouter } from 'next/router'
 import { ThemeProvider } from '@mui/material/styles'
 import CssBaseline from '@mui/material/CssBaseline'
 import { CacheProvider } from '@emotion/react'
-import * as Sentry from '@sentry/nextjs'
 import theme from '../src/theme'
 import createEmotionCache from '../src/utilities/createEmotionCache'
 import '../styles/global.css'
-import { initAmplitude } from '../src/utilities/amplitude'
-import posthog from 'posthog-js'
-import { createClient as createBrowserClient } from '../src/lib/supabase-browser'
 import { AuthSessionContext } from '../src/context/AuthSessionContext'
 
 const clientSideEmotionCache = createEmotionCache()
@@ -74,17 +70,39 @@ export default function MyApp(props) {
   React.useEffect(() => {
     if (
       process.env.NEXT_PUBLIC_ENV === 'production' &&
-      typeof window !== 'undefined'
+      typeof window !== 'undefined' &&
+      process.env.NEXT_PUBLIC_AMPLITUDE
     ) {
-      initAmplitude()
+      let cancelled = false
+      import('../src/utilities/amplitude')
+        .then(({ initAmplitude }) => {
+          if (!cancelled) initAmplitude()
+        })
+        .catch(() => {})
+      return () => {
+        cancelled = true
+      }
     }
+    return undefined
   }, [])
 
   React.useEffect(() => {
-    if (process.env.NEXT_PUBLIC_POSTHOG_PROJECT_TOKEN) {
-      posthog.init(process.env.NEXT_PUBLIC_POSTHOG_PROJECT_TOKEN, {
-        api_host: process.env.NEXT_PUBLIC_POSTHOG_HOST,
+    const token = process.env.NEXT_PUBLIC_POSTHOG_PROJECT_TOKEN
+    if (!token || typeof window === 'undefined') return undefined
+
+    let cancelled = false
+    import('posthog-js')
+      .then(({ default: posthog }) => {
+        if (!cancelled) {
+          posthog.init(token, {
+            api_host: process.env.NEXT_PUBLIC_POSTHOG_HOST,
+          })
+        }
       })
+      .catch(() => {})
+
+    return () => {
+      cancelled = true
     }
   }, [])
 
@@ -92,19 +110,39 @@ export default function MyApp(props) {
   const [authReady, setAuthReady] = React.useState(false)
 
   React.useEffect(() => {
-    const supabase = createBrowserClient()
-    const {
-      data: { subscription },
-    } = supabase.auth.onAuthStateChange((_, session) => {
-      setAuthUser(session?.user ?? null)
-      setAuthReady(true)
-      if (session?.user) {
-        Sentry.setUser({ id: session.user.id, email: session.user.email })
-      } else {
-        Sentry.setUser(null)
-      }
-    })
-    return () => subscription.unsubscribe()
+    let active = true
+    let subscription
+    let sentryPromise
+
+    const setSentryUser = async (user) => {
+      if (!user && !sentryPromise) return
+      sentryPromise ||= import('@sentry/nextjs')
+      const Sentry = await sentryPromise
+      if (!active) return
+      Sentry.setUser(user ? { id: user.id, email: user.email } : null)
+    }
+
+    import('../src/lib/supabase-browser')
+      .then(({ createClient }) => {
+        if (!active) return
+        const supabase = createClient()
+        const { data } = supabase.auth.onAuthStateChange((_, session) => {
+          if (!active) return
+          const user = session?.user ?? null
+          setAuthUser(user)
+          setAuthReady(true)
+          setSentryUser(user).catch(() => {})
+        })
+        subscription = data.subscription
+      })
+      .catch(() => {
+        if (active) setAuthReady(true)
+      })
+
+    return () => {
+      active = false
+      subscription?.unsubscribe()
+    }
   }, [])
 
   const authSessionValue = React.useMemo(
