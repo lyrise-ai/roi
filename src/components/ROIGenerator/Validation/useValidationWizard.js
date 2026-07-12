@@ -247,8 +247,8 @@ export function useValidationWizard(initialWorkflows, globals, company) {
         method: 'PATCH',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ validationData: payload }),
-      }).catch(() => {
-        /* best-effort — finalize is the source of truth */
+      }).catch((err) => {
+        console.error('[validation] draft autosave failed:', err)
       })
     },
     [

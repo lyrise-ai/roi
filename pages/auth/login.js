@@ -86,7 +86,8 @@ export default function Login({ next = '/dashboard' }) {
       }
 
       router.push(next)
-    } catch {
+    } catch (err) {
+      console.error('[auth] password sign-in failed:', err)
       setError('Something went wrong. Please try again.')
       setLoading(false)
     }

@@ -100,7 +100,8 @@ export default function AlphaInvite() {
       setEmail('')
       setFullName('')
       await loadInvites()
-    } catch {
+    } catch (err) {
+      console.error('[alpha-invite] create failed:', err)
       setError('Something went wrong.')
     } finally {
       setLoading(false)
@@ -123,7 +124,10 @@ export default function AlphaInvite() {
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ revoked: !invite.revoked_at }),
       })
-      if (res.ok) await loadInvites()
+      if (!res.ok) throw new Error(`Revoke request failed (${res.status})`)
+      await loadInvites()
+    } catch (err) {
+      console.error('[alpha-invite] revoke failed:', err)
     } finally {
       setRevokingId(null)
     }

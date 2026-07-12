@@ -118,7 +118,6 @@ export default function AlphaSurvey() {
   const [currentStars, setCurrentStars] = useState(0)
 
   const [submitting, setSubmitting] = useState(false)
-  const [submitError, setSubmitError] = useState('')
   const [done, setDone] = useState(false)
 
   const [intakeRating, setIntakeRating] = useState(null)
@@ -184,7 +183,6 @@ export default function AlphaSurvey() {
     }
 
     setSubmitting(true)
-    setSubmitError('')
 
     try {
       const supabase = await createBrowserSupabaseClient()
@@ -221,19 +219,18 @@ export default function AlphaSurvey() {
             .upsert(payload, { onConflict: 'alpha_token' })
         : await supabase.from('alpha_feedback').insert(payload)
       if (error) throw error
-
-      // Clean up localStorage
+    } catch (err) {
+      // eslint-disable-next-line no-console
+      console.error('alpha_feedback insert error:', err)
+    } finally {
+      // Feedback collection is best-effort and must never block the tester from
+      // completing the tour.
       localStorage.removeItem('alpha_token')
       localStorage.removeItem('alpha_intake_rating')
       localStorage.removeItem('alpha_intake_comment')
       localStorage.removeItem('alpha_generation_speed')
 
       setDone(true)
-    } catch (err) {
-      setSubmitError('Could not save your feedback. Please try again.')
-      // eslint-disable-next-line no-console
-      console.error('alpha_feedback insert error:', err)
-    } finally {
       setSubmitting(false)
     }
   }
@@ -374,13 +371,6 @@ export default function AlphaSurvey() {
                       onChange={setCurrentStars}
                     />
                   </div>
-                )}
-
-                {/* Submit error message */}
-                {submitError && (
-                  <p className="mt-4 text-xs text-red-500 text-center">
-                    {submitError}
-                  </p>
                 )}
 
                 {/* Navigation buttons */}

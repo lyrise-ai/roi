@@ -796,7 +796,9 @@ function SuccessView({ email, reportId, isEmployee }) {
           setMessages(data.messages)
         }
       })
-      .catch(() => {})
+      .catch((err) => {
+        console.error('[chat] history load failed:', err)
+      })
   }, [reportId])
 
   useEffect(() => {
@@ -834,7 +836,8 @@ function SuccessView({ email, reportId, isEmployee }) {
         ...prev,
         { role: 'assistant', content: data.reply },
       ])
-    } catch {
+    } catch (err) {
+      console.error('[chat] message send failed:', err)
       setMessages((prev) => [
         ...prev,
         {
@@ -1095,7 +1098,9 @@ export default function ROIReport({ isEmployee, isAlpha }) {
         body: JSON.stringify({ alphaToken: token }),
       })
         .then(() => localStorage.setItem('alpha_notified', '1'))
-        .catch(() => {}) // non-critical
+        .catch((err) => {
+          console.error('[alpha] start notification failed:', err)
+        })
     }
   }, [isAlpha])
 
@@ -1139,10 +1144,12 @@ export default function ROIReport({ isEmployee, isAlpha }) {
               .then(({ error }) => {
                 if (error) console.error('[alpha] intake tracking:', error)
               })
-              .catch(() => {})
+              .catch((err) => {
+                console.error('[alpha] intake tracking failed:', err)
+              })
           }
-        } catch {
-          /* non-critical */
+        } catch (err) {
+          console.error('[alpha] intake tracking failed:', err)
         }
       }
 
@@ -1315,10 +1322,12 @@ export default function ROIReport({ isEmployee, isAlpha }) {
             .then(({ error }) => {
               if (error) console.error('[alpha] generation tracking:', error)
             })
-            .catch(() => {})
+            .catch((err) => {
+              console.error('[alpha] generation tracking failed:', err)
+            })
         }
-      } catch {
-        /* non-critical */
+      } catch (err) {
+        console.error('[alpha] generation tracking failed:', err)
       }
     }
 

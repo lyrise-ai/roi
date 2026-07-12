@@ -35,6 +35,7 @@ class ErrorBoundary extends React.Component {
   }
 
   componentDidCatch(error, info) {
+    console.error('[ErrorBoundary] render failed:', error, info)
     this.setState({
       componentStack: info.componentStack,
       url: typeof window !== 'undefined' ? window.location.href : null,
@@ -50,7 +51,9 @@ class ErrorBoundary extends React.Component {
           context: pageContext,
           url: typeof window !== 'undefined' ? window.location.href : undefined,
         }),
-      }).catch(() => {})
+      }).catch((err) => {
+        console.error('[ErrorBoundary] team notification failed:', err)
+      })
     }
   }
 
@@ -139,7 +142,9 @@ class ErrorBoundary extends React.Component {
                 <p className="font-outfit text-[10px] font-semibold text-gray-400 uppercase tracking-wider mb-2">
                   URL
                 </p>
-                <p className="font-mono text-xs text-gray-600 break-all">{url}</p>
+                <p className="font-mono text-xs text-gray-600 break-all">
+                  {url}
+                </p>
               </div>
             )}
 
@@ -152,8 +157,12 @@ class ErrorBoundary extends React.Component {
                 <div className="flex flex-col gap-1">
                   {Object.entries(pageContext).map(([k, v]) => (
                     <div key={k} className="flex items-center gap-2">
-                      <span className="font-outfit text-xs text-gray-400 w-20 flex-shrink-0">{k}</span>
-                      <span className="font-mono text-xs text-gray-600">{v}</span>
+                      <span className="font-outfit text-xs text-gray-400 w-20 flex-shrink-0">
+                        {k}
+                      </span>
+                      <span className="font-mono text-xs text-gray-600">
+                        {v}
+                      </span>
                     </div>
                   ))}
                 </div>

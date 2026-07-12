@@ -236,8 +236,8 @@ export default function ReportPage({
             if (error) console.error('[alpha] generation page tracking:', error)
           })
       })
-    } catch {
-      /* non-critical */
+    } catch (err) {
+      console.error('[alpha] generation page tracking failed:', err)
     }
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [isAlpha])
@@ -278,8 +278,8 @@ export default function ReportPage({
         'alpha_chat_keywords',
         JSON.stringify(categorizeChatMessages(messages || [])),
       )
-    } catch {
-      /* non-critical */
+    } catch (err) {
+      console.error('[alpha] tour exit tracking failed:', err)
     } finally {
       setTourExitSubmitting(false)
     }
