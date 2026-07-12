@@ -1,5 +1,5 @@
 import React, { useState, useRef, useCallback, useEffect } from 'react'
-import { loadSentryFeedback } from '@/src/lib/sentryFeedback'
+import { loadSentryFeedback, setFeedbackSource } from '@/src/lib/sentryFeedback'
 
 const TOUR_LENGTH = 6
 
@@ -261,6 +261,7 @@ export default function DemoReportViewer({
               return
             }
             form.appendToDom()
+            setFeedbackSource('walkthrough')
             form.open()
             const done = () => {
               form.removeFromDom()

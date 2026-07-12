@@ -170,7 +170,6 @@ export default function ReportPage({
 
   // Tour-exit modal state — shown when tester clicks "Share feedback"
   const [showTourExit, setShowTourExit] = useState(false)
-  // Shared with ReportViewer so tour step 5 can spotlight this exact button
   const feedbackButtonRef = useRef(null)
   const [reportClarity, setReportClarity] = useState(0)
   const [chatRating, setChatRating] = useState(0)
@@ -180,19 +179,9 @@ export default function ReportPage({
   const [showNudge, setShowNudge] = useState(false)
   const [scrolled, setScrolled] = useState(false)
 
-  // Periodically nudge the tester to share feedback via a small tooltip
-  // above the Share feedback button.
-  useEffect(() => {
-    if (!isAlpha) return undefined
-    const interval = setInterval(() => {
-      setShowNudge(true)
-      setTimeout(() => setShowNudge(false), 3000)
-    }, 20000)
-    return () => clearInterval(interval)
-  }, [isAlpha])
-
-  // Trigger a glow on the Share feedback button once the tester has scrolled
-  // through most of the report. The report scrolls inside its own container
+  // Nudge the tester to share feedback exactly once, tied to a meaningful
+  // moment (having scrolled through most of the report) rather than a
+  // repeating timer. The report scrolls inside its own container
   // (id="report-scroll-container", rendered by ReportContent) rather than
   // the outer window, so we poll for that element and listen on it directly.
   useEffect(() => {
@@ -202,6 +191,8 @@ export default function ReportPage({
       const el = e.target
       if ((el.scrollTop + el.clientHeight) / el.scrollHeight >= 0.8) {
         setScrolled(true)
+        setShowNudge(true)
+        setTimeout(() => setShowNudge(false), 3000)
         el.removeEventListener('scroll', onScroll)
       }
     }
@@ -351,7 +342,6 @@ export default function ReportPage({
           shareToken={shareToken}
           forceTour={isShareLink}
           backHref={isShareLink ? null : '/dashboard'}
-          feedbackButtonRef={feedbackButtonRef}
           validatedAt={validatedAt}
         />
       </motion.div>
@@ -442,7 +432,7 @@ export default function ReportPage({
                 cursor: 'pointer',
                 boxShadow: '0 4px 14px rgba(91,72,248,0.35)',
                 ...(scrolled
-                  ? { animation: 'alpha-btn-glow 2s ease-in-out infinite' }
+                  ? { animation: 'alpha-btn-glow 2s ease-in-out 3' }
                   : {}),
               }}
               onMouseEnter={(e) => {
@@ -452,7 +442,7 @@ export default function ReportPage({
                 e.currentTarget.style.background = '#5B48F8'
               }}
             >
-              Share feedback →
+              Finish Tour →
             </button>
           </div>
           <style>{`

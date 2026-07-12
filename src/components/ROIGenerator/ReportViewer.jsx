@@ -2,12 +2,21 @@ import React, { useState, useRef, useCallback, useEffect } from 'react'
 import Link from 'next/link'
 import { drainSSE } from '@/src/lib/drainSSE'
 import { REPORT_CHAT_MESSAGE_LIMIT } from '@/src/lib/roi/constants'
-import { loadSentryFeedback } from '@/src/lib/sentryFeedback'
+import { loadSentryFeedback, setFeedbackSource } from '@/src/lib/sentryFeedback'
 import { trackShareEvent } from '@/src/lib/trackShareEvent'
 import { INTER_FONT_FAMILY } from '@/src/utilities/fonts'
+import { useSpotlightTour } from '@/src/hooks/useSpotlightTour'
+import SpotlightTourOverlay from '@/src/components/shared/SpotlightTourOverlay'
 import ReportContent from './Report/ReportContent'
 import TerminologyGuide from './Report/TerminologyGuide'
 import { NAV_ITEMS } from './Report/navItems'
+
+const TOUR_JOURNEY = [
+  'Your Report',
+  'Every Number, Explained',
+  'Export & Share',
+  'Refine with AI',
+]
 
 const SUGGEST_RE = /\[SUGGEST:\s*([^\]]+)\]$/
 function parseSuggestions(content) {
@@ -121,8 +130,7 @@ export default function ReportViewer({
   isShareLink = false,
   shareToken = null,
   validatedAt = null,
-  // forceTour = false,
-  // feedbackButtonRef: feedbackButtonRefProp = null,
+  forceTour = false,
 }) {
   const [reportState, setReportState] = useState(initialState)
   const [chatHistory, setChatHistory] = useState(initialChatHistory)
@@ -150,11 +158,15 @@ export default function ReportViewer({
     let cleanup
     let cancelled = false
 
+    let el
+    let onClick
     loadSentryFeedback()
       .then((feedback) => {
         if (cancelled || !feedback) return
-        const el = document.getElementById('proposal-feedback-btn')
+        el = document.getElementById('proposal-feedback-btn')
         if (!el) return
+        onClick = () => setFeedbackSource('proposal')
+        el.addEventListener('click', onClick)
         cleanup = feedback.attachTo(el, {
           formTitle: 'Before you decide — anything unclear?',
           tags: { 'feedback.source': 'proposal' },
@@ -164,20 +176,17 @@ export default function ReportViewer({
 
     return () => {
       cancelled = true
+      el?.removeEventListener('click', onClick)
       cleanup?.()
     }
   }, [showCallPrompt])
-  // const [tourStep, setTourStep] = useState(-1)
-  // const [tourRect, setTourRect] = useState(null)
 
   const messagesEndRef = useRef(null)
-  // const sectionNavRef = useRef(null)
-  // const terminologyGuideRef = useRef(null)
-  // const downloadRef = useRef(null)
-  // const resendEmailRef = useRef(null)
-  // const chatPanelRef = useRef(null)
-  // const localFeedbackButtonRef = useRef(null)
-  // const feedbackButtonRef = feedbackButtonRefProp ?? localFeedbackButtonRef
+  const sectionNavRef = useRef(null)
+  const terminologyGuideRef = useRef(null)
+  const downloadRef = useRef(null)
+  const resendEmailRef = useRef(null)
+  const chatPanelRef = useRef(null)
   const scrollToSectionRef = useRef(null)
 
   // Share-link recipient tracking: when a prospect opens "Edit with chat" from
@@ -219,20 +228,11 @@ export default function ReportViewer({
     }
   }, [isShareLink, shareToken, reportId])
 
-  /*
-  const TOUR_JOURNEY = [
-    'Your Report',
-    'Every Number, Explained',
-    'Export & Share',
-    'Refine with AI',
-    'Share Feedback',
-  ]
-
-  const TOUR_STEPS = [
+  const tourSteps = [
     {
       title: 'Your Report',
       body: 'This single scrolling view covers the full business case — hero metrics, workflows, sources, roadmap, and more. Use this nav to jump straight to any section.',
-      placement: 'bottom-start',
+      placement: 'right',
       targetRef: sectionNavRef,
     },
     {
@@ -251,32 +251,36 @@ export default function ReportViewer({
     },
     {
       title: 'The report is a conversation',
-      body: 'Ask the assistant to change the currency, add a workflow, adjust an assumption, or rewrite any section. The report updates in real time — every edit is tracked so you can resend the latest version.',
+      body: 'Ask the assistant to change the currency, add a workflow, adjust an assumption, or rewrite any section. The report updates in real time — every edit is tracked so you can resend the latest version. Got thoughts on the report itself? The Feedback button in the corner is always there for that.',
       placement: 'left',
       targetRef: chatPanelRef,
     },
-    {
-      title: 'Share your feedback',
-      body: 'Once you finish exploring the report, click "Share feedback" below. Your thoughts help us improve the product before launch.',
-      placement: 'top',
-      targetRef: feedbackButtonRef,
-    },
   ]
+
+  const {
+    tourStep,
+    tourRect,
+    isTourOpen,
+    isLastStep,
+    openTour,
+    advanceTour,
+    closeTour,
+  } = useSpotlightTour({ steps: tourSteps, seenKey: 'lyrise_tour_seen' })
 
   useEffect(() => {
     if (forceTour) {
       // Share-link visitors should always see the tour on first arrival
       // from the email, even if a prior anon visit dismissed it.
-      // setTourStep(0)
+      openTour()
       return
     }
     try {
-      // if (!localStorage.getItem('lyrise_tour_seen')) setTourStep(0)
+      if (!localStorage.getItem('lyrise_tour_seen')) openTour()
     } catch {
       // private browsing
     }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [forceTour])
-  */
 
   useEffect(() => {
     messagesEndRef.current?.scrollIntoView({ behavior: 'smooth' })
@@ -298,57 +302,6 @@ export default function ReportViewer({
     const t = setTimeout(() => setFlashSections(new Set()), 5000)
     return () => clearTimeout(t)
   }, [flashSections])
-
-  /*
-  useEffect(() => {
-    if (tourStep < 0 || tourStep >= TOUR_STEPS.length) {
-      setTourRect(null)
-      return undefined
-    }
-    const recompute = () => {
-      const el = TOUR_STEPS[tourStep]?.targetRef?.current
-      if (!el) {
-        setTourRect(null)
-        return
-      }
-      const r = el.getBoundingClientRect()
-      setTourRect({
-        top: r.top,
-        left: r.left,
-        width: r.width,
-        height: r.height,
-      })
-    }
-    recompute()
-    window.addEventListener('resize', recompute)
-    return () => window.removeEventListener('resize', recompute)
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [tourStep])
-
-  const advanceTour = useCallback(() => {
-    setTourStep((s) => {
-      const next = s + 1 >= TOUR_STEPS.length ? -1 : s + 1
-      if (next === -1) {
-        try {
-          localStorage.setItem('lyrise_tour_seen', '1')
-        } catch {
-          // private browsing
-        }
-      }
-      return next
-    })
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [])
-
-  const closeTour = useCallback(() => {
-    try {
-      localStorage.setItem('lyrise_tour_seen', '1')
-    } catch {
-      // private browsing
-    }
-    setTourStep(-1)
-  }, [])
-  */
 
   const company = reportState?.assembled?.roi_data?.company ?? ''
 
@@ -574,38 +527,6 @@ export default function ReportViewer({
     },
   }
 
-  /*
-  const popoverPositionFor = (placement, rect) => {
-    const w = 300
-    const gap = 14
-    if (placement === 'bottom-start') {
-      return { top: rect.top + rect.height + gap, left: Math.max(8, rect.left) }
-    }
-    if (placement === 'bottom-end') {
-      return {
-        top: rect.top + rect.height + gap,
-        left: Math.max(8, rect.left + rect.width - w),
-      }
-    }
-    if (placement === 'left') {
-      return {
-        top: Math.max(8, rect.top + 24),
-        left: Math.max(16, rect.left - w - gap),
-      }
-    }
-    if (placement === 'top') {
-      return {
-        bottom: window.innerHeight - rect.top + gap,
-        left: Math.max(8, rect.left),
-      }
-    }
-    return { top: rect.top + rect.height + gap, left: rect.left }
-  }
-  const isTourOpen =
-    tourStep >= 0 && tourStep < TOUR_STEPS.length && tourRect !== null
-  const isLastStep = tourStep === TOUR_STEPS.length - 1
-  */
-
   return (
     <div
       style={{
@@ -687,7 +608,7 @@ export default function ReportViewer({
         </div>
         <div style={{ display: 'flex', gap: 8, alignItems: 'center' }}>
           <button
-            // ref={downloadRef}
+            ref={downloadRef}
             type="button"
             onClick={handleDownload}
             disabled={!reportId || downloadStatus === 'downloading'}
@@ -712,10 +633,9 @@ export default function ReportViewer({
                 ? 'Download failed — retry'
                 : 'Download PDF'}
           </button>
-          {/*
           <button
             type="button"
-            onClick={() => setTourStep(0)}
+            onClick={openTour}
             title="Take a tour"
             style={{
               width: 32,
@@ -732,13 +652,10 @@ export default function ReportViewer({
           >
             ?
           </button>
-          */}
-          <TerminologyGuide
-          // triggerRef={terminologyGuideRef}
-          />
+          <TerminologyGuide triggerRef={terminologyGuideRef} />
           {!isShareLink && (
             <button
-              // ref={resendEmailRef}
+              ref={resendEmailRef}
               type="button"
               onClick={handleResendEmail}
               disabled={!reportId || emailStatus === 'sending'}
@@ -849,13 +766,13 @@ export default function ReportViewer({
         <ReportContent
           reportState={reportState}
           highlightedSections={flashSections}
-          // navRef={sectionNavRef}
+          navRef={sectionNavRef}
           onReady={handleReportContentReady}
         />
 
         {/* Chat panel */}
         <div
-          // ref={chatPanelRef}
+          ref={chatPanelRef}
           style={{
             flex: '0 0 334px',
             display: 'flex',
@@ -1307,181 +1224,18 @@ export default function ReportViewer({
         </div>
       </div>
 
-      {/*
       {isTourOpen && (
-        <>
-          <div
-            style={{
-              position: 'fixed',
-              top: 0,
-              left: 0,
-              right: 0,
-              height: Math.max(0, tourRect.top - 6),
-              background: 'rgba(15, 23, 42, 0.72)',
-              zIndex: 1000,
-              transition: 'all 0.25s ease',
-            }}
-          />
-          <div
-            style={{
-              position: 'fixed',
-              top: tourRect.top + tourRect.height + 6,
-              left: 0,
-              right: 0,
-              bottom: 0,
-              background: 'rgba(15, 23, 42, 0.72)',
-              zIndex: 1000,
-              transition: 'all 0.25s ease',
-            }}
-          />
-          <div
-            style={{
-              position: 'fixed',
-              top: Math.max(0, tourRect.top - 6),
-              left: 0,
-              width: Math.max(0, tourRect.left - 6),
-              height: tourRect.height + 12,
-              background: 'rgba(15, 23, 42, 0.72)',
-              zIndex: 1000,
-              transition: 'all 0.25s ease',
-            }}
-          />
-          <div
-            style={{
-              position: 'fixed',
-              top: Math.max(0, tourRect.top - 6),
-              left: tourRect.left + tourRect.width + 6,
-              right: 0,
-              height: tourRect.height + 12,
-              background: 'rgba(15, 23, 42, 0.72)',
-              zIndex: 1000,
-              transition: 'all 0.25s ease',
-            }}
-          />
-          <div
-            style={{
-              position: 'fixed',
-              top: tourRect.top - 6,
-              left: tourRect.left - 6,
-              width: tourRect.width + 12,
-              height: tourRect.height + 12,
-              borderRadius: 10,
-              boxShadow:
-                '0 0 0 2px rgba(255,255,255,0.45) inset, 0 0 24px rgba(91, 72, 248, 0.55)',
-              pointerEvents: 'none',
-              zIndex: 1001,
-              transition: 'all 0.25s ease',
-            }}
-          />
-          <div
-            style={{
-              position: 'fixed',
-              ...popoverPositionFor(TOUR_STEPS[tourStep].placement, tourRect),
-              width: 300,
-              background: '#fff',
-              borderRadius: 10,
-              padding: '16px 18px 14px',
-              boxShadow:
-                '0 16px 40px rgba(0,0,0,0.35), 0 4px 12px rgba(0,0,0,0.15)',
-              zIndex: 1002,
-              transition: 'all 0.25s ease',
-            }}
-          >
-            <button
-              type="button"
-              onClick={closeTour}
-              aria-label="Close"
-              style={{
-                position: 'absolute',
-                top: 8,
-                right: 10,
-                width: 24,
-                height: 24,
-                border: 'none',
-                background: 'transparent',
-                color: '#94a3b8',
-                fontSize: 18,
-                cursor: 'pointer',
-                padding: 0,
-                lineHeight: 1,
-              }}
-            >
-              ×
-            </button>
-            <div
-              style={{
-                fontSize: 15,
-                fontWeight: 700,
-                color: '#0F172A',
-                marginBottom: 6,
-                paddingRight: 18,
-              }}
-            >
-              {TOUR_STEPS[tourStep].title}
-            </div>
-            <div
-              style={{
-                fontSize: 13,
-                color: '#475569',
-                lineHeight: 1.5,
-                marginBottom: 14,
-              }}
-            >
-              {TOUR_STEPS[tourStep].body}
-            </div>
-            <div style={{ display: 'flex', gap: 4, marginBottom: 5 }}>
-              {TOUR_JOURNEY.map((label, i) => (
-                <div
-                  key={label}
-                  title={label}
-                  style={{
-                    flex: 1,
-                    height: 3,
-                    borderRadius: 2,
-                    background: i <= tourStep ? '#5B48F8' : '#e2e8f0',
-                    transition: 'background 0.2s',
-                  }}
-                />
-              ))}
-            </div>
-            <div
-              style={{
-                fontSize: 11,
-                color: '#94a3b8',
-                marginBottom: 12,
-                fontWeight: 500,
-              }}
-            >
-              {TOUR_JOURNEY[tourStep]}
-            </div>
-            <div
-              style={{
-                display: 'flex',
-                alignItems: 'center',
-                justifyContent: 'flex-end',
-              }}
-            >
-              <button
-                type="button"
-                onClick={advanceTour}
-                style={{
-                  padding: '7px 16px',
-                  background: '#5B48F8',
-                  color: '#fff',
-                  border: 'none',
-                  borderRadius: 8,
-                  fontSize: 13,
-                  fontWeight: 600,
-                  cursor: 'pointer',
-                }}
-              >
-                {isLastStep ? 'Got it' : 'Next →'}
-              </button>
-            </div>
-          </div>
-        </>
+        <SpotlightTourOverlay
+          tourRect={tourRect}
+          step={tourSteps[tourStep]}
+          stepIndex={tourStep}
+          journeyLabels={TOUR_JOURNEY}
+          isLastStep={isLastStep}
+          onNext={advanceTour}
+          onClose={closeTour}
+          lastStepLabel="Got it"
+        />
       )}
-      */}
 
       <style>{`
         @keyframes pulse {

@@ -1,6 +1,6 @@
 import { useEffect, useLayoutEffect, useMemo, useRef, useState } from 'react'
 import { motion, AnimatePresence } from 'framer-motion'
-import { loadSentryFeedback } from '@/src/lib/sentryFeedback'
+import { loadSentryFeedback, setFeedbackSource } from '@/src/lib/sentryFeedback'
 
 const PHASES = [
   {
@@ -286,10 +286,15 @@ export default function ReportLoadingScreen({
     let unsub
     let cancelled = false
 
+    let el
+    let onClick
     loadSentryFeedback()
       .then((feedback) => {
         if (cancelled || !feedback || !proposalFeedbackRef.current) return
-        unsub = feedback.attachTo(proposalFeedbackRef.current, {
+        el = proposalFeedbackRef.current
+        onClick = () => setFeedbackSource('proposal')
+        el.addEventListener('click', onClick)
+        unsub = feedback.attachTo(el, {
           formTitle: 'Before you decide — anything unclear?',
           tags: { 'feedback.source': 'proposal' },
         })
@@ -298,6 +303,7 @@ export default function ReportLoadingScreen({
 
     return () => {
       cancelled = true
+      el?.removeEventListener('click', onClick)
       unsub?.()
     }
   }, [isComplete, onOpen])
