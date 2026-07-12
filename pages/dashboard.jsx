@@ -370,7 +370,8 @@ function DashboardInner({
     try {
       const res = await fetch(`/api/reports/${id}`, { method: 'DELETE' })
       if (!res.ok) throw new Error('Delete failed')
-    } catch {
+    } catch (err) {
+      console.error('[dashboard] report delete failed:', err)
       setReports((prev) => {
         if (prev.some((r) => r.id === id)) return prev
         const next = [...prev]

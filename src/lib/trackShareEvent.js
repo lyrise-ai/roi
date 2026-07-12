@@ -32,8 +32,10 @@ export function trackShareEvent({ reportId, shareToken, type, durationMs }) {
       headers: { 'Content-Type': 'application/json' },
       body: payload,
       keepalive: true, // best-effort if the page is unloading
-    }).catch(() => {})
-  } catch {
-    /* tracking must never break the page */
+    }).catch((err) => {
+      console.error('[share-event] fetch failed:', err)
+    })
+  } catch (err) {
+    console.error('[share-event] tracking failed:', err)
   }
 }

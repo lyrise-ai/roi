@@ -8,6 +8,7 @@ import MainHeader from '../src/layout/MainHeader'
 import { drainSSE } from '../src/lib/drainSSE'
 import { PIPELINE_LOG_TOOL_NAMES } from '../src/lib/roi/constants'
 import { useRouter } from 'next/router'
+import { setFeedbackSource } from '../src/lib/sentryFeedback'
 
 // Only one of these views is ever mounted at a time (see viewState below) —
 // dynamic-import them so a visitor only downloads the one they land on.
@@ -795,7 +796,9 @@ function SuccessView({ email, reportId, isEmployee }) {
           setMessages(data.messages)
         }
       })
-      .catch(() => {})
+      .catch((err) => {
+        console.error('[chat] history load failed:', err)
+      })
   }, [reportId])
 
   useEffect(() => {
@@ -833,7 +836,8 @@ function SuccessView({ email, reportId, isEmployee }) {
         ...prev,
         { role: 'assistant', content: data.reply },
       ])
-    } catch {
+    } catch (err) {
+      console.error('[chat] message send failed:', err)
       setMessages((prev) => [
         ...prev,
         {
@@ -1094,7 +1098,9 @@ export default function ROIReport({ isEmployee, isAlpha }) {
         body: JSON.stringify({ alphaToken: token }),
       })
         .then(() => localStorage.setItem('alpha_notified', '1'))
-        .catch(() => {}) // non-critical
+        .catch((err) => {
+          console.error('[alpha] start notification failed:', err)
+        })
     }
   }, [isAlpha])
 
@@ -1138,10 +1144,12 @@ export default function ROIReport({ isEmployee, isAlpha }) {
               .then(({ error }) => {
                 if (error) console.error('[alpha] intake tracking:', error)
               })
-              .catch(() => {})
+              .catch((err) => {
+                console.error('[alpha] intake tracking failed:', err)
+              })
           }
-        } catch {
-          /* non-critical */
+        } catch (err) {
+          console.error('[alpha] intake tracking failed:', err)
         }
       }
 
@@ -1314,10 +1322,12 @@ export default function ROIReport({ isEmployee, isAlpha }) {
             .then(({ error }) => {
               if (error) console.error('[alpha] generation tracking:', error)
             })
-            .catch(() => {})
+            .catch((err) => {
+              console.error('[alpha] generation tracking failed:', err)
+            })
         }
-      } catch {
-        /* non-critical */
+      } catch (err) {
+        console.error('[alpha] generation tracking failed:', err)
       }
     }
 
@@ -1379,12 +1389,17 @@ export default function ROIReport({ isEmployee, isAlpha }) {
 
     let active = true
     let cleanup
+    let el
+    let onClick
     import('@sentry/nextjs')
       .then((Sentry) => {
         if (!active || !questionnaireFeedbackRef.current) return
         const feedback = Sentry.getFeedback()
         if (!feedback) return
-        cleanup = feedback.attachTo(questionnaireFeedbackRef.current, {
+        el = questionnaireFeedbackRef.current
+        onClick = () => setFeedbackSource('roi-questionnaire')
+        el.addEventListener('click', onClick)
+        cleanup = feedback.attachTo(el, {
           formTitle: 'How was that?',
           tags: { 'feedback.source': 'roi-questionnaire' },
         })
@@ -1393,6 +1408,7 @@ export default function ROIReport({ isEmployee, isAlpha }) {
 
     return () => {
       active = false
+      el?.removeEventListener('click', onClick)
       cleanup?.()
     }
   }, [step])

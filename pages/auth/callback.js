@@ -25,6 +25,7 @@ export async function getServerSideProps({ req, res, query }) {
   const { error: exchangeError } =
     await supabase.auth.exchangeCodeForSession(code)
   if (exchangeError) {
+    console.error('[auth] OAuth code exchange failed:', exchangeError)
     return { redirect: { destination: '/auth/login', permanent: false } }
   }
 
@@ -36,6 +37,7 @@ export async function getServerSideProps({ req, res, query }) {
     skipWhitelist: true,
   })
   if (ensureError) {
+    console.error('[auth] user provisioning failed:', ensureError)
     return { redirect: { destination: '/auth/login', permanent: false } }
   }
 

@@ -1,5 +1,5 @@
 import React, { useState, useRef, useCallback, useEffect } from 'react'
-import { loadSentryFeedback } from '@/src/lib/sentryFeedback'
+import { loadSentryFeedback, setFeedbackSource } from '@/src/lib/sentryFeedback'
 
 const TOUR_LENGTH = 6
 
@@ -125,7 +125,9 @@ export default function DemoReportViewer({
           email: email || null,
           ...extra,
         }),
-      }).catch(() => {})
+      }).catch((err) => {
+        console.error('[demo-tour] analytics tracking failed:', err)
+      })
     },
     [companyName, email],
   )
@@ -188,7 +190,8 @@ export default function DemoReportViewer({
         setExecHtmlAlt(data.execHtml)
         setFullHtmlAlt(data.fullHtml)
       })
-      .catch(() => {
+      .catch((err) => {
+        console.error('[demo-tour] report load failed:', err)
         if (mounted) setIsLoading(false)
       })
     return () => {
@@ -261,6 +264,7 @@ export default function DemoReportViewer({
               return
             }
             form.appendToDom()
+            setFeedbackSource('walkthrough')
             form.open()
             const done = () => {
               form.removeFromDom()
@@ -271,7 +275,8 @@ export default function DemoReportViewer({
             cleanup = () => form.removeFromDom()
           })
       })
-      .catch(() => {
+      .catch((err) => {
+        console.error('[demo-tour] feedback form failed:', err)
         if (!cancelled) onFinish?.()
       })
 

@@ -1,4 +1,11 @@
-const enableClientSentry = process.env.NEXT_PUBLIC_SENTRY_ENABLED !== 'false'
+import {
+  reportFeedbackEvent,
+  setFeedbackSource,
+} from '@/src/lib/sentryFeedback'
+
+const enableClientSentry =
+  process.env.NODE_ENV !== 'development' &&
+  process.env.NEXT_PUBLIC_SENTRY_ENABLED !== 'false'
 const enableReplay = process.env.NEXT_PUBLIC_SENTRY_REPLAY === 'true'
 const enableFeedback = process.env.NEXT_PUBLIC_SENTRY_FEEDBACK !== 'false'
 
@@ -9,7 +16,12 @@ function loadSentry() {
   if (!sentryPromise) {
     sentryPromise = import('@sentry/nextjs')
       .then((Sentry) => {
-        const integrations = []
+        const integrations = [
+          // Caught application errors are commonly logged after the UI has
+          // recovered. Promote those logs to Sentry error events so they flow
+          // through the configured Sentry -> Linear integration too.
+          Sentry.captureConsoleIntegration({ levels: ['error'] }),
+        ]
 
         if (enableReplay) {
           integrations.push(
@@ -34,6 +46,21 @@ function loadSentry() {
               successMessageText: "Thanks! We'll dig into this.",
               enableScreenshot: true,
               autoInject: true,
+              onFormOpen: () =>
+                reportFeedbackEvent('sentry_feedback_form_opened'),
+              onFormClose: () => {
+                reportFeedbackEvent('sentry_feedback_form_abandoned')
+                setFeedbackSource(null)
+              },
+              onSubmitSuccess: (_data, eventId) =>
+                reportFeedbackEvent('sentry_feedback_form_submitted', {
+                  event_id: eventId,
+                }),
+              onSubmitError: (err) =>
+                reportFeedbackEvent('sentry_feedback_form_error', {
+                  error_message: err?.message,
+                }),
+              onFormSubmitted: () => setFeedbackSource(null),
             }),
           )
         }

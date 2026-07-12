@@ -44,7 +44,6 @@
   font-weight: 700;
 }
 
-
 :root {
   --section-spacing: 120px;
   --section-padding: 40px;
@@ -597,4 +596,14 @@ abbr {
 .hire-ai-developer-container {
   background-image: url('../src/assets/hero/background.png') !important;
   background-size: cover !important;
+}
+
+/* Sentry's feedback widget defaults to the bottom-right corner, which sits
+   on top of the ROI report's chat panel (send button/input live there too).
+   --actor-inset/--inset are the CSS custom properties Sentry's widget reads
+   for its own positioning (see @sentry/feedback's :host rule) and are
+   designed to be overridden from outside the widget's shadow DOM. */
+#sentry-feedback {
+  --inset: auto auto 1rem 1rem;
+  --actor-inset: auto auto 1rem 1rem;
 }
