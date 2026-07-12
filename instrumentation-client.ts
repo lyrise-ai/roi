@@ -25,9 +25,13 @@ function loadSentry() {
           integrations.push(
             Sentry.feedbackIntegration({
               colorScheme: 'system',
-              buttonLabel: 'Feedback',
-              formTitle: 'Something off? Tell us.',
-              submitButtonLabel: 'Send',
+              triggerLabel: 'Feedback',
+              triggerAriaLabel: 'Share feedback',
+              formTitle: 'Got thoughts? We want them.',
+              messagePlaceholder:
+                "What worked, what didn't, what confused you?",
+              submitButtonLabel: 'Send feedback',
+              successMessageText: "Thanks! We'll dig into this.",
               enableScreenshot: true,
               autoInject: true,
             }),
