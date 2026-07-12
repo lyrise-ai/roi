@@ -1,25 +1,23 @@
 import { useEffect, useState } from 'react'
 import Head from 'next/head'
-import {
-  Box,
-  Card,
-  CardContent,
-  Typography,
-  Table,
-  TableBody,
-  TableCell,
-  TableHead,
-  TableRow,
-  Collapse,
-  IconButton,
-  Select,
-  MenuItem,
-  CircularProgress,
-  Chip,
-  Tabs,
-  Tab,
-  Link,
-} from '@mui/material'
+import Box from '@mui/material/Box'
+import Card from '@mui/material/Card'
+import CardContent from '@mui/material/CardContent'
+import Typography from '@mui/material/Typography'
+import Table from '@mui/material/Table'
+import TableBody from '@mui/material/TableBody'
+import TableCell from '@mui/material/TableCell'
+import TableHead from '@mui/material/TableHead'
+import TableRow from '@mui/material/TableRow'
+import Collapse from '@mui/material/Collapse'
+import IconButton from '@mui/material/IconButton'
+import Select from '@mui/material/Select'
+import MenuItem from '@mui/material/MenuItem'
+import CircularProgress from '@mui/material/CircularProgress'
+import Chip from '@mui/material/Chip'
+import Tabs from '@mui/material/Tabs'
+import Tab from '@mui/material/Tab'
+import Link from '@mui/material/Link'
 import OpenInNewIcon from '@mui/icons-material/OpenInNew'
 import KeyboardArrowDownIcon from '@mui/icons-material/KeyboardArrowDown'
 import KeyboardArrowUpIcon from '@mui/icons-material/KeyboardArrowUp'

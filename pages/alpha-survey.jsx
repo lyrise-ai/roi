@@ -5,7 +5,11 @@ import { FaCheckCircle, FaStar } from 'react-icons/fa'
 import clsx from 'clsx'
 import { useRouter } from 'next/router'
 import MainHeader from '../src/layout/MainHeader'
-import { createClient } from '../src/lib/supabase-browser'
+
+async function createBrowserSupabaseClient() {
+  const { createClient } = await import('../src/lib/supabase-browser')
+  return createClient()
+}
 
 // ── Question definitions ──────────────────────────────────────────────────────
 
@@ -183,7 +187,7 @@ export default function AlphaSurvey() {
     setSubmitError('')
 
     try {
-      const supabase = createClient()
+      const supabase = await createBrowserSupabaseClient()
 
       const alphaToken = localStorage.getItem('alpha_token') || null
       const chatKeywords = localStorage.getItem('alpha_chat_keywords')
@@ -354,7 +358,6 @@ export default function AlphaSurvey() {
                     rows={3}
                     placeholder={activeQuestion.placeholder}
                     className="w-full border border-slate-200 rounded-xl px-4 py-3 text-sm text-slate-900 placeholder-slate-400 outline-none focus:border-slate-500 resize-none transition-colors"
-                    autoFocus
                   />
                 )}
 

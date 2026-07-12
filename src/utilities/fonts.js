@@ -1,13 +1,18 @@
-import { Inter } from 'next/font/google'
+import localFont from 'next/font/local'
 
-// Self-hosted replacement for the blocking Google Fonts <link> that used to
-// live in _document.js. Imported by every file that hardcodes an 'Inter'
-// fontFamily so the family name stays literally 'Inter'-shaped in call sites
-// while the actual font is preloaded and self-hosted by Next.
-export const inter = Inter({
-  subsets: ['latin'],
-  weight: ['300', '400', '500', '600', '700'],
+export const inter = localFont({
+  src: [
+    { path: '../../fonts/Outfit-Regular.ttf', weight: '400', style: 'normal' },
+    { path: '../../fonts/Outfit-Medium.ttf', weight: '500', style: 'normal' },
+    {
+      path: '../../fonts/Outfit-SemiBold.ttf',
+      weight: '600',
+      style: 'normal',
+    },
+    { path: '../../fonts/Outfit-Bold.ttf', weight: '700', style: 'normal' },
+  ],
   display: 'swap',
+  fallback: ['-apple-system', 'BlinkMacSystemFont', 'Segoe UI', 'sans-serif'],
 })
 
 export const INTER_FONT_FAMILY = `${inter.style.fontFamily}, -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif`

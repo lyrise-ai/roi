@@ -1,7 +1,6 @@
 import React, { useState, useCallback, useEffect, useRef } from 'react'
 import Head from 'next/head'
 import dynamic from 'next/dynamic'
-import * as Sentry from '@sentry/nextjs'
 import { motion, AnimatePresence } from 'framer-motion'
 import { FaCheckCircle, FaStar } from 'react-icons/fa'
 import clsx from 'clsx'
@@ -9,7 +8,6 @@ import MainHeader from '../src/layout/MainHeader'
 import { drainSSE } from '../src/lib/drainSSE'
 import { PIPELINE_LOG_TOOL_NAMES } from '../src/lib/roi/constants'
 import { useRouter } from 'next/router'
-import { createClient as createBrowserClient } from '../src/lib/supabase-browser'
 
 // Only one of these views is ever mounted at a time (see viewState below) —
 // dynamic-import them so a visitor only downloads the one they land on.
@@ -98,6 +96,11 @@ const VIEW_STATES = {
   COMPLETE: 'complete',
   SUCCESS: 'success',
   ERROR: 'error',
+}
+
+async function createBrowserSupabaseClient() {
+  const { createClient } = await import('../src/lib/supabase-browser')
+  return createClient()
 }
 
 const DEV_STEP1_PRESET = {
@@ -1120,21 +1123,22 @@ export default function ROIReport({ isEmployee, isAlpha }) {
         try {
           const token = localStorage.getItem('alpha_token')
           if (token) {
-            const supabase = createBrowserClient()
-            supabase
-              .from('alpha_feedback')
-              .upsert(
-                {
-                  alpha_token: token,
-                  step_intake_completed: true,
-                  company_name: s1.companyName?.trim() || null,
-                  user_email: s2.email?.trim() || null,
-                },
-                { onConflict: 'alpha_token' },
+            createBrowserSupabaseClient()
+              .then((supabase) =>
+                supabase.from('alpha_feedback').upsert(
+                  {
+                    alpha_token: token,
+                    step_intake_completed: true,
+                    company_name: s1.companyName?.trim() || null,
+                    user_email: s2.email?.trim() || null,
+                  },
+                  { onConflict: 'alpha_token' },
+                ),
               )
               .then(({ error }) => {
                 if (error) console.error('[alpha] intake tracking:', error)
               })
+              .catch(() => {})
           }
         } catch {
           /* non-critical */
@@ -1298,15 +1302,19 @@ export default function ROIReport({ isEmployee, isAlpha }) {
       try {
         const token = localStorage.getItem('alpha_token')
         if (token) {
-          createBrowserClient()
-            .from('alpha_feedback')
-            .upsert(
-              { alpha_token: token, step_generation_completed: true },
-              { onConflict: 'alpha_token' },
+          createBrowserSupabaseClient()
+            .then((supabase) =>
+              supabase
+                .from('alpha_feedback')
+                .upsert(
+                  { alpha_token: token, step_generation_completed: true },
+                  { onConflict: 'alpha_token' },
+                ),
             )
             .then(({ error }) => {
               if (error) console.error('[alpha] generation tracking:', error)
             })
+            .catch(() => {})
         }
       } catch {
         /* non-critical */
@@ -1367,14 +1375,26 @@ export default function ROIReport({ isEmployee, isAlpha }) {
 
   // Attach Sentry feedback to the questionnaire feedback button on the last step
   useEffect(() => {
-    if (step !== TOTAL_STEPS) return
-    const feedback = Sentry.getFeedback()
-    if (!feedback || !questionnaireFeedbackRef.current) return
-    const cleanup = feedback.attachTo(questionnaireFeedbackRef.current, {
-      formTitle: 'How was that?',
-      tags: { 'feedback.source': 'roi-questionnaire' },
-    })
-    return () => cleanup?.()
+    if (step !== TOTAL_STEPS) return undefined
+
+    let active = true
+    let cleanup
+    import('@sentry/nextjs')
+      .then((Sentry) => {
+        if (!active || !questionnaireFeedbackRef.current) return
+        const feedback = Sentry.getFeedback()
+        if (!feedback) return
+        cleanup = feedback.attachTo(questionnaireFeedbackRef.current, {
+          formTitle: 'How was that?',
+          tags: { 'feedback.source': 'roi-questionnaire' },
+        })
+      })
+      .catch(() => {})
+
+    return () => {
+      active = false
+      cleanup?.()
+    }
   }, [step])
 
   // ── Renders ───────────────────────────────────────────────────────────────

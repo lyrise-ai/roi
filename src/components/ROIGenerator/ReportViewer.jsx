@@ -1,10 +1,13 @@
 import React, { useState, useRef, useCallback, useEffect } from 'react'
-import * as Sentry from '@sentry/nextjs'
 import Link from 'next/link'
 import { drainSSE } from '@/src/lib/drainSSE'
 import { REPORT_CHAT_MESSAGE_LIMIT } from '@/src/lib/roi/constants'
+import { loadSentryFeedback } from '@/src/lib/sentryFeedback'
 import { trackShareEvent } from '@/src/lib/trackShareEvent'
 import { INTER_FONT_FAMILY } from '@/src/utilities/fonts'
+import ReportContent from './Report/ReportContent'
+import TerminologyGuide from './Report/TerminologyGuide'
+import { NAV_ITEMS } from './Report/navItems'
 
 const SUGGEST_RE = /\[SUGGEST:\s*([^\]]+)\]$/
 function parseSuggestions(content) {
@@ -73,39 +76,25 @@ const TOOL_LABELS = {
   remove_workflow: 'Removing workflow…',
 }
 
-// Per-tab heading shown to the user. Each entry mirrors the actual <h2> text
-// in the corresponding template; a missing key for a tab means the section
-// doesn't exist there (clicking the chip auto-switches to the other tab).
-const SECTION_INFO = {
-  financials: { exec: 'KPI Bar', full: 'Executive Summary' },
-  thesis: { exec: 'The Pattern Underneath', full: 'The Pattern Underneath' },
-  workflows: {
-    exec: 'Where the Operational Dividend Comes From',
-    full: 'Proposed AI Workflows',
-  },
-  profit_levers: {
-    exec: 'Where the Profit Uplift Comes From',
-    full: 'Profit Uplift Analysis',
-  },
-  cost_of_delay: { exec: 'Cost of Delay', full: 'Cost of Delay' },
-  cta: { exec: 'What Happens Next', full: 'Next Steps' },
-  resilience_rows: { full: 'Resilience Positioning' },
-  risks: { full: 'Risks & Mitigations' },
-  pilot: { full: 'Recommended Starting Point' },
+// Maps the agent's own section keys (from AgentEvent's `changedSections`) to
+// the report's nav-sidebar keys (see Report/navItems.js) — a single agent
+// edit can touch more than one visible section (e.g. a globals/currency
+// change recomputes both the hero metrics and the 3-year outlook).
+const CHANGED_TO_NAV_KEYS = {
+  financials: ['overview', 'outlook'],
+  thesis: ['overview'],
+  workflows: ['workflows'],
+  profit_levers: ['uplift'],
+  cost_of_delay: ['delay'],
+  resilience_rows: ['resilience'],
+  risks: ['risks'],
+  pilot: ['roadmap'],
+  cta: ['next'],
 }
 
-function getSectionLabel(key, activeTab) {
-  const info = SECTION_INFO[key]
-  if (!info) return key
-  return info[activeTab] ?? info.exec ?? info.full ?? key
-}
-
-function getTargetTab(key, activeTab) {
-  const info = SECTION_INFO[key]
-  if (!info) return activeTab
-  if (info[activeTab]) return activeTab
-  return info.exec ? 'exec' : 'full'
-}
+const NAV_LABEL_BY_KEY = Object.fromEntries(
+  NAV_ITEMS.map(({ key, label }) => [key, label]),
+)
 
 // Render **bold** markdown from agent responses
 function renderText(text) {
@@ -131,13 +120,11 @@ export default function ReportViewer({
   batchContext,
   isShareLink = false,
   shareToken = null,
-  forceTour = false,
-  feedbackButtonRef: feedbackButtonRefProp = null,
+  validatedAt = null,
+  // forceTour = false,
+  // feedbackButtonRef: feedbackButtonRefProp = null,
 }) {
   const [reportState, setReportState] = useState(initialState)
-  const [htmlLoading, setHtmlLoading] = useState(
-    !initialState?.renderedHtml && !initialState?.renderedFullHtml,
-  )
   const [chatHistory, setChatHistory] = useState(initialChatHistory)
   const [initialMessage] = useState(() => buildInitialMessage(initialState))
   const [streamingText, setStreamingText] = useState('')
@@ -145,8 +132,12 @@ export default function ReportViewer({
   const [isAgentRunning, setIsAgentRunning] = useState(false)
   const [input, setInput] = useState('')
   const [emailStatus, setEmailStatus] = useState('idle')
-  const [activeTab, setActiveTab] = useState('exec')
-  const [lastChangedSections, setLastChangedSections] = useState([])
+  // Nav-sidebar keys touched by the most recent chat edit — persists until the
+  // next message (drives the "Sections updated" chip row); `flashSections` is
+  // the same set but auto-clears after a few seconds (drives the highlight
+  // ring on the section itself).
+  const [changedSections, setChangedSections] = useState([])
+  const [flashSections, setFlashSections] = useState(new Set())
   const [limitReached, setLimitReached] = useState(
     initialMessagesUsed >= REPORT_CHAT_MESSAGE_LIMIT,
   )
@@ -155,29 +146,39 @@ export default function ReportViewer({
   const [downloadStatus, setDownloadStatus] = useState('idle')
 
   useEffect(() => {
-    if (!showCallPrompt) return
-    const el = document.getElementById('proposal-feedback-btn')
-    const feedback = Sentry.getFeedback()
-    if (!feedback || !el) return
-    const cleanup = feedback.attachTo(el, {
-      formTitle: 'Before you decide — anything unclear?',
-      tags: { 'feedback.source': 'proposal' },
-    })
-    return () => cleanup?.()
-  }, [showCallPrompt])
-  const [tourStep, setTourStep] = useState(-1)
-  const [tourRect, setTourRect] = useState(null)
+    if (!showCallPrompt) return undefined
+    let cleanup
+    let cancelled = false
 
-  const iframeRef = useRef(null)
+    loadSentryFeedback()
+      .then((feedback) => {
+        if (cancelled || !feedback) return
+        const el = document.getElementById('proposal-feedback-btn')
+        if (!el) return
+        cleanup = feedback.attachTo(el, {
+          formTitle: 'Before you decide — anything unclear?',
+          tags: { 'feedback.source': 'proposal' },
+        })
+      })
+      .catch(() => {})
+
+    return () => {
+      cancelled = true
+      cleanup?.()
+    }
+  }, [showCallPrompt])
+  // const [tourStep, setTourStep] = useState(-1)
+  // const [tourRect, setTourRect] = useState(null)
+
   const messagesEndRef = useRef(null)
-  const pendingHighlightsRef = useRef([])
-  const execTabRef = useRef(null)
-  const fullTabRef = useRef(null)
-  const downloadRef = useRef(null)
-  const resendEmailRef = useRef(null)
-  const chatPanelRef = useRef(null)
-  const localFeedbackButtonRef = useRef(null)
-  const feedbackButtonRef = feedbackButtonRefProp ?? localFeedbackButtonRef
+  // const sectionNavRef = useRef(null)
+  // const terminologyGuideRef = useRef(null)
+  // const downloadRef = useRef(null)
+  // const resendEmailRef = useRef(null)
+  // const chatPanelRef = useRef(null)
+  // const localFeedbackButtonRef = useRef(null)
+  // const feedbackButtonRef = feedbackButtonRefProp ?? localFeedbackButtonRef
+  const scrollToSectionRef = useRef(null)
 
   // Share-link recipient tracking: when a prospect opens "Edit with chat" from
   // the email, record the open and how long they spend on the page (the chat
@@ -218,9 +219,10 @@ export default function ReportViewer({
     }
   }, [isShareLink, shareToken, reportId])
 
+  /*
   const TOUR_JOURNEY = [
     'Your Report',
-    'Full Analysis',
+    'Every Number, Explained',
     'Export & Share',
     'Refine with AI',
     'Share Feedback',
@@ -228,16 +230,16 @@ export default function ReportViewer({
 
   const TOUR_STEPS = [
     {
-      title: 'Your Executive Summary',
-      body: 'This single-page view is built for decision-makers — total hours returned, Operational Dividend, and Total Financial Gain, all sourced from live research about your company. Share it directly with leadership.',
+      title: 'Your Report',
+      body: 'This single scrolling view covers the full business case — hero metrics, workflows, sources, roadmap, and more. Use this nav to jump straight to any section.',
       placement: 'bottom-start',
-      targetRef: execTabRef,
+      targetRef: sectionNavRef,
     },
     {
-      title: 'The complete business case',
-      body: 'Switch to the Full Report for the deep dive: every workflow modelled line by line, the source behind each billing rate, a 10-week implementation roadmap, resilience positioning, and risk mitigations.',
-      placement: 'bottom-start',
-      targetRef: fullTabRef,
+      title: 'Every number, explained',
+      body: 'Hover any "?" for a plain-language definition, or click a headline number for the exact formula behind it. Use the Terminology Guide for a full glossary any time.',
+      placement: 'bottom-end',
+      targetRef: terminologyGuideRef,
     },
     {
       title: 'Take it with you',
@@ -262,96 +264,42 @@ export default function ReportViewer({
   ]
 
   useEffect(() => {
-    if (!htmlLoading) return
-    fetch(`/api/reports/${reportId}`)
-      .then((r) => r.json())
-      .then(({ renderedHtml, renderedFullHtml }) => {
-        setReportState((prev) => ({ ...prev, renderedHtml, renderedFullHtml }))
-        setHtmlLoading(false)
-      })
-      .catch(() => setHtmlLoading(false))
-  }, [reportId, htmlLoading])
-
-  useEffect(() => {
     if (forceTour) {
       // Share-link visitors should always see the tour on first arrival
       // from the email, even if a prior anon visit dismissed it.
-      setTourStep(0)
+      // setTourStep(0)
       return
     }
     try {
-      if (!localStorage.getItem('lyrise_tour_seen')) setTourStep(0)
+      // if (!localStorage.getItem('lyrise_tour_seen')) setTourStep(0)
     } catch {
-      /* private browsing */
+      // private browsing
     }
   }, [forceTour])
+  */
 
   useEffect(() => {
     messagesEndRef.current?.scrollIntoView({ behavior: 'smooth' })
   }, [chatHistory, streamingText, activeTool])
 
-  const applySectionHighlights = useCallback((doc, sections) => {
-    if (!doc?.body?.querySelector('[data-section]')) return false
-    sections.forEach((section) => {
-      doc.querySelectorAll(`[data-section="${section}"]`).forEach((el) => {
-        el.classList.add('section-highlighted')
-      })
-    })
-    return true
+  const handleSectionChipClick = useCallback((navKey) => {
+    scrollToSectionRef.current?.(navKey)
   }, [])
 
-  // Scrolls the iframe to the first element matching the given data-section,
-  // applies the highlight class, and pulses focus. Returns true if the target
-  // was found in the current iframe document.
-  const scrollIframeToSection = useCallback((section) => {
-    const doc = iframeRef.current?.contentDocument
-    const el = doc?.querySelector(`[data-section="${section}"]`)
-    if (!el) return false
-    el.classList.add('section-highlighted')
-    el.scrollIntoView({ behavior: 'smooth', block: 'start' })
-    return true
+  const handleReportContentReady = useCallback(({ scrollToSection }) => {
+    scrollToSectionRef.current = scrollToSection
   }, [])
 
-  const pendingScrollRef = useRef(null)
-
-  // Drains queued highlights and a queued scroll target. Called from both
-  // the iframe onLoad event (when srcDoc actually changes) and from a
-  // post-render effect (fallback when the same srcDoc is reused).
-  const drainPendingActions = useCallback(() => {
-    const sections = pendingHighlightsRef.current
-    if (sections.length) {
-      const doc = iframeRef.current?.contentDocument
-      if (applySectionHighlights(doc, sections)) {
-        pendingHighlightsRef.current = []
-      }
-    }
-    const pendingScroll = pendingScrollRef.current
-    if (pendingScroll && scrollIframeToSection(pendingScroll)) {
-      pendingScrollRef.current = null
-    }
-  }, [applySectionHighlights, scrollIframeToSection])
-
+  // Auto-fade the highlight ring a few seconds after a chat edit lands — the
+  // "Sections updated" chips (driven by `changedSections`) persist until the
+  // next message, matching the pre-redesign behavior.
   useEffect(() => {
-    drainPendingActions()
-  }, [reportState, activeTab, drainPendingActions])
+    if (flashSections.size === 0) return undefined
+    const t = setTimeout(() => setFlashSections(new Set()), 5000)
+    return () => clearTimeout(t)
+  }, [flashSections])
 
-  const handleSectionChipClick = useCallback(
-    (section) => {
-      const targetTab = getTargetTab(section, activeTab)
-      if (targetTab !== activeTab) {
-        pendingScrollRef.current = section
-        setActiveTab(targetTab)
-        return
-      }
-      // Same tab — scroll immediately. Fall back to queueing if the iframe
-      // hasn't rendered the new srcDoc yet.
-      if (!scrollIframeToSection(section)) {
-        pendingScrollRef.current = section
-      }
-    },
-    [activeTab, scrollIframeToSection],
-  )
-
+  /*
   useEffect(() => {
     if (tourStep < 0 || tourStep >= TOUR_STEPS.length) {
       setTourRect(null)
@@ -384,7 +332,7 @@ export default function ReportViewer({
         try {
           localStorage.setItem('lyrise_tour_seen', '1')
         } catch {
-          /* private browsing */
+          // private browsing
         }
       }
       return next
@@ -396,19 +344,12 @@ export default function ReportViewer({
     try {
       localStorage.setItem('lyrise_tour_seen', '1')
     } catch {
-      /* private browsing */
+      // private browsing
     }
     setTourStep(-1)
   }, [])
+  */
 
-  const handleTabSelect = useCallback((tab) => {
-    setActiveTab(tab)
-  }, [])
-
-  const activeHtml =
-    activeTab === 'exec'
-      ? (reportState?.renderedHtml ?? initialState?.renderedHtml)
-      : (reportState?.renderedFullHtml ?? initialState?.renderedFullHtml)
   const company = reportState?.assembled?.roi_data?.company ?? ''
 
   const handleSend = useCallback(
@@ -421,11 +362,8 @@ export default function ReportViewer({
       setChatHistory(newHistory)
       if (!overrideMsg) setInput('')
       setIsAgentRunning(true)
-      setLastChangedSections([])
-      // Clear any section highlights from the previous agent response
-      iframeRef.current?.contentDocument
-        ?.querySelectorAll('.section-highlighted')
-        .forEach((el) => el.classList.remove('section-highlighted'))
+      setChangedSections([])
+      setFlashSections(new Set())
       setStreamingText('')
       setActiveTool(null)
 
@@ -469,10 +407,15 @@ export default function ReportViewer({
           } else if (event.type === 'tool_start') {
             setActiveTool(TOOL_LABELS[event.tool] ?? event.tool)
           } else if (event.type === 'report_update') {
-            pendingHighlightsRef.current = event.changedSections ?? []
-            setLastChangedSections((prev) => [
-              ...new Set([...prev, ...(event.changedSections ?? [])]),
-            ])
+            const navKeys = [
+              ...new Set(
+                (event.changedSections ?? []).flatMap(
+                  (k) => CHANGED_TO_NAV_KEYS[k] ?? [],
+                ),
+              ),
+            ]
+            setChangedSections(navKeys)
+            setFlashSections(new Set(navKeys))
             setReportState(event.state)
             setActiveTool(null)
           } else if (event.type === 'done') {
@@ -515,10 +458,6 @@ export default function ReportViewer({
     ],
   )
 
-  const handleIframeLoad = useCallback(() => {
-    drainPendingActions()
-  }, [drainPendingActions])
-
   const handleDownload = useCallback(async () => {
     if (!reportId || downloadStatus === 'downloading') return
     setDownloadStatus('downloading')
@@ -526,7 +465,7 @@ export default function ReportViewer({
       const res = await fetch('/api/roi-pdf', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ reportId, reportType: activeTab }),
+        body: JSON.stringify({ reportId }),
       })
       if (!res.ok) throw new Error(`HTTP ${res.status}`)
 
@@ -558,7 +497,7 @@ export default function ReportViewer({
       setDownloadStatus('error')
       setTimeout(() => setDownloadStatus('idle'), 3000)
     }
-  }, [downloadStatus, reportId, activeTab, isShareLink, shareToken])
+  }, [downloadStatus, reportId, isShareLink, shareToken])
 
   const handleResendEmail = useCallback(async () => {
     if (!reportId || emailStatus === 'sending') return
@@ -635,6 +574,7 @@ export default function ReportViewer({
     },
   }
 
+  /*
   const popoverPositionFor = (placement, rect) => {
     const w = 300
     const gap = 14
@@ -664,6 +604,7 @@ export default function ReportViewer({
   const isTourOpen =
     tourStep >= 0 && tourStep < TOUR_STEPS.length && tourRect !== null
   const isLastStep = tourStep === TOUR_STEPS.length - 1
+  */
 
   return (
     <div
@@ -723,62 +664,30 @@ export default function ReportViewer({
               BULK · {batchContext.currentIndex + 1} of {batchContext.total}
             </span>
           )}
-        </div>
-        <div style={{ display: 'flex', gap: 8 }}>
-          <div style={{ position: 'relative' }}>
-            <div
+          {validatedAt && (
+            <span
               style={{
-                display: 'flex',
-                background: '#F3F4F6',
+                fontSize: 11,
+                fontWeight: 600,
+                color: '#059669',
+                background: '#ECFDF5',
                 borderRadius: 999,
-                padding: 3,
-                gap: 2,
+                padding: '3px 10px',
+                letterSpacing: '0.02em',
               }}
+              title={`Validated by you on ${new Date(validatedAt).toLocaleDateString()}`}
             >
-              <button
-                ref={execTabRef}
-                type="button"
-                onClick={() => handleTabSelect('exec')}
-                style={{
-                  padding: '5px 16px',
-                  fontSize: 12,
-                  fontWeight: 500,
-                  border: 'none',
-                  borderRadius: 999,
-                  background: activeTab === 'exec' ? '#5B48F8' : 'transparent',
-                  color: activeTab === 'exec' ? '#fff' : '#374151',
-                  cursor: 'pointer',
-                  whiteSpace: 'nowrap',
-                  fontFamily: 'inherit',
-                  transition: 'background 0.15s, color 0.15s',
-                }}
-              >
-                Executive Summary
-              </button>
-              <button
-                ref={fullTabRef}
-                type="button"
-                onClick={() => handleTabSelect('full')}
-                style={{
-                  padding: '5px 16px',
-                  fontSize: 12,
-                  fontWeight: 500,
-                  border: 'none',
-                  borderRadius: 999,
-                  background: activeTab === 'full' ? '#5B48F8' : 'transparent',
-                  color: activeTab === 'full' ? '#fff' : '#374151',
-                  cursor: 'pointer',
-                  whiteSpace: 'nowrap',
-                  fontFamily: 'inherit',
-                  transition: 'background 0.15s, color 0.15s',
-                }}
-              >
-                Full Report
-              </button>
-            </div>
-          </div>
+              ✓ Validated{' '}
+              {new Date(validatedAt).toLocaleDateString(undefined, {
+                month: 'short',
+                day: 'numeric',
+              })}
+            </span>
+          )}
+        </div>
+        <div style={{ display: 'flex', gap: 8, alignItems: 'center' }}>
           <button
-            ref={downloadRef}
+            // ref={downloadRef}
             type="button"
             onClick={handleDownload}
             disabled={!reportId || downloadStatus === 'downloading'}
@@ -803,6 +712,7 @@ export default function ReportViewer({
                 ? 'Download failed — retry'
                 : 'Download PDF'}
           </button>
+          {/*
           <button
             type="button"
             onClick={() => setTourStep(0)}
@@ -822,9 +732,13 @@ export default function ReportViewer({
           >
             ?
           </button>
+          */}
+          <TerminologyGuide
+          // triggerRef={terminologyGuideRef}
+          />
           {!isShareLink && (
             <button
-              ref={resendEmailRef}
+              // ref={resendEmailRef}
               type="button"
               onClick={handleResendEmail}
               disabled={!reportId || emailStatus === 'sending'}
@@ -932,67 +846,22 @@ export default function ReportViewer({
 
       {/* Main content */}
       <div style={{ display: 'flex', flex: 1, overflow: 'hidden' }}>
-        {/* Report iframe (65% width) */}
-        <div
-          style={{
-            flex: '0 0 65%',
-            overflow: 'hidden',
-            borderRight: '1px solid #e2e8f0',
-            background: '#f1f5f9',
-            position: 'relative',
-          }}
-        >
-          {htmlLoading && (
-            <div
-              style={{
-                position: 'absolute',
-                inset: 0,
-                display: 'flex',
-                flexDirection: 'column',
-                alignItems: 'center',
-                justifyContent: 'center',
-                gap: 16,
-                background: '#f1f5f9',
-                zIndex: 2,
-              }}
-            >
-              <div
-                style={{
-                  width: 36,
-                  height: 36,
-                  border: '3px solid #e2e8f0',
-                  borderTopColor: '#5B48F8',
-                  borderRadius: '50%',
-                  animation: 'spin 0.75s linear infinite',
-                }}
-              />
-              <span style={{ fontSize: 13, color: '#6b7280', fontWeight: 500 }}>
-                Loading report…
-              </span>
-            </div>
-          )}
-          <iframe
-            ref={iframeRef}
-            srcDoc={activeHtml ?? ''}
-            onLoad={handleIframeLoad}
-            style={{
-              width: '100%',
-              height: '100%',
-              border: 'none',
-              opacity: htmlLoading ? 0 : 1,
-            }}
-            title="ROI Report Preview"
-          />
-        </div>
+        <ReportContent
+          reportState={reportState}
+          highlightedSections={flashSections}
+          // navRef={sectionNavRef}
+          onReady={handleReportContentReady}
+        />
 
         {/* Chat panel */}
         <div
-          ref={chatPanelRef}
+          // ref={chatPanelRef}
           style={{
-            flex: '0 0 35%',
+            flex: '0 0 334px',
             display: 'flex',
             flexDirection: 'column',
             background: '#F8F7F5',
+            borderLeft: '1px solid #E5E7EB',
           }}
         >
           {/* Chat header */}
@@ -1240,7 +1109,7 @@ export default function ReportViewer({
             )}
 
             {/* Changed sections chips — shown after agent finishes */}
-            {!isAgentRunning && lastChangedSections.length > 0 && (
+            {!isAgentRunning && changedSections.length > 0 && (
               <div
                 style={{
                   display: 'flex',
@@ -1253,42 +1122,27 @@ export default function ReportViewer({
                 <span style={{ fontSize: 11, color: '#8a8aaa', flexShrink: 0 }}>
                   Sections updated:
                 </span>
-                {[...new Set(lastChangedSections)]
-                  .filter((s) => SECTION_INFO[s])
-                  .map((s) => {
-                    const targetTab = getTargetTab(s, activeTab)
-                    const label = getSectionLabel(s, targetTab)
-                    const willSwitchTab = targetTab !== activeTab
-                    return (
-                      <button
-                        key={s}
-                        type="button"
-                        onClick={() => handleSectionChipClick(s)}
-                        title={
-                          willSwitchTab
-                            ? `Switches to ${
-                                targetTab === 'exec'
-                                  ? 'Executive Summary'
-                                  : 'Full Report'
-                              } and scrolls to "${label}"`
-                            : `Scroll to "${label}"`
-                        }
-                        style={{
-                          fontSize: 11,
-                          fontWeight: 500,
-                          background: '#EDE9FE',
-                          color: '#2957ff',
-                          border: '1px solid #C4B5FD',
-                          borderRadius: 4,
-                          padding: '2px 7px',
-                          cursor: 'pointer',
-                          fontFamily: 'inherit',
-                        }}
-                      >
-                        {label}
-                      </button>
-                    )
-                  })}
+                {changedSections.map((navKey) => (
+                  <button
+                    key={navKey}
+                    type="button"
+                    onClick={() => handleSectionChipClick(navKey)}
+                    title={`Scroll to "${NAV_LABEL_BY_KEY[navKey] ?? navKey}"`}
+                    style={{
+                      fontSize: 11,
+                      fontWeight: 500,
+                      background: '#EDE9FE',
+                      color: '#2957ff',
+                      border: '1px solid #C4B5FD',
+                      borderRadius: 4,
+                      padding: '2px 7px',
+                      cursor: 'pointer',
+                      fontFamily: 'inherit',
+                    }}
+                  >
+                    {NAV_LABEL_BY_KEY[navKey] ?? navKey}
+                  </button>
+                ))}
               </div>
             )}
 
@@ -1453,9 +1307,9 @@ export default function ReportViewer({
         </div>
       </div>
 
+      {/*
       {isTourOpen && (
         <>
-          {/* Top dim */}
           <div
             style={{
               position: 'fixed',
@@ -1468,7 +1322,6 @@ export default function ReportViewer({
               transition: 'all 0.25s ease',
             }}
           />
-          {/* Bottom dim */}
           <div
             style={{
               position: 'fixed',
@@ -1481,7 +1334,6 @@ export default function ReportViewer({
               transition: 'all 0.25s ease',
             }}
           />
-          {/* Left dim */}
           <div
             style={{
               position: 'fixed',
@@ -1494,7 +1346,6 @@ export default function ReportViewer({
               transition: 'all 0.25s ease',
             }}
           />
-          {/* Right dim */}
           <div
             style={{
               position: 'fixed',
@@ -1507,7 +1358,6 @@ export default function ReportViewer({
               transition: 'all 0.25s ease',
             }}
           />
-          {/* Spotlight outline */}
           <div
             style={{
               position: 'fixed',
@@ -1523,7 +1373,6 @@ export default function ReportViewer({
               transition: 'all 0.25s ease',
             }}
           />
-          {/* Popover */}
           <div
             style={{
               position: 'fixed',
@@ -1580,7 +1429,6 @@ export default function ReportViewer({
             >
               {TOUR_STEPS[tourStep].body}
             </div>
-            {/* Named journey progress bar */}
             <div style={{ display: 'flex', gap: 4, marginBottom: 5 }}>
               {TOUR_JOURNEY.map((label, i) => (
                 <div
@@ -1633,6 +1481,7 @@ export default function ReportViewer({
           </div>
         </>
       )}
+      */}
 
       <style>{`
         @keyframes pulse {

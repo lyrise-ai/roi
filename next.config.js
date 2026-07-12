@@ -3,18 +3,29 @@ const { withSentryConfig } = require('@sentry/nextjs')
 
 const nextConfig = {
   reactStrictMode: false,
-  transpilePackages: [
-    '@mui/material',
-    '@mui/system',
-    '@mui/styled-engine',
-    '@mui/icons-material',
-    '@mui/base',
-    '@mui/utils',
-    '@mui/private-theming',
-    '@mui/types',
-  ],
-  eslint: {
-    ignoreDuringBuilds: true,
+  modularizeImports: {
+    '@mui/material': {
+      transform: '@mui/material/{{member}}',
+    },
+    '@mui/icons-material': {
+      transform: '@mui/icons-material/{{member}}',
+    },
+  },
+  turbopack: {
+    resolveAlias: {
+      '@components': path.resolve(__dirname, 'src/components'),
+      '@hooks': path.resolve(__dirname, 'src/hooks'),
+      '@': path.resolve(__dirname),
+    },
+  },
+  async redirects() {
+    return [
+      {
+        source: '/login',
+        destination: '/auth/login',
+        permanent: false,
+      },
+    ]
   },
   async headers() {
     return [

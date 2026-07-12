@@ -1,8 +1,9 @@
-import { supabaseAdmin } from './supabaseAdmin'
+import { getSupabaseAdmin } from './supabaseAdmin'
 
 type Role = 'EMPLOYEE' | 'CLIENT'
 
 export async function getRoleForUser(userId: string) {
+  const supabaseAdmin = getSupabaseAdmin()
   const { data, error } = await supabaseAdmin
     .from('users')
     .select('role')
@@ -18,6 +19,7 @@ export async function canSignUp(
   email: string,
   options: { skipWhitelist?: boolean } = {},
 ): Promise<{ allowed: boolean; role: Role | null; error: string | null }> {
+  const supabaseAdmin = getSupabaseAdmin()
   if (email.endsWith('@lyrise.ai')) {
     if (!options.skipWhitelist) {
       const { data: whitelistRow, error: whitelistError } = await supabaseAdmin
@@ -44,6 +46,7 @@ export async function createUserRecord(
   userId: string,
   role: Role,
 ) {
+  const supabaseAdmin = getSupabaseAdmin()
   const { error } = await supabaseAdmin
     .from('users')
     .insert({ id: userId, email, role })
@@ -65,6 +68,7 @@ export async function ensureUserRecord(
   if (roleError) return { role: null, error: roleError }
   if (existingRole) return { role: existingRole, error: null }
 
+  const supabaseAdmin = getSupabaseAdmin()
   const { allowed, role, error: checkError } = await canSignUp(email, options)
   if (!allowed || checkError) {
     await supabaseAdmin.auth.admin.deleteUser(userId)

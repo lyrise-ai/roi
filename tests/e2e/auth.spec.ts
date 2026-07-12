@@ -11,6 +11,8 @@ test.describe('protected route redirects', () => {
     '/dashboard',
     '/dashboard/usage',
     '/roi-report',
+    '/roi-report/bulk',
+    '/roi-report/bulk/fake-session',
     '/report/nonexistent-id',
   ]
 
@@ -52,7 +54,7 @@ test.describe('login page UI', () => {
   })
 
   test('email input accepts text', async ({ page }) => {
-    const input = page.getByPlaceholder('Email')
+    const input = page.getByPlaceholder('Work email')
     await expect(input).toBeVisible()
     await input.fill('test@example.com')
     await expect(input).toHaveValue('test@example.com')
@@ -63,27 +65,27 @@ test.describe('login page UI', () => {
     await expect(input).toHaveAttribute('type', 'password')
   })
 
-  test('Log In button submits the form', async ({ page }) => {
-    await expect(page.getByRole('button', { name: /log in/i })).toBeEnabled()
+  test('Sign in button submits the form', async ({ page }) => {
+    await expect(page.getByRole('button', { name: /sign in/i })).toBeEnabled()
   })
 
   test('toggle to signup mode changes submit button text', async ({ page }) => {
     await page.getByRole('button', { name: /sign up/i }).click()
     await expect(
-      page.getByRole('button', { name: 'Sign Up' }).last(),
+      page.getByRole('button', { name: 'Create account' }),
     ).toBeVisible()
   })
 
-  test('toggle back to login mode restores Log In text', async ({ page }) => {
+  test('toggle back to login mode restores Sign in text', async ({ page }) => {
     await page.getByRole('button', { name: /sign up/i }).click()
-    await page.getByRole('button', { name: /log in/i }).click()
-    await expect(page.getByRole('button', { name: 'Log In' })).toBeVisible()
+    await page.getByRole('button', { name: /sign in/i }).click()
+    await expect(page.getByRole('button', { name: 'Sign in' })).toBeVisible()
   })
 
   test('submitting blank form shows browser validation (email required)', async ({
     page,
   }) => {
-    const emailInput = page.getByPlaceholder('Email')
+    const emailInput = page.getByPlaceholder('Work email')
     await expect(emailInput).toHaveAttribute('required', '')
   })
 })
@@ -93,11 +95,10 @@ test.describe('login page UI', () => {
 test.describe('login error feedback', () => {
   test('shows error message on bad credentials', async ({ page }) => {
     await page.goto('/auth/login')
-    await page.fill('[placeholder="Email"]', 'nobody@example.com')
+    await page.fill('[placeholder="Work email"]', 'nobody@example.com')
     await page.fill('[placeholder="Password"]', 'wrongpassword')
     await page.click('button[type="submit"]')
-    // The error paragraph appears when login fails
-    await expect(page.locator('p.text-red-500, p[class*="red"]')).toBeVisible({
+    await expect(page.getByText(/invalid login credentials/i)).toBeVisible({
       timeout: 10_000,
     })
   })

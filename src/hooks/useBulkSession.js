@@ -1,6 +1,7 @@
 import { useCallback, useEffect, useState } from 'react'
 import { nanoid } from 'nanoid'
 import { drainSSE } from '../lib/drainSSE'
+import { loginRedirect } from '../lib/routes'
 
 export const STAGGER_MS = 60_000
 const STORAGE_PREFIX = 'lyrise_bulk_'
@@ -147,7 +148,9 @@ async function generateRow(sessionId, index) {
     })
 
     if (response.status === 401) {
-      window.location.href = '/login'
+      window.location.href = loginRedirect(
+        `${window.location.pathname}${window.location.search}`,
+      )
       return
     }
 

@@ -8,20 +8,23 @@ import GeneratingView from '../../../src/components/ROIGenerator/GeneratingView'
 import useBulkSession, {
   cancelBulkSession,
 } from '../../../src/hooks/useBulkSession'
+import { ROUTES, loginRedirect } from '@/src/lib/routes'
 
-export async function getServerSideProps({ req, res }) {
+export async function getServerSideProps({ req, res, resolvedUrl }) {
   const supabase = createServerClient(req, res)
   const {
     data: { user },
   } = await supabase.auth.getUser()
 
   if (!user) {
-    return { redirect: { destination: '/login', permanent: false } }
+    return {
+      redirect: { destination: loginRedirect(resolvedUrl), permanent: false },
+    }
   }
 
   const isEmployee = user.email?.endsWith('@lyrise.ai') === true
   if (!isEmployee) {
-    return { redirect: { destination: '/dashboard', permanent: false } }
+    return { redirect: { destination: ROUTES.dashboard, permanent: false } }
   }
 
   return { props: {} }

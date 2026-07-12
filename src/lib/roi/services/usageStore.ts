@@ -10,7 +10,7 @@
 // never break report generation.
 // ─────────────────────────────────────────────────────────────────────────────
 
-import { supabaseAdmin } from '@/src/lib/supabaseAdmin'
+import { getSupabaseAdmin } from '@/src/lib/supabaseAdmin'
 
 import { maybeSendUsageCostAlert } from './usageAlerts'
 import type { UsageSummary } from './usageTracker'
@@ -26,6 +26,7 @@ export async function persistUsage(
     return
   }
   try {
+    const supabaseAdmin = getSupabaseAdmin()
     // Additive upsert: a report's cost accrues across the initial generation
     // AND every chat turn. The upsert_roi_usage RPC sums cost/tokens/duration
     // and concatenates calls on conflict, so a cheap chat turn never overwrites

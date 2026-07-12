@@ -1,6 +1,6 @@
 import { createRouteClient } from '../../../../src/lib/supabaseRouteClient'
 import { getRoleForUser } from '../../../../src/lib/authHelpers'
-import { supabaseAdmin } from '../../../../src/lib/supabaseAdmin'
+import { getSupabaseAdmin } from '../../../../src/lib/supabaseAdmin'
 
 export default async function handler(req, res) {
   if (req.method !== 'PATCH') {
@@ -23,6 +23,7 @@ export default async function handler(req, res) {
     return
   }
 
+  const supabaseAdmin = getSupabaseAdmin()
   const { id } = req.query
   const { revoked } = req.body ?? {}
 

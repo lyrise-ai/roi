@@ -20,12 +20,6 @@ function parse(iso) {
   return Number.isNaN(d.getTime()) ? null : d
 }
 
-export function fmtDate(iso) {
-  const d = parse(iso)
-  if (!d) return '—'
-  return `${d.getUTCDate()} ${MONTHS_SHORT[d.getUTCMonth()]} ${d.getUTCFullYear()}`
-}
-
 export function fmtDateTime(iso) {
   const d = parse(iso)
   if (!d) return '—'
