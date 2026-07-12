@@ -285,7 +285,8 @@ function buildCompanySnapshot({ company, copy, normInput }) {
   return rows
 }
 
-function workflowStatusMeta(sourceType) {
+function workflowStatusMeta(sourceType, userValidated) {
+  if (userValidated) return 'Validated'
   if (sourceType === 'user_stated') return 'Provided'
   if (sourceType === 'research_derived') return 'Scraped'
   return 'Benchmarked'
@@ -304,7 +305,7 @@ function buildWorkflows(merged, currency) {
       afterPct: Math.max(6, Math.round((afterHrs / (beforeHrs || 1)) * 100)),
       hrsSaved: Math.round(w.monthlyHours),
       valueLabel: fmtCurrency(monthlyValue, currency),
-      status: workflowStatusMeta(w.sourceType),
+      status: workflowStatusMeta(w.sourceType, w.userValidated),
       role: w.owner || w.agentName,
       targetOutcome: w.expectedOutcome,
       whyFits: w.whyItMatters,
@@ -552,9 +553,11 @@ function buildSources({
     rows.push({
       input: `${wf.name} — monthly volume`,
       detail: `${fmtNumber(wf.monthlyVolume)}/mo estimated`,
-      sourceLabel: workflowStatusMeta(wf.sourceType),
+      sourceLabel: workflowStatusMeta(wf.sourceType, wf.userValidated),
       status:
-        wf.sourceType === 'user_stated' ? 'Validated' : 'Needs validation',
+        wf.userValidated || wf.sourceType === 'user_stated'
+          ? 'Validated'
+          : 'Needs validation',
     })
   })
 

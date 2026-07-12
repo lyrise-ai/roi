@@ -14,7 +14,7 @@ function OutlookBar({ id, data }) {
         result={data.result}
         placement="top-center"
         width={270}
-        triggerClassName="flex w-full max-w-[90px] flex-col overflow-hidden rounded-t-lg"
+        triggerClassName="flex w-[90px] flex-col overflow-hidden rounded-t-lg"
         triggerStyle={{ height: data.heightPx }}
       >
         <span

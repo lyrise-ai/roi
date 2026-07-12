@@ -1,5 +1,6 @@
 import Head from 'next/head'
 import Link from 'next/link'
+import dynamic from 'next/dynamic'
 import { useState, useEffect } from 'react'
 import { useRouter } from 'next/router'
 import { FaTrash } from 'react-icons/fa'
@@ -9,12 +10,15 @@ import {
   createClient as createServerClient,
   createAdminClient,
 } from '../src/lib/supabase-server'
-import { createClient as createBrowserClient } from '../src/lib/supabase-browser'
 import MainHeader from '../src/layout/MainHeader/index'
 import { getRoleForUser } from '../src/lib/authHelpers'
-import AlphaDashboardPanel from '../src/components/AlphaDashboardPanel'
 import ErrorBoundary from '../src/components/shared/ErrorBoundary'
 import { INTER_FONT_FAMILY } from '../src/utilities/fonts'
+
+const AlphaDashboardPanel = dynamic(
+  () => import('../src/components/AlphaDashboardPanel'),
+  { ssr: false },
+)
 
 const FONT = INTER_FONT_FAMILY
 

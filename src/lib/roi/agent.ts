@@ -25,6 +25,12 @@ import { fetchPage } from '@/src/lib/roi/tools/fetchPage'
 import { roiCalculator } from '@/src/lib/roi/pipeline/roiCalculator'
 import { assembleReport } from '@/src/lib/roi/pipeline/assembleReport'
 import { renderTemplate } from '@/src/lib/roi/pipeline/renderTemplate'
+import {
+  patchWorkflow,
+  removeWorkflowByName,
+  appendWorkflow,
+  workflowExists,
+} from '@/src/lib/roi/pipeline/workflowMutations'
 import { roiLog, roiWarn } from '@/src/lib/roi/debug'
 import {
   ROI_MODELER_SYSTEM_PROMPT,
@@ -121,6 +127,28 @@ function classifySeniority(s?: string | null): 'junior' | 'mid' | 'senior' {
 
 // ── Internal helpers ──────────────────────────────────────────────────────────
 
+// Pure recompute chain: calculator → assemble → render. No LLM calls, no
+// callbacks — safe to call from any server context that has a ReportState
+// (chat tools below, and the validation wizard's finalize endpoint at
+// pages/api/reports/[id]/validate-finalize.js). Mutates and returns `state`.
+export function recomputeReportState(
+  state: ReportState,
+  execTemplateHtml: string,
+  fullTemplateHtml: string,
+): ReportState {
+  if (!state.workflows || !state.globals || !state.company) return state
+  state.calcOutput = roiCalculator(
+    state.workflows,
+    state.globals,
+    state.company,
+  )
+  if (!state.copy || !state.normInput) return state
+  state.assembled = assembleReport(state)
+  state.renderedHtml = renderTemplate(execTemplateHtml, state.assembled)
+  state.renderedFullHtml = renderTemplate(fullTemplateHtml, state.assembled)
+  return state
+}
+
 function reAssemble(
   state: ReportState,
   execTemplateHtml: string,
@@ -129,16 +157,11 @@ function reAssemble(
   changedSections?: string[],
 ) {
   if (!state.workflows || !state.globals || !state.company) return
-  state.calcOutput = roiCalculator(
-    state.workflows,
-    state.globals,
-    state.company,
-  )
+  if (state.copy && state.normInput) {
+    callbacks.onPipelineLog?.('Rendering financial tables and report layout…')
+  }
+  recomputeReportState(state, execTemplateHtml, fullTemplateHtml)
   if (!state.copy || !state.normInput) return
-  callbacks.onPipelineLog?.('Rendering financial tables and report layout…')
-  state.assembled = assembleReport(state)
-  state.renderedHtml = renderTemplate(execTemplateHtml, state.assembled)
-  state.renderedFullHtml = renderTemplate(fullTemplateHtml, state.assembled)
   callbacks.onReportUpdate(state, changedSections)
 }
 
@@ -1161,38 +1184,30 @@ function buildTools(
         }
       }) => {
         if (!state.workflows) return { error: 'No workflows to patch' }
-        const idx = state.workflows.findIndex(
-          (w) => w.name.toLowerCase() === workflowName.toLowerCase(),
-        )
-        if (idx === -1) {
+        if (!workflowExists(state.workflows, workflowName)) {
           return {
             error: `Workflow "${workflowName}" not found. Available: ${state.workflows
               .map((w) => w.name)
               .join(', ')}`,
           }
         }
-        state.workflows = state.workflows.map((w, i) =>
-          i !== idx
-            ? w
-            : {
-                ...w,
-                ...(patches.monthlyVolume !== undefined && {
-                  monthlyVolume: patches.monthlyVolume,
-                }),
-                ...(patches.minutesPerItemBefore !== undefined && {
-                  minutesPerItemBefore: patches.minutesPerItemBefore,
-                }),
-                ...(patches.minutesPerItemAfter !== undefined && {
-                  minutesPerItemAfter: patches.minutesPerItemAfter,
-                }),
-                ...(patches.rateOverride !== undefined && {
-                  rateOverride: patches.rateOverride,
-                }),
-                ...(patches.adoptionRate !== undefined && {
-                  adoptionRate: patches.adoptionRate,
-                }),
-              },
-        )
+        state.workflows = patchWorkflow(state.workflows, workflowName, {
+          ...(patches.monthlyVolume !== undefined && {
+            monthlyVolume: patches.monthlyVolume,
+          }),
+          ...(patches.minutesPerItemBefore !== undefined && {
+            minutesPerItemBefore: patches.minutesPerItemBefore,
+          }),
+          ...(patches.minutesPerItemAfter !== undefined && {
+            minutesPerItemAfter: patches.minutesPerItemAfter,
+          }),
+          ...(patches.rateOverride !== undefined && {
+            rateOverride: patches.rateOverride,
+          }),
+          ...(patches.adoptionRate !== undefined && {
+            adoptionRate: patches.adoptionRate,
+          }),
+        })
         reAssemble(state, execTemplateHtml, fullTemplateHtml, callbacks, [
           'workflows',
           'financials',
@@ -1242,10 +1257,7 @@ function buildTools(
       }) => {
         if (!state.workflows) return { error: 'No workflows to add to' }
 
-        const alreadyExists = state.workflows.some(
-          (w) => w.name.toLowerCase() === workflow.name.toLowerCase(),
-        )
-        if (alreadyExists) {
+        if (workflowExists(state.workflows, workflow.name)) {
           return {
             error: `Workflow "${workflow.name}" already exists. Use update_workflow to change its parameters.`,
           }
@@ -1280,7 +1292,7 @@ function buildTools(
           rationale:
             'Added via chat — defaults applied. Use update_workflow to refine.',
         }
-        state.workflows = [...state.workflows, newWorkflow]
+        state.workflows = appendWorkflow(state.workflows, newWorkflow)
         reAssemble(state, execTemplateHtml, fullTemplateHtml, callbacks, [
           'workflows',
           'financials',
@@ -1295,7 +1307,7 @@ function buildTools(
       inputSchema: z.object({ workflowName: z.string() }),
       execute: async ({ workflowName }: { workflowName: string }) => {
         if (!state.workflows) return { error: 'No workflows' }
-        state.workflows = state.workflows.filter((w) => w.name !== workflowName)
+        state.workflows = removeWorkflowByName(state.workflows, workflowName)
         reAssemble(state, execTemplateHtml, fullTemplateHtml, callbacks, [
           'workflows',
           'financials',

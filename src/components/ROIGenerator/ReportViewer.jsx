@@ -120,6 +120,7 @@ export default function ReportViewer({
   batchContext,
   isShareLink = false,
   shareToken = null,
+  validatedAt = null,
   // forceTour = false,
   // feedbackButtonRef: feedbackButtonRefProp = null,
 }) {
@@ -661,6 +662,26 @@ export default function ReportViewer({
               }}
             >
               BULK · {batchContext.currentIndex + 1} of {batchContext.total}
+            </span>
+          )}
+          {validatedAt && (
+            <span
+              style={{
+                fontSize: 11,
+                fontWeight: 600,
+                color: '#059669',
+                background: '#ECFDF5',
+                borderRadius: 999,
+                padding: '3px 10px',
+                letterSpacing: '0.02em',
+              }}
+              title={`Validated by you on ${new Date(validatedAt).toLocaleDateString()}`}
+            >
+              ✓ Validated{' '}
+              {new Date(validatedAt).toLocaleDateString(undefined, {
+                month: 'short',
+                day: 'numeric',
+              })}
             </span>
           )}
         </div>

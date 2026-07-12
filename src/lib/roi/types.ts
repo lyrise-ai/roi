@@ -113,6 +113,11 @@ export interface WorkflowInput {
   rateSource: string | null
   rateSourceUrl: string | null
   rationale: string
+
+  // Set true for workflows the user explicitly kept during the validation
+  // wizard (src/components/ROIGenerator/Validation) — surfaces as the
+  // 'Validated' status pill instead of 'Provided'/'Scraped'/'Benchmarked'.
+  userValidated?: boolean
 }
 
 // ── Salary evidence collected during research (per workflow) ─────────────────

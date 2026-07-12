@@ -113,9 +113,10 @@ export default function ProfitUpliftSection({
           result={leverTotal.result}
           placement="bottom-right"
           width={270}
-          triggerClassName="border-b-2 border-dashed border-[rgba(196,181,253,0.5)] text-base font-bold text-[#C9BFFF]"
         >
-          {leverTotal.value}
+          <span className="border-b-2 border-dashed border-[rgba(196,181,253,0.5)] text-sm font-bold text-[#C9BFFF]">
+            {leverTotal.value}
+          </span>
         </AssumptionPopover>
       </div>
     </div>

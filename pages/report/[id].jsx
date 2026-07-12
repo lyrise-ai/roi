@@ -1,15 +1,13 @@
 import { useEffect, useRef, useState } from 'react'
 import Head from 'next/head'
-import { createClient, createAdminClient } from '../../src/lib/supabase-server'
-import { createClient as createBrowserClient } from '../../src/lib/supabase-browser'
+import { createAdminClient } from '../../src/lib/supabase-server'
 import ReportViewerWithBatch from '../../src/components/ROIGenerator/BulkUpload/ReportViewerWithBatch'
 import { buildStateFromReportRow } from '@/src/lib/roi/reportState'
+import { resolveReportViewerAccess } from '@/src/lib/roi/reportViewerAccess'
 import { motion } from 'framer-motion'
 import { useRouter } from 'next/router'
 import { trackReportAccess } from '@/src/lib/roi/services/reportAccess'
 import ErrorBoundary from '../../src/components/shared/ErrorBoundary'
-import { isEmployeeUser } from '@/src/lib/isEmployee'
-import { ROUTES, loginRedirect } from '@/src/lib/routes'
 
 export async function getServerSideProps({
   req,
@@ -18,67 +16,43 @@ export async function getServerSideProps({
   query,
   resolvedUrl,
 }) {
-  const supabase = createClient(req, res)
+  const access = await resolveReportViewerAccess({
+    req,
+    res,
+    params,
+    query,
+    resolvedUrl,
+  })
+  if (access.redirect) return access
+
+  const {
+    report,
+    isShareLink,
+    isEmployee,
+    isBulk,
+    viewerUserId,
+    viewerEmail,
+    isAlpha,
+    token,
+  } = access
+
+  // Self-serve prospects confirm the AI's assumptions in the validation
+  // wizard before seeing the polished report. Share-link recipients (already
+  // finished, reviewing by email) and bulk-outbound reports (an employee's
+  // own internal review flow) bypass this redirect. Employees still get
+  // redirected to the wizard for their own reports — they just get the
+  // `canSkip` button there (see pages/report/[id]/validate.jsx) instead of
+  // bypassing it outright.
+  if (!isShareLink && !isBulk && !report.validated_at) {
+    return {
+      redirect: {
+        destination: `/report/${report.id}/validate`,
+        permanent: false,
+      },
+    }
+  }
+
   const admin = createAdminClient()
-
-  const token = typeof query?.t === 'string' ? query.t : null
-  let isAlpha = false
-
-  // Always fetch the report once with its share fields so we can decide
-  // whether to grant share-link access before requiring a Supabase session.
-  const { data: report } = await admin
-    .from('reports')
-    .select(
-      'id, company_name, email, status, state_data, user_id, share_token, share_revoked_at, share_message_count',
-    )
-    .eq('id', params.id)
-    .single()
-
-  if (!report) {
-    return { redirect: { destination: '/dashboard', permanent: false } }
-  }
-
-  const isShareLink =
-    !!token &&
-    !!report.share_token &&
-    token === report.share_token &&
-    !report.share_revoked_at
-
-  let isEmployee = false
-  let viewerUserId = null
-  let viewerEmail = null
-
-  if (!isShareLink) {
-    const {
-      data: { user },
-    } = await supabase.auth.getUser()
-
-    if (!user) {
-      return {
-        redirect: { destination: loginRedirect(resolvedUrl), permanent: false },
-      }
-    }
-
-    const { data: userData } = await admin
-      .from('users')
-      .select('role')
-      .eq('id', user.id)
-      .single()
-
-    isEmployee = isEmployeeUser(user, userData)
-    viewerUserId = user.id
-    viewerEmail = user.email ?? null
-    isAlpha = user.user_metadata?.alpha === true
-
-    if (!isEmployee && report.user_id !== user.id) {
-      return { redirect: { destination: ROUTES.dashboard, permanent: false } }
-    }
-
-    if (!isEmployee && report.status !== 'SUCCESS') {
-      return { redirect: { destination: ROUTES.dashboard, permanent: false } }
-    }
-  }
-
   const initialState = buildStateFromReportRow(report)
 
   // Load chat history and usage count in parallel.
@@ -144,6 +118,7 @@ export async function getServerSideProps({
       initialChatHistory,
       isShareLink,
       shareToken: isShareLink ? token : null,
+      validatedAt: report.validated_at ?? null,
     },
   }
 }
@@ -189,6 +164,7 @@ export default function ReportPage({
   initialChatHistory,
   isShareLink,
   shareToken,
+  validatedAt,
 }) {
   const { push } = useRouter()
 
@@ -203,17 +179,6 @@ export default function ReportPage({
   const [tourExitSubmitting, setTourExitSubmitting] = useState(false)
   const [showNudge, setShowNudge] = useState(false)
   const [scrolled, setScrolled] = useState(false)
-
-  // FIX 2 — Auto-trigger the existing product tour for alpha testers.
-  // Simulates a click on the "Take a tour" button after the page has rendered.
-  // The button itself is unchanged so users can replay the tour manually.
-  useEffect(() => {
-    if (!isAlpha) return undefined
-    const t = setTimeout(() => {
-      document.querySelector('button[title="Take a tour"]')?.click()
-    }, 800)
-    return () => clearTimeout(t)
-  }, [isAlpha])
 
   // Periodically nudge the tester to share feedback via a small tooltip
   // above the Share feedback button.
@@ -269,15 +234,17 @@ export default function ReportPage({
     try {
       const token = localStorage.getItem('alpha_token')
       if (!token) return
-      createBrowserClient()
-        .from('alpha_feedback')
-        .upsert(
-          { alpha_token: token, step_generation_completed: true },
-          { onConflict: 'alpha_token' },
-        )
-        .then(({ error }) => {
-          if (error) console.error('[alpha] generation page tracking:', error)
-        })
+      import('../../src/lib/supabase-browser').then(({ createClient }) => {
+        createClient()
+          .from('alpha_feedback')
+          .upsert(
+            { alpha_token: token, step_generation_completed: true },
+            { onConflict: 'alpha_token' },
+          )
+          .then(({ error }) => {
+            if (error) console.error('[alpha] generation page tracking:', error)
+          })
+      })
     } catch {
       /* non-critical */
     }
@@ -289,7 +256,8 @@ export default function ReportPage({
     setTourExitSubmitting(true)
     try {
       const token = localStorage.getItem('alpha_token')
-      const supabase = createBrowserClient()
+      const { createClient } = await import('../../src/lib/supabase-browser')
+      const supabase = createClient()
 
       if (token) {
         await supabase.from('alpha_feedback').upsert(
@@ -384,6 +352,7 @@ export default function ReportPage({
           forceTour={isShareLink}
           backHref={isShareLink ? null : '/dashboard'}
           feedbackButtonRef={feedbackButtonRef}
+          validatedAt={validatedAt}
         />
       </motion.div>
 
