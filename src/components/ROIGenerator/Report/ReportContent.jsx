@@ -16,6 +16,7 @@ import SourcesSection from './sections/SourcesSection'
 import RisksSection from './sections/RisksSection'
 import RoadmapSection from './sections/RoadmapSection'
 import NextStepsSection from './sections/NextStepsSection'
+import EndingSection from './sections/EndingSection'
 
 function TrackedSection({
   sectionKey,
@@ -46,6 +47,12 @@ export default function ReportContent({
   highlightedSections,
   navRef,
   onReady,
+  isAlpha,
+  reportId,
+  onDownload,
+  downloadStatus,
+  onAward,
+  onCredibilityAnswer,
 }) {
   const [hoveredTip, setHoveredTip] = useState(null)
   const [openAssumption, setOpenAssumption] = useState(null)
@@ -247,6 +254,21 @@ export default function ReportContent({
               <NextStepsSection
                 ctaParagraph={viewModel.ctaParagraph}
                 recipientLine={viewModel.recipientLine}
+              />
+            </TrackedSection>
+
+            <TrackedSection
+              sectionKey="ending"
+              highlightedSections={highlightedSections}
+              registerSectionRef={registerSectionRef}
+            >
+              <EndingSection
+                isAlpha={isAlpha}
+                reportId={reportId}
+                onDownload={onDownload}
+                downloadStatus={downloadStatus}
+                onAward={onAward}
+                onCredibilityAnswer={onCredibilityAnswer}
               />
             </TrackedSection>
           </div>
