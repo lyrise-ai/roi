@@ -79,6 +79,8 @@ export default function ReportLoadingScreen({
   sseEvents = [],
   viewState = 'generating',
   onOpen,
+  isAlpha = false,
+  reportId = null,
 }) {
   const [phaseIndex, setPhaseIndex] = useState(0)
   const [logs, setLogs] = useState([])
@@ -88,6 +90,44 @@ export default function ReportLoadingScreen({
   const startTime = useRef(new Date())
   const lastProcessedSseIndex = useRef(0)
   const lastLogAppendAt = useRef(0)
+  const [intakeEase, setIntakeEase] = useState(0)
+  const [intakeEaseNote, setIntakeEaseNote] = useState('')
+
+  // Alpha tour tracking — best-effort, fire-and-forget. Sends the current
+  // rating and note together every time either changes; never awaited, never
+  // blocks the generation wait it's shown alongside.
+  const trackIntakeEase = (rating, note) => {
+    if (!isAlpha) return
+    try {
+      const token = localStorage.getItem('alpha_token')
+      if (!token) return
+      fetch('/api/alpha/progress', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          session_token: token,
+          report_id: reportId,
+          intake_ease: rating || null,
+          intake_ease_note: note?.trim() || null,
+        }),
+      })
+        .then((res) => {
+          if (!res.ok) {
+            console.error('[alpha] intake_ease tracking failed:', res.status)
+          }
+        })
+        .catch((err) => {
+          console.error('[alpha] intake_ease tracking failed:', err)
+        })
+    } catch (err) {
+      console.error('[alpha] intake_ease tracking failed:', err)
+    }
+  }
+
+  const rateIntakeEase = (value) => {
+    setIntakeEase(value)
+    trackIntakeEase(value, intakeEaseNote)
+  }
 
   useEffect(() => {
     if (sseEvents.length === 0) {
@@ -394,6 +434,50 @@ export default function ReportLoadingScreen({
               isFinalising={isDoneOrFinalising}
             />
           </div>
+
+          {/* Intake-ease question — alpha-only, during the active wait */}
+          {isAlpha && !isDoneOrFinalising && (
+            <motion.div
+              initial={{ opacity: 0, y: 6 }}
+              animate={{ opacity: 1, y: 0 }}
+              transition={{ duration: 0.35, ease: [0.22, 1, 0.36, 1] }}
+              className="mt-5 rounded-lg border border-gray-100 bg-white px-4 py-3.5"
+            >
+              <p className="font-poppins text-[12.5px] font-medium text-navy">
+                While we build this — how easy was it to tell us about your
+                company?
+              </p>
+              <div className="mt-2 flex items-center gap-1.5">
+                {[1, 2, 3, 4, 5].map((n) => (
+                  <button
+                    key={n}
+                    type="button"
+                    onClick={() => rateIntakeEase(n)}
+                    className="transition-transform hover:scale-110"
+                    aria-label={`${n} star${n > 1 ? 's' : ''}`}
+                  >
+                    <svg
+                      viewBox="0 0 20 20"
+                      className="h-5 w-5"
+                      fill={n <= intakeEase ? '#F59E0B' : '#E5E7EB'}
+                    >
+                      <path d="M9.049 2.927c.3-.921 1.603-.921 1.902 0l1.07 3.292a1 1 0 00.95.69h3.462c.969 0 1.371 1.24.588 1.81l-2.8 2.034a1 1 0 00-.364 1.118l1.07 3.292c.3.921-.755 1.688-1.54 1.118l-2.8-2.034a1 1 0 00-1.175 0l-2.8 2.034c-.784.57-1.838-.197-1.539-1.118l1.07-3.292a1 1 0 00-.364-1.118L2.98 8.72c-.783-.57-.38-1.81.588-1.81h3.461a1 1 0 00.951-.69l1.07-3.292z" />
+                    </svg>
+                  </button>
+                ))}
+              </div>
+              {intakeEase > 0 && intakeEase <= 3 && (
+                <textarea
+                  value={intakeEaseNote}
+                  onChange={(e) => setIntakeEaseNote(e.target.value)}
+                  onBlur={() => trackIntakeEase(intakeEase, intakeEaseNote)}
+                  placeholder="What was awkward or missing? (optional)"
+                  rows={2}
+                  className="font-poppins mt-2.5 w-full resize-none rounded-md border border-gray-200 px-2.5 py-2 text-[11.5px] text-navy outline-none focus:border-[#5B48F8]"
+                />
+              )}
+            </motion.div>
+          )}
 
           {/* Open Profit Map CTA — shown when complete and a handler is provided */}
           {isComplete && onOpen && (

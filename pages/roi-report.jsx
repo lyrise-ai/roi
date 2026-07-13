@@ -1371,6 +1371,8 @@ export default function ROIReport({ isEmployee, isAlpha }) {
             generationLog={generationLog}
             sseEvents={sseEvents}
             viewState={viewState}
+            isAlpha={isAlpha}
+            reportId={reportId}
             onOpen={
               isAlpha && reportId
                 ? () => router.push(`/report/${reportId}`)

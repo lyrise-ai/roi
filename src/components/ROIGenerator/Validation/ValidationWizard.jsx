@@ -82,6 +82,8 @@ export default function ValidationWizard({
               wizard={wizard}
               currency={currency}
               onStart={() => goStep(1)}
+              isAlpha={isAlpha}
+              reportId={reportId}
             />
           )}
           {wizard.step === 1 && (
@@ -120,6 +122,8 @@ export default function ValidationWizard({
               wizard={wizard}
               onSkip={() => goStep(6)}
               onSubmit={() => goStep(6)}
+              isAlpha={isAlpha}
+              reportId={reportId}
             />
           )}
           {wizard.step === 6 && (

@@ -185,6 +185,8 @@ export default function AlphaSurvey() {
         pmf_main_benefit: finalAnswers['pmf_main_benefit'] || null,
         pmf_improvement: finalAnswers['pmf_improvement'] || null,
         pmf_virality: finalAnswers['pmf_virality'] || null,
+        not_disappointed_reason:
+          finalAnswers['not_disappointed_reason'] || null,
         reached_survey: true,
       }
 

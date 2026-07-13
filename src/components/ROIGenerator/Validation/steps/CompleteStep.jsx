@@ -58,6 +58,7 @@ export default function CompleteStep({ wizard, reportId, currency, isAlpha }) {
                 session_token: token,
                 reached_validation: true,
                 report_id: reportId,
+                intent_timeline: wizard.budgetTiming || null,
               }),
             })
               .then((trackRes) => {

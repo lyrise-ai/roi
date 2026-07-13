@@ -1,5 +1,6 @@
 import { useEffect, useRef, useState } from 'react'
 import Head from 'next/head'
+import clsx from 'clsx'
 import { createAdminClient } from '../../src/lib/supabase-server'
 import ReportViewerWithBatch from '../../src/components/ROIGenerator/BulkUpload/ReportViewerWithBatch'
 import { buildStateFromReportRow } from '@/src/lib/roi/reportState'
@@ -123,6 +124,14 @@ export async function getServerSideProps({
   }
 }
 
+const UNCLEAR_OPTIONS = [
+  'The numbers',
+  'The workflow table',
+  'What to do next',
+  'The terminology',
+  'Something else',
+]
+
 function categorizeChatMessages(messages) {
   if (!messages || messages.length === 0) return []
   return messages
@@ -173,6 +182,8 @@ export default function ReportPage({
   const feedbackButtonRef = useRef(null)
   const [reportClarity, setReportClarity] = useState(0)
   const [clarityHover, setClarityHover] = useState(0)
+  const [unclearReason, setUnclearReason] = useState(null)
+  const [unclearNote, setUnclearNote] = useState('')
   const [tourExitSubmitting, setTourExitSubmitting] = useState(false)
   const [showNudge, setShowNudge] = useState(false)
   const [scrolled, setScrolled] = useState(false)
@@ -264,6 +275,14 @@ export default function ReportPage({
             session_token: token,
             reached_report: true,
             report_clarity: reportClarity || null,
+            unclear_reason:
+              reportClarity > 0 && reportClarity <= 3
+                ? unclearReason || null
+                : null,
+            unclear_note:
+              reportClarity > 0 && reportClarity <= 3
+                ? unclearNote.trim() || null
+                : null,
           }),
         })
         if (!res.ok) {
@@ -509,6 +528,39 @@ export default function ReportPage({
                     </button>
                   ))}
                 </div>
+
+                {/* Q: What was unclear (only when clarity rated 3 or below) */}
+                {reportClarity > 0 && reportClarity <= 3 && (
+                  <div className="mb-5">
+                    <p className="text-sm font-medium text-slate-700 mb-2">
+                      What was unclear?
+                    </p>
+                    <div className="flex flex-col gap-1.5 mb-3">
+                      {UNCLEAR_OPTIONS.map((opt) => (
+                        <button
+                          key={opt}
+                          type="button"
+                          onClick={() => setUnclearReason(opt)}
+                          className={clsx(
+                            'text-left px-3 py-2 rounded-lg border text-sm transition-colors',
+                            unclearReason === opt
+                              ? 'border-[#5B48F8] bg-[#F5F3FF] text-[#5B48F8] font-semibold'
+                              : 'border-slate-200 text-slate-600 hover:border-slate-400',
+                          )}
+                        >
+                          {opt}
+                        </button>
+                      ))}
+                    </div>
+                    <textarea
+                      value={unclearNote}
+                      onChange={(e) => setUnclearNote(e.target.value)}
+                      placeholder="Anything else? (optional)"
+                      rows={2}
+                      className="w-full border border-slate-200 rounded-lg px-3 py-2 text-sm text-slate-900 placeholder-slate-400 outline-none focus:border-[#5B48F8] resize-none"
+                    />
+                  </div>
+                )}
 
                 <div className="flex gap-3">
                   <button

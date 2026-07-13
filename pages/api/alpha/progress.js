@@ -27,6 +27,8 @@ const WHITELISTED_FIELDS = new Set([
   'pmf_main_benefit',
   'pmf_improvement',
   'pmf_virality',
+  'not_disappointed_reason',
+  'intent_timeline',
   'reached_intake',
   'reached_generation',
   'reached_validation',
