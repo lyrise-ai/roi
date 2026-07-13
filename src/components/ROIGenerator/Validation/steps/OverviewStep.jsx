@@ -2,6 +2,8 @@ import { useMemo, useState } from 'react'
 import { fmtCurrency, fmtCurrencyShort, fmtNumber } from '../../Report/format'
 import { statusStyle, statusDef } from '../../Report/shared/statusMeta'
 import KpiTile from '../KpiTile'
+import NumberScale from '../../NumberScale'
+import { INTER_FONT_FAMILY } from '@/src/utilities/fonts'
 
 // Merges WorkflowInput + WorkflowCalc by name, mirroring
 // reportViewModel.js's `merged` construction — kept local rather than
@@ -220,31 +222,21 @@ export default function OverviewStep({
         </div>
 
         {isAlpha && (
-          <div className="mx-auto mb-6 max-w-[320px] border-t border-[rgba(124,140,176,0.25)] pt-6">
-            <div className="mb-2.5 text-[12.5px] text-[#9AA7C4]">
-              Before you validate — how much do you trust these numbers?
+          <div className="mx-auto mb-6 max-w-[360px] border-t border-[rgba(124,140,176,0.25)] pt-6">
+            <div
+              style={{ fontFamily: INTER_FONT_FAMILY, letterSpacing: '-0.2px' }}
+              className="mb-2 text-[14.5px] font-normal text-white"
+            >
+              Before you validate, how much do you trust these numbers?
             </div>
-            <div className="flex justify-center gap-1.5">
-              {[1, 2, 3, 4, 5].map((n) => (
-                <button
-                  key={n}
-                  type="button"
-                  onClick={() => rateTrustBefore(n)}
-                  className="transition-transform hover:scale-110"
-                  aria-label={`${n} star${n > 1 ? 's' : ''}`}
-                >
-                  <svg
-                    viewBox="0 0 20 20"
-                    className="h-6 w-6"
-                    fill={
-                      n <= trustBefore ? '#F59E0B' : 'rgba(255,255,255,0.18)'
-                    }
-                  >
-                    <path d="M9.049 2.927c.3-.921 1.603-.921 1.902 0l1.07 3.292a1 1 0 00.95.69h3.462c.969 0 1.371 1.24.588 1.81l-2.8 2.034a1 1 0 00-.364 1.118l1.07 3.292c.3.921-.755 1.688-1.54 1.118l-2.8-2.034a1 1 0 00-1.175 0l-2.8 2.034c-.784.57-1.838-.197-1.539-1.118l1.07-3.292a1 1 0 00-.364-1.118L2.98 8.72c-.783-.57-.38-1.81.588-1.81h3.461a1 1 0 00.951-.69l1.07-3.292z" />
-                  </svg>
-                </button>
-              ))}
-            </div>
+            <NumberScale
+              value={trustBefore}
+              onChange={rateTrustBefore}
+              lowLabel="Not at all"
+              highLabel="Completely"
+              variant="dark"
+              align="center"
+            />
           </div>
         )}
 

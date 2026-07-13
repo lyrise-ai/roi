@@ -9,6 +9,8 @@ import { motion } from 'framer-motion'
 import { useRouter } from 'next/router'
 import { trackReportAccess } from '@/src/lib/roi/services/reportAccess'
 import ErrorBoundary from '../../src/components/shared/ErrorBoundary'
+import NumberScale from '../../src/components/ROIGenerator/NumberScale'
+import { INTER_FONT_FAMILY } from '@/src/utilities/fonts'
 
 export async function getServerSideProps({
   req,
@@ -181,7 +183,6 @@ export default function ReportPage({
   const [showTourExit, setShowTourExit] = useState(false)
   const feedbackButtonRef = useRef(null)
   const [reportClarity, setReportClarity] = useState(0)
-  const [clarityHover, setClarityHover] = useState(0)
   const [unclearReason, setUnclearReason] = useState(null)
   const [unclearNote, setUnclearNote] = useState('')
   const [tourExitSubmitting, setTourExitSubmitting] = useState(false)
@@ -500,39 +501,34 @@ export default function ReportPage({
                 </p>
 
                 {/* Q: Report clarity */}
-                <p className="text-sm font-medium text-slate-700 mb-2">
+                <p
+                  style={{
+                    fontFamily: INTER_FONT_FAMILY,
+                    letterSpacing: '-0.2px',
+                  }}
+                  className="text-[14.5px] font-normal text-slate-800 mb-2"
+                >
                   How clearly did the report communicate value to you?
                 </p>
-                <div className="flex gap-2 mb-6">
-                  {[1, 2, 3, 4, 5].map((s) => (
-                    <button
-                      key={s}
-                      type="button"
-                      onClick={() => setReportClarity(s)}
-                      onMouseEnter={() => setClarityHover(s)}
-                      onMouseLeave={() => setClarityHover(0)}
-                      aria-label={`${s} star${s > 1 ? 's' : ''}`}
-                      className="focus:outline-none transition-transform hover:scale-110"
-                    >
-                      <svg
-                        viewBox="0 0 20 20"
-                        className="w-8 h-8"
-                        fill={
-                          s <= (clarityHover || reportClarity)
-                            ? '#fbbf24'
-                            : '#e2e8f0'
-                        }
-                      >
-                        <path d="M9.049 2.927c.3-.921 1.603-.921 1.902 0l1.07 3.292a1 1 0 00.95.69h3.462c.969 0 1.371 1.24.588 1.81l-2.8 2.034a1 1 0 00-.364 1.118l1.07 3.292c.3.921-.755 1.688-1.54 1.118l-2.8-2.034a1 1 0 00-1.175 0l-2.8 2.034c-.784.57-1.838-.197-1.539-1.118l1.07-3.292a1 1 0 00-.364-1.118L2.98 8.72c-.783-.57-.38-1.81.588-1.81h3.461a1 1 0 00.951-.69l1.07-3.292z" />
-                      </svg>
-                    </button>
-                  ))}
+                <div className="mb-2">
+                  <NumberScale
+                    value={reportClarity}
+                    onChange={setReportClarity}
+                    lowLabel="Not clear"
+                    highLabel="Very clear"
+                  />
                 </div>
 
                 {/* Q: What was unclear (only when clarity rated 3 or below) */}
                 {reportClarity > 0 && reportClarity <= 3 && (
                   <div className="mb-5">
-                    <p className="text-sm font-medium text-slate-700 mb-2">
+                    <p
+                      style={{
+                        fontFamily: INTER_FONT_FAMILY,
+                        letterSpacing: '-0.2px',
+                      }}
+                      className="text-sm font-medium text-slate-700 mb-2"
+                    >
                       What was unclear?
                     </p>
                     <div className="flex flex-col gap-1.5 mb-3">
@@ -541,6 +537,7 @@ export default function ReportPage({
                           key={opt}
                           type="button"
                           onClick={() => setUnclearReason(opt)}
+                          style={{ fontFamily: INTER_FONT_FAMILY }}
                           className={clsx(
                             'text-left px-3 py-2 rounded-lg border text-sm transition-colors',
                             unclearReason === opt
@@ -557,6 +554,7 @@ export default function ReportPage({
                       onChange={(e) => setUnclearNote(e.target.value)}
                       placeholder="Anything else? (optional)"
                       rows={2}
+                      style={{ fontFamily: INTER_FONT_FAMILY }}
                       className="w-full border border-slate-200 rounded-lg px-3 py-2 text-sm text-slate-900 placeholder-slate-400 outline-none focus:border-[#5B48F8] resize-none"
                     />
                   </div>

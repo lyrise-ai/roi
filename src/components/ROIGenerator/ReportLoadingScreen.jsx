@@ -1,5 +1,7 @@
 import { useEffect, useLayoutEffect, useMemo, useRef, useState } from 'react'
 import { motion, AnimatePresence } from 'framer-motion'
+import NumberScale from './NumberScale'
+import { INTER_FONT_FAMILY } from '@/src/utilities/fonts'
 
 const PHASES = [
   {
@@ -443,28 +445,23 @@ export default function ReportLoadingScreen({
               transition={{ duration: 0.35, ease: [0.22, 1, 0.36, 1] }}
               className="mt-5 rounded-lg border border-gray-100 bg-white px-4 py-3.5"
             >
-              <p className="font-poppins text-[12.5px] font-medium text-navy">
-                While we build this — how easy was it to tell us about your
+              <p
+                style={{
+                  fontFamily: INTER_FONT_FAMILY,
+                  letterSpacing: '-0.2px',
+                }}
+                className="text-[14.5px] font-normal text-navy"
+              >
+                While we build this, how easy was it to tell us about your
                 company?
               </p>
-              <div className="mt-2 flex items-center gap-1.5">
-                {[1, 2, 3, 4, 5].map((n) => (
-                  <button
-                    key={n}
-                    type="button"
-                    onClick={() => rateIntakeEase(n)}
-                    className="transition-transform hover:scale-110"
-                    aria-label={`${n} star${n > 1 ? 's' : ''}`}
-                  >
-                    <svg
-                      viewBox="0 0 20 20"
-                      className="h-5 w-5"
-                      fill={n <= intakeEase ? '#F59E0B' : '#E5E7EB'}
-                    >
-                      <path d="M9.049 2.927c.3-.921 1.603-.921 1.902 0l1.07 3.292a1 1 0 00.95.69h3.462c.969 0 1.371 1.24.588 1.81l-2.8 2.034a1 1 0 00-.364 1.118l1.07 3.292c.3.921-.755 1.688-1.54 1.118l-2.8-2.034a1 1 0 00-1.175 0l-2.8 2.034c-.784.57-1.838-.197-1.539-1.118l1.07-3.292a1 1 0 00-.364-1.118L2.98 8.72c-.783-.57-.38-1.81.588-1.81h3.461a1 1 0 00.951-.69l1.07-3.292z" />
-                    </svg>
-                  </button>
-                ))}
+              <div className="mt-2">
+                <NumberScale
+                  value={intakeEase}
+                  onChange={rateIntakeEase}
+                  lowLabel="Very hard"
+                  highLabel="Very easy"
+                />
               </div>
               {intakeEase > 0 && intakeEase <= 3 && (
                 <textarea
@@ -473,7 +470,8 @@ export default function ReportLoadingScreen({
                   onBlur={() => trackIntakeEase(intakeEase, intakeEaseNote)}
                   placeholder="What was awkward or missing? (optional)"
                   rows={2}
-                  className="font-poppins mt-2.5 w-full resize-none rounded-md border border-gray-200 px-2.5 py-2 text-[11.5px] text-navy outline-none focus:border-[#5B48F8]"
+                  style={{ fontFamily: INTER_FONT_FAMILY }}
+                  className="mt-2 w-full resize-none rounded-md border border-gray-200 px-2.5 py-2 text-[11.5px] text-navy outline-none focus:border-[#5B48F8]"
                 />
               )}
             </motion.div>
