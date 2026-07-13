@@ -106,21 +106,6 @@ export default async function handler(req, res) {
 
     const userId = linkData.user.id
 
-    // Set metadata explicitly rather than relying on generateLink's `data`
-    // option alone, since that's only reliably applied at user creation time.
-    const { error: updateError } =
-      await supabaseAdmin.auth.admin.updateUserById(userId, {
-        user_metadata: {
-          ...(linkData.user.user_metadata ?? {}),
-          alpha: true,
-          ...(trimmedName ? { full_name: trimmedName } : {}),
-        },
-      })
-    if (updateError) {
-      res.status(500).json({ error: updateError.message })
-      return
-    }
-
     const token = crypto.randomUUID().replace(/-/g, '')
     const { data: invite, error: insertError } = await supabaseAdmin
       .from('alpha_invites')
@@ -145,6 +130,25 @@ export default async function handler(req, res) {
         return
       }
       res.status(500).json({ error: insertError.message })
+      return
+    }
+
+    // Set metadata explicitly rather than relying on generateLink's `data`
+    // option alone, since that's only reliably applied at user creation time.
+    // invite_id lets every later alpha_feedback write recover this invite's
+    // row without a privileged lookup (alpha_invites has no client-facing
+    // RLS policies) — see pages/api/alpha/progress.js.
+    const { error: updateError } =
+      await supabaseAdmin.auth.admin.updateUserById(userId, {
+        user_metadata: {
+          ...(linkData.user.user_metadata ?? {}),
+          alpha: true,
+          invite_id: invite.id,
+          ...(trimmedName ? { full_name: trimmedName } : {}),
+        },
+      })
+    if (updateError) {
+      res.status(500).json({ error: updateError.message })
       return
     }
 

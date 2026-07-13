@@ -498,6 +498,31 @@ export default function AlphaDashboardPanel() {
     )
   }
 
+  // alpha_feedback was just rebuilt on a new schema (see the migration) — an
+  // empty table is expected right after that, not a real "0 testers"
+  // result. Say so explicitly rather than rendering every metric card and
+  // the funnel as if zero were a measured value.
+  if (rows.length === 0) {
+    return (
+      <div className="flex flex-col items-center justify-center gap-2 py-24">
+        <p className="text-slate-500 text-sm font-medium">
+          No alpha tester data yet.
+        </p>
+        <p className="text-slate-400 text-xs max-w-sm text-center">
+          alpha_feedback was rebuilt on a new schema — this fills in as testers
+          use the tour again.
+        </p>
+        <button
+          type="button"
+          onClick={fetchData}
+          className="mt-2 text-sm font-medium text-blue-600 hover:underline"
+        >
+          Refresh ↻
+        </button>
+      </div>
+    )
+  }
+
   const total = rows.length
 
   const veryDisappointed = rows.filter(

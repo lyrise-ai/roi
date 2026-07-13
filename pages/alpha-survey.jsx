@@ -6,11 +6,6 @@ import clsx from 'clsx'
 import { useRouter } from 'next/router'
 import MainHeader from '../src/layout/MainHeader'
 
-async function createBrowserSupabaseClient() {
-  const { createClient } = await import('../src/lib/supabase-browser')
-  return createClient()
-}
-
 // ── Question definitions ──────────────────────────────────────────────────────
 
 const Q1 = {
@@ -110,7 +105,7 @@ function StarPicker({ value, onChange }) {
 
 export default function AlphaSurvey() {
   const router = useRouter()
-  const { reportId, email: emailParam } = router.query
+  const { reportId } = router.query
 
   const [currentQ, setCurrentQ] = useState(0)
   const [answers, setAnswers] = useState({})
@@ -119,15 +114,6 @@ export default function AlphaSurvey() {
 
   const [submitting, setSubmitting] = useState(false)
   const [done, setDone] = useState(false)
-
-  const [intakeRating, setIntakeRating] = useState(null)
-  const [generationSpeed, setGenerationSpeed] = useState(null)
-
-  // Read localStorage on mount
-  useEffect(() => {
-    setIntakeRating(localStorage.getItem('alpha_intake_rating') || null)
-    setGenerationSpeed(localStorage.getItem('alpha_generation_speed') || null)
-  }, [])
 
   // ── Compute question sequence based on Q1 answer ──────────────
 
@@ -185,16 +171,13 @@ export default function AlphaSurvey() {
     setSubmitting(true)
 
     try {
-      const supabase = await createBrowserSupabaseClient()
-
       const alphaToken = localStorage.getItem('alpha_token') || null
       const chatKeywords = localStorage.getItem('alpha_chat_keywords')
       const parsedKeywords = chatKeywords ? JSON.parse(chatKeywords) : null
 
       const payload = {
-        ...(alphaToken ? { alpha_token: alphaToken } : {}),
+        session_token: alphaToken,
         report_id: reportId || null,
-        user_email: emailParam || null,
         chat_keywords: parsedKeywords,
         // PMF core fields
         pmf_disappointed: finalAnswers['pmf_disappointed'] || null,
@@ -202,26 +185,20 @@ export default function AlphaSurvey() {
         pmf_main_benefit: finalAnswers['pmf_main_benefit'] || null,
         pmf_improvement: finalAnswers['pmf_improvement'] || null,
         pmf_virality: finalAnswers['pmf_virality'] || null,
-        step1_intake_rating: intakeRating ? parseInt(intakeRating, 10) : null,
-        step2_generation_speed: generationSpeed || null,
-        tour_completed: true,
-        step_survey_completed: true,
-        last_completed_step: 5,
-        created_at: new Date().toISOString(),
+        reached_survey: true,
       }
 
-      // eslint-disable-next-line no-console
-      console.log('alpha_feedback payload:', payload)
-
-      const { error } = alphaToken
-        ? await supabase
-            .from('alpha_feedback')
-            .upsert(payload, { onConflict: 'alpha_token' })
-        : await supabase.from('alpha_feedback').insert(payload)
-      if (error) throw error
+      const res = await fetch('/api/alpha/progress', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify(payload),
+      })
+      if (!res.ok) {
+        throw new Error(`alpha progress save failed: ${res.status}`)
+      }
     } catch (err) {
       // eslint-disable-next-line no-console
-      console.error('alpha_feedback insert error:', err)
+      console.error('alpha_feedback save error:', err)
     } finally {
       // Feedback collection is best-effort and must never block the tester from
       // completing the tour.

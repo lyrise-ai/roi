@@ -172,9 +172,7 @@ export default function ReportPage({
   const [showTourExit, setShowTourExit] = useState(false)
   const feedbackButtonRef = useRef(null)
   const [reportClarity, setReportClarity] = useState(0)
-  const [chatRating, setChatRating] = useState(0)
   const [clarityHover, setClarityHover] = useState(0)
-  const [chatHover, setChatHover] = useState(0)
   const [tourExitSubmitting, setTourExitSubmitting] = useState(false)
   const [showNudge, setShowNudge] = useState(false)
   const [scrolled, setScrolled] = useState(false)
@@ -225,17 +223,25 @@ export default function ReportPage({
     try {
       const token = localStorage.getItem('alpha_token')
       if (!token) return
-      import('../../src/lib/supabase-browser').then(({ createClient }) => {
-        createClient()
-          .from('alpha_feedback')
-          .upsert(
-            { alpha_token: token, step_generation_completed: true },
-            { onConflict: 'alpha_token' },
-          )
-          .then(({ error }) => {
-            if (error) console.error('[alpha] generation page tracking:', error)
-          })
+      fetch('/api/alpha/progress', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          session_token: token,
+          reached_generation: true,
+        }),
       })
+        .then((res) => {
+          if (!res.ok) {
+            console.error(
+              '[alpha] generation page tracking failed:',
+              res.status,
+            )
+          }
+        })
+        .catch((err) => {
+          console.error('[alpha] generation page tracking failed:', err)
+        })
     } catch (err) {
       console.error('[alpha] generation page tracking failed:', err)
     }
@@ -251,15 +257,18 @@ export default function ReportPage({
       const supabase = createClient()
 
       if (token) {
-        await supabase.from('alpha_feedback').upsert(
-          {
-            alpha_token: token,
-            step_report_completed: true,
-            step3_report_clarity: reportClarity || null,
-            step4_chat_rating: chatRating || null,
-          },
-          { onConflict: 'alpha_token' },
-        )
+        const res = await fetch('/api/alpha/progress', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({
+            session_token: token,
+            reached_report: true,
+            report_clarity: reportClarity || null,
+          }),
+        })
+        if (!res.ok) {
+          console.error('[alpha] tour exit tracking failed:', res.status)
+        }
       }
 
       // Extract keywords from this report's chat messages and save them to
@@ -460,7 +469,7 @@ export default function ReportPage({
             }
           `}</style>
 
-          {/* Tour-exit modal — collect report clarity + chat rating before redirecting */}
+          {/* Tour-exit modal — collect report clarity before redirecting */}
           {showTourExit && (
             <div className="fixed inset-0 z-[100] flex items-center justify-center bg-black/50">
               <div className="bg-white rounded-2xl shadow-2xl w-full max-w-sm mx-4 p-6">
@@ -468,14 +477,14 @@ export default function ReportPage({
                   Before you go…
                 </h3>
                 <p className="text-xs text-slate-400 mb-5">
-                  Two quick questions — takes 20 seconds.
+                  One quick question — takes 10 seconds.
                 </p>
 
                 {/* Q: Report clarity */}
                 <p className="text-sm font-medium text-slate-700 mb-2">
                   How clearly did the report communicate value to you?
                 </p>
-                <div className="flex gap-2 mb-5">
+                <div className="flex gap-2 mb-6">
                   {[1, 2, 3, 4, 5].map((s) => (
                     <button
                       key={s}
@@ -493,37 +502,6 @@ export default function ReportPage({
                           s <= (clarityHover || reportClarity)
                             ? '#fbbf24'
                             : '#e2e8f0'
-                        }
-                      >
-                        <path d="M9.049 2.927c.3-.921 1.603-.921 1.902 0l1.07 3.292a1 1 0 00.95.69h3.462c.969 0 1.371 1.24.588 1.81l-2.8 2.034a1 1 0 00-.364 1.118l1.07 3.292c.3.921-.755 1.688-1.54 1.118l-2.8-2.034a1 1 0 00-1.175 0l-2.8 2.034c-.784.57-1.838-.197-1.539-1.118l1.07-3.292a1 1 0 00-.364-1.118L2.98 8.72c-.783-.57-.38-1.81.588-1.81h3.461a1 1 0 00.951-.69l1.07-3.292z" />
-                      </svg>
-                    </button>
-                  ))}
-                </div>
-
-                {/* Q: Chat rating (optional) */}
-                <p className="text-sm font-medium text-slate-700 mb-1">
-                  How smooth was editing the report with AI?
-                </p>
-                <p className="text-xs text-slate-400 mb-2">
-                  Skip if you didn&apos;t use the chat
-                </p>
-                <div className="flex gap-2 mb-6">
-                  {[1, 2, 3, 4, 5].map((s) => (
-                    <button
-                      key={s}
-                      type="button"
-                      onClick={() => setChatRating(s)}
-                      onMouseEnter={() => setChatHover(s)}
-                      onMouseLeave={() => setChatHover(0)}
-                      aria-label={`${s} star${s > 1 ? 's' : ''}`}
-                      className="focus:outline-none transition-transform hover:scale-110"
-                    >
-                      <svg
-                        viewBox="0 0 20 20"
-                        className="w-8 h-8"
-                        fill={
-                          s <= (chatHover || chatRating) ? '#fbbf24' : '#e2e8f0'
                         }
                       >
                         <path d="M9.049 2.927c.3-.921 1.603-.921 1.902 0l1.07 3.292a1 1 0 00.95.69h3.462c.969 0 1.371 1.24.588 1.81l-2.8 2.034a1 1 0 00-.364 1.118l1.07 3.292c.3.921-.755 1.688-1.54 1.118l-2.8-2.034a1 1 0 00-1.175 0l-2.8 2.034c-.784.57-1.838-.197-1.539-1.118l1.07-3.292a1 1 0 00-.364-1.118L2.98 8.72c-.783-.57-.38-1.81.588-1.81h3.461a1 1 0 00.951-.69l1.07-3.292z" />

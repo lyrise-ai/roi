@@ -98,11 +98,6 @@ const VIEW_STATES = {
   ERROR: 'error',
 }
 
-async function createBrowserSupabaseClient() {
-  const { createClient } = await import('../src/lib/supabase-browser')
-  return createClient()
-}
-
 const DEV_STEP1_PRESET = {
   companyName: 'LyRise',
   website: 'lyrise.ai',
@@ -1034,8 +1029,9 @@ export default function ROIReport({ isEmployee, isAlpha }) {
   )
   const [errors, setErrors] = useState({})
 
-  // Generate a unique per-session alpha token (used as alpha_feedback PK)
-  // and fire a one-time notification email to the internal team.
+  // Generate a unique per-session alpha token (sent to /api/alpha/progress
+  // as session_token, alpha_feedback's conflict key) and fire a one-time
+  // notification email to the internal team.
   useEffect(() => {
     if (!isAlpha) return
 
@@ -1086,20 +1082,18 @@ export default function ROIReport({ isEmployee, isAlpha }) {
         try {
           const token = localStorage.getItem('alpha_token')
           if (token) {
-            createBrowserSupabaseClient()
-              .then((supabase) =>
-                supabase.from('alpha_feedback').upsert(
-                  {
-                    alpha_token: token,
-                    step_intake_completed: true,
-                    company_name: s1.companyName?.trim() || null,
-                    user_email: s2.email?.trim() || null,
-                  },
-                  { onConflict: 'alpha_token' },
-                ),
-              )
-              .then(({ error }) => {
-                if (error) console.error('[alpha] intake tracking:', error)
+            fetch('/api/alpha/progress', {
+              method: 'POST',
+              headers: { 'Content-Type': 'application/json' },
+              body: JSON.stringify({
+                session_token: token,
+                reached_intake: true,
+              }),
+            })
+              .then((res) => {
+                if (!res.ok) {
+                  console.error('[alpha] intake tracking failed:', res.status)
+                }
               })
               .catch((err) => {
                 console.error('[alpha] intake tracking failed:', err)
@@ -1267,17 +1261,18 @@ export default function ROIReport({ isEmployee, isAlpha }) {
       try {
         const token = localStorage.getItem('alpha_token')
         if (token) {
-          createBrowserSupabaseClient()
-            .then((supabase) =>
-              supabase
-                .from('alpha_feedback')
-                .upsert(
-                  { alpha_token: token, step_generation_completed: true },
-                  { onConflict: 'alpha_token' },
-                ),
-            )
-            .then(({ error }) => {
-              if (error) console.error('[alpha] generation tracking:', error)
+          fetch('/api/alpha/progress', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({
+              session_token: token,
+              reached_generation: true,
+            }),
+          })
+            .then((res) => {
+              if (!res.ok) {
+                console.error('[alpha] generation tracking failed:', res.status)
+              }
             })
             .catch((err) => {
               console.error('[alpha] generation tracking failed:', err)
