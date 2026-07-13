@@ -221,7 +221,7 @@ export default function AlphaSurvey() {
       if (error) throw error
     } catch (err) {
       // eslint-disable-next-line no-console
-      console.error('alpha_feedback insert error:', err)
+      console.error('alpha_feedback insert error:', err.message)
     } finally {
       // Feedback collection is best-effort and must never block the tester from
       // completing the tour.

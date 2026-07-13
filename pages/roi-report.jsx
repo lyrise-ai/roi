@@ -1142,7 +1142,8 @@ export default function ROIReport({ isEmployee, isAlpha }) {
                 ),
               )
               .then(({ error }) => {
-                if (error) console.error('[alpha] intake tracking:', error)
+                if (error)
+                  console.error('[alpha] intake tracking:', error.message)
               })
               .catch((err) => {
                 console.error('[alpha] intake tracking failed:', err)

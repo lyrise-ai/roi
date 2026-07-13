@@ -4,6 +4,12 @@ Sentry.init({
   dsn: 'https://35bc0693cb1fdcd1e6e5d2c146ca5c0b@o4511621876678656.ingest.de.sentry.io/4511621883428944',
   enabled: process.env.NODE_ENV !== 'development',
   integrations: [Sentry.captureConsoleIntegration({ levels: ['error'] })],
+  // Vercel's serverless module loader can emit this benign Node runtime
+  // warning on cold starts. It is not tied to the route handling the request
+  // and should not become an actionable Sentry/Linear issue.
+  ignoreErrors: [
+    /vm\.USE_MAIN_CONTEXT_DEFAULT_LOADER is an experimental feature/,
+  ],
   dataCollection: {
     // To disable sending user data and HTTP bodies, uncomment the lines below. For more info visit:
     // https://docs.sentry.io/platforms/javascript/guides/nextjs/configuration/options/#dataCollection
