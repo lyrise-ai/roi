@@ -20,7 +20,7 @@ export async function getServerSideProps({
   })
   if (access.redirect) return access
 
-  const { report, isShareLink, isEmployee, isBulk } = access
+  const { report, isShareLink, isEmployee, isBulk, isAlpha } = access
 
   // Already validated — can't be re-forced through the wizard by URL.
   if (report.validated_at) {
@@ -42,11 +42,17 @@ export async function getServerSideProps({
       initialState: buildStateFromReportRow(report),
       reportId: report.id,
       canSkip: isEmployee || isBulk,
+      isAlpha,
     },
   }
 }
 
-export default function ValidatePage({ initialState, reportId, canSkip }) {
+export default function ValidatePage({
+  initialState,
+  reportId,
+  canSkip,
+  isAlpha,
+}) {
   return (
     <ErrorBoundary pageContext={{ page: 'report-validate', reportId }}>
       <Head>
@@ -56,6 +62,7 @@ export default function ValidatePage({ initialState, reportId, canSkip }) {
         initialState={initialState}
         reportId={reportId}
         canSkip={canSkip}
+        isAlpha={isAlpha}
       />
     </ErrorBoundary>
   )

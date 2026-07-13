@@ -10,7 +10,7 @@ const BUDGET_OPTIONS = [
   { value: 'exploring', label: 'Just exploring' },
 ]
 
-export default function CompleteStep({ wizard, reportId, currency }) {
+export default function CompleteStep({ wizard, reportId, currency, isAlpha }) {
   const router = useRouter()
   const [status, setStatus] = useState('idle') // idle | saving | error
 
@@ -44,6 +44,39 @@ export default function CompleteStep({ wizard, reportId, currency }) {
         }),
       })
       if (!res.ok) throw new Error(`HTTP ${res.status}`)
+
+      // Alpha tour tracking — best-effort. Validation is already saved above;
+      // this must never block or break navigation to the finished report.
+      if (isAlpha) {
+        try {
+          const token = localStorage.getItem('alpha_token')
+          if (token) {
+            fetch('/api/alpha/progress', {
+              method: 'POST',
+              headers: { 'Content-Type': 'application/json' },
+              body: JSON.stringify({
+                session_token: token,
+                reached_validation: true,
+                report_id: reportId,
+              }),
+            })
+              .then((trackRes) => {
+                if (!trackRes.ok) {
+                  console.error(
+                    '[alpha] validation tracking failed:',
+                    trackRes.status,
+                  )
+                }
+              })
+              .catch((err) => {
+                console.error('[alpha] validation tracking failed:', err)
+              })
+          }
+        } catch (err) {
+          console.error('[alpha] validation tracking failed:', err)
+        }
+      }
+
       router.push(`/report/${reportId}`)
     } catch (err) {
       console.error('[CompleteStep] finalize failed:', err)

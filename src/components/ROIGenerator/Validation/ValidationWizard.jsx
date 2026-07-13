@@ -27,7 +27,12 @@ const CHAT_QUICK_REPLIES = {
 // shell, per-step content, and the real AI chat panel. Intentionally a
 // separate component tree from ReportViewer.jsx — see the implementation
 // plan's routing rationale.
-export default function ValidationWizard({ initialState, reportId, canSkip }) {
+export default function ValidationWizard({
+  initialState,
+  reportId,
+  canSkip,
+  isAlpha,
+}) {
   const router = useRouter()
   const chatRef = useRef(null)
   const wizard = useValidationWizard(
@@ -122,6 +127,7 @@ export default function ValidationWizard({ initialState, reportId, canSkip }) {
               wizard={wizard}
               reportId={reportId}
               currency={currency}
+              isAlpha={isAlpha}
             />
           )}
         </WizardShell>
