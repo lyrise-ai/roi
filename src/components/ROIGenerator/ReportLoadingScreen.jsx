@@ -1,6 +1,5 @@
 import { useEffect, useLayoutEffect, useMemo, useRef, useState } from 'react'
 import { motion, AnimatePresence } from 'framer-motion'
-import { loadSentryFeedback, setFeedbackSource } from '@/src/lib/sentryFeedback'
 
 const PHASES = [
   {
@@ -89,7 +88,6 @@ export default function ReportLoadingScreen({
   const startTime = useRef(new Date())
   const lastProcessedSseIndex = useRef(0)
   const lastLogAppendAt = useRef(0)
-  const proposalFeedbackRef = useRef(null)
 
   useEffect(() => {
     if (sseEvents.length === 0) {
@@ -281,33 +279,6 @@ export default function ReportLoadingScreen({
     }
   }, [isComplete, isFinalising, activePhase])
 
-  useEffect(() => {
-    if (!isComplete || !onOpen) return undefined
-    let unsub
-    let cancelled = false
-
-    let el
-    let onClick
-    loadSentryFeedback()
-      .then((feedback) => {
-        if (cancelled || !feedback || !proposalFeedbackRef.current) return
-        el = proposalFeedbackRef.current
-        onClick = () => setFeedbackSource('proposal')
-        el.addEventListener('click', onClick)
-        unsub = feedback.attachTo(el, {
-          formTitle: 'Before you decide — anything unclear?',
-          tags: { 'feedback.source': 'proposal' },
-        })
-      })
-      .catch(() => {})
-
-    return () => {
-      cancelled = true
-      el?.removeEventListener('click', onClick)
-      unsub?.()
-    }
-  }, [isComplete, onOpen])
-
   return (
     <div className="relative min-h-screen w-full bg-gray-50">
       {/* Progress bar */}
@@ -439,13 +410,6 @@ export default function ReportLoadingScreen({
                 style={{ background: '#5B48F8' }}
               >
                 Open my Profit Map →
-              </button>
-              <button
-                ref={proposalFeedbackRef}
-                type="button"
-                className="text-xs text-gray-400 hover:text-gray-600 transition-colors py-1"
-              >
-                Before you decide — anything unclear?
               </button>
             </motion.div>
           )}

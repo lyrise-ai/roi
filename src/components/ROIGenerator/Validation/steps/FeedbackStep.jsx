@@ -46,15 +46,6 @@ export default function FeedbackStep({ wizard, onSkip, onSubmit }) {
             onChange={(v) => wizard.setFeedback('reportFitRating', v)}
           />
         </div>
-        <div className="mb-5">
-          <div className="mb-2 text-[13px] text-[#374151]">
-            How likely are you to share the full report with a decision-maker?
-          </div>
-          <StarRating
-            value={wizard.feedback.aiHelpfulnessRating}
-            onChange={(v) => wizard.setFeedback('aiHelpfulnessRating', v)}
-          />
-        </div>
         <div>
           <div className="mb-2 text-[13px] text-[#374151]">
             What would make this validation step better?{' '}

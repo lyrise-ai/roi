@@ -2,13 +2,12 @@ import React, { useState, useCallback, useEffect, useRef } from 'react'
 import Head from 'next/head'
 import dynamic from 'next/dynamic'
 import { motion, AnimatePresence } from 'framer-motion'
-import { FaCheckCircle, FaStar } from 'react-icons/fa'
+import { FaCheckCircle } from 'react-icons/fa'
 import clsx from 'clsx'
 import MainHeader from '../src/layout/MainHeader'
 import { drainSSE } from '../src/lib/drainSSE'
 import { PIPELINE_LOG_TOOL_NAMES } from '../src/lib/roi/constants'
 import { useRouter } from 'next/router'
-import { setFeedbackSource } from '../src/lib/sentryFeedback'
 
 // Only one of these views is ever mounted at a time (see viewState below) —
 // dynamic-import them so a visitor only downloads the one they land on.
@@ -574,16 +573,7 @@ function Step1({ data, onChange, errors, isAlpha }) {
 
 // ── Step 2 ────────────────────────────────────────────────────────────────────
 
-function Step2({
-  data,
-  onChange,
-  errors,
-  isDev,
-  isAlpha,
-  intakeRating,
-  onIntakeRatingChange,
-}) {
-  const [intakeHovered, setIntakeHovered] = useState(0)
+function Step2({ data, onChange, errors, isDev, isAlpha }) {
   return (
     <div className="space-y-5">
       <div>
@@ -646,37 +636,6 @@ function Step2({
           error={errors.currency}
         />
       </div>
-
-      {/* Alpha only: intake clarity star rating */}
-      {isAlpha && (
-        <div className="pt-4 border-t border-gray-100">
-          <p className="text-xs text-gray-400 mb-2">
-            Optional — How clear was this form?
-          </p>
-          <div className="flex gap-1.5">
-            {[1, 2, 3, 4, 5].map((star) => (
-              <button
-                key={star}
-                type="button"
-                onClick={() => onIntakeRatingChange(star)}
-                onMouseEnter={() => setIntakeHovered(star)}
-                onMouseLeave={() => setIntakeHovered(0)}
-                aria-label={`${star} star${star > 1 ? 's' : ''}`}
-                className="focus:outline-none transition-transform hover:scale-110"
-              >
-                <FaStar
-                  className={clsx(
-                    'w-5 h-5 transition-colors',
-                    star <= (intakeHovered || intakeRating)
-                      ? 'text-amber-400'
-                      : 'text-slate-200',
-                  )}
-                />
-              </button>
-            ))}
-          </div>
-        </div>
-      )}
     </div>
   )
 }
@@ -1046,11 +1005,9 @@ export default function ROIReport({ isEmployee, isAlpha }) {
 
   // Alpha-specific UI state
   const [showSplash, setShowSplash] = useState(isAlpha)
-  const [intakeRating, setIntakeRating] = useState(0)
 
   const [isGenerationComplete, setIsGenerationComplete] = useState(false)
   const generationStartedAt = useRef(Date.now())
-  const questionnaireFeedbackRef = useRef(null)
   const [generationLog, setGenerationLog] = useState('')
   const [sseEvents, setSseEvents] = useState([])
   const [reportState, setReportState] = useState(null)
@@ -1383,36 +1340,6 @@ export default function ROIReport({ isEmployee, isAlpha }) {
     setErrors({})
   }, [])
 
-  // Attach Sentry feedback to the questionnaire feedback button on the last step
-  useEffect(() => {
-    if (step !== TOTAL_STEPS) return undefined
-
-    let active = true
-    let cleanup
-    let el
-    let onClick
-    import('@sentry/nextjs')
-      .then((Sentry) => {
-        if (!active || !questionnaireFeedbackRef.current) return
-        const feedback = Sentry.getFeedback()
-        if (!feedback) return
-        el = questionnaireFeedbackRef.current
-        onClick = () => setFeedbackSource('roi-questionnaire')
-        el.addEventListener('click', onClick)
-        cleanup = feedback.attachTo(el, {
-          formTitle: 'How was that?',
-          tags: { 'feedback.source': 'roi-questionnaire' },
-        })
-      })
-      .catch(() => {})
-
-    return () => {
-      active = false
-      el?.removeEventListener('click', onClick)
-      cleanup?.()
-    }
-  }, [step])
-
   // ── Renders ───────────────────────────────────────────────────────────────
 
   // Alpha splash -- shown until animation completes
@@ -1640,11 +1567,6 @@ export default function ROIReport({ isEmployee, isAlpha }) {
                       errors={errors}
                       isDev={IS_DEV}
                       isAlpha={isAlpha}
-                      intakeRating={intakeRating}
-                      onIntakeRatingChange={(v) => {
-                        setIntakeRating(v)
-                        localStorage.setItem('alpha_intake_rating', String(v))
-                      }}
                     />
                   )}
                 </motion.div>
@@ -1712,15 +1634,6 @@ export default function ROIReport({ isEmployee, isAlpha }) {
                       : 'Continue →'}
                   </button>
                 </div>
-                {step === TOTAL_STEPS && (
-                  <button
-                    ref={questionnaireFeedbackRef}
-                    type="button"
-                    className="text-xs text-gray-400 hover:text-gray-600 transition-colors"
-                  >
-                    How was that?
-                  </button>
-                )}
               </div>
             </div>
           </motion.div>
