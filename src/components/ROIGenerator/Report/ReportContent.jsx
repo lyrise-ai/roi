@@ -49,6 +49,7 @@ export default function ReportContent({
   onReady,
   isAlpha,
   reportId,
+  canManageShares,
   onDownload,
   downloadStatus,
   onAward,
@@ -265,6 +266,7 @@ export default function ReportContent({
               <EndingSection
                 isAlpha={isAlpha}
                 reportId={reportId}
+                canManageShares={canManageShares}
                 onDownload={onDownload}
                 downloadStatus={downloadStatus}
                 onAward={onAward}

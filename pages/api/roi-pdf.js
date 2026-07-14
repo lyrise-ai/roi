@@ -17,6 +17,8 @@ import {
 import { generatePdf } from '@/src/lib/roi/services/pdf'
 import { createClient, createAdminClient } from '../../src/lib/supabase-server'
 import { buildStateFromReportRow } from '@/src/lib/roi/reportState'
+import { isEmployeeUser } from '@/src/lib/isEmployee'
+import { hasReportAccess, getGrantForUser } from '@/src/lib/roi/reportGrants'
 
 export const config = {
   maxDuration: 120,
@@ -60,10 +62,15 @@ export default async function handler(req, res) {
       .single(),
   ])
 
-  const isEmployee =
-    userData?.role === 'EMPLOYEE' || user.email?.endsWith('@lyrise.ai')
+  const isEmployee = isEmployeeUser(user, userData)
+  const grant = report
+    ? await getGrantForUser({ admin, reportId, userId: user.id })
+    : null
 
-  if (!report || (!isEmployee && report.user_id !== user.id)) {
+  if (
+    !report ||
+    !hasReportAccess({ report, userId: user.id, isEmployee, grant })
+  ) {
     res.status(403).json({ error: 'Unauthorized' })
     return
   }

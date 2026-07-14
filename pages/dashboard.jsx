@@ -157,17 +157,25 @@ function formatDate(iso) {
 function formatDateTime(iso) {
   const d = parseTimestamp(iso)
   if (!d) return '—'
-  return d
-    .toLocaleString('en-GB', {
-      day: 'numeric',
-      month: 'short',
-      year: 'numeric',
+  // Format date and time separately and join with a literal comma, rather
+  // than letting toLocaleString pick the date/time joiner itself — that
+  // joiner ("," vs " at ") comes from the engine's bundled ICU/CLDR data,
+  // which can differ between Node (SSR) and the browser (hydration),
+  // causing a hydration mismatch even though the actual date/time agree.
+  const datePart = d.toLocaleDateString('en-GB', {
+    day: 'numeric',
+    month: 'short',
+    year: 'numeric',
+  })
+  const timePart = d
+    .toLocaleTimeString('en-GB', {
       hour: 'numeric',
       minute: '2-digit',
       second: '2-digit',
       hour12: true,
     })
     .replace(/\b(am|pm)\b/i, (m) => m.toUpperCase())
+  return `${datePart}, ${timePart}`
 }
 
 function timeAgo(iso) {

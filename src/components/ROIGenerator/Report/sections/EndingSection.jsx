@@ -1,4 +1,5 @@
 import { useEffect, useRef, useState } from 'react'
+import { useEmailSendControl } from '@/src/hooks/useEmailSendControl'
 
 const CHAT_TEXTAREA_SELECTOR =
   'textarea[placeholder="Ask me to change anything in the report…"]'
@@ -19,6 +20,7 @@ function ActionCard({ icon, title, body, children }) {
 export default function EndingSection({
   isAlpha,
   reportId,
+  canManageShares,
   onDownload,
   downloadStatus,
   onAward,
@@ -53,31 +55,59 @@ export default function EndingSection({
           ? 'Downloaded ✓'
           : 'Download PDF'
 
-  // Loop in a colleague
-  const [shareExpanded, setShareExpanded] = useState(false)
-  const [shareEmail, setShareEmail] = useState('')
-  const [shareSending, setShareSending] = useState(false)
-  const [shareSent, setShareSent] = useState(false)
-  const [shareError, setShareError] = useState(false)
-  const handleSendShare = async () => {
-    const to = shareEmail.trim()
-    if (!to || shareSending) return
-    setShareSending(true)
-    setShareError(false)
-    try {
-      const res = await fetch('/api/roi-share-email', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ reportId, to }),
-      })
-      if (!res.ok) throw new Error(`HTTP ${res.status}`)
-      setShareSent(true)
-      setShareExpanded(false)
+  // Loop in a colleague — shares the same "send via email" mechanism as the
+  // toolbar's resend-to-self button (see useEmailSendControl), starting
+  // blank here rather than prefilled since this card is for a colleague.
+  const emailControl = useEmailSendControl({
+    reportId,
+    defaultEmail: '',
+    onSent: () => {
       onAward('+1 chat credit — shared with a colleague')
+      refreshShares()
+    },
+  })
+
+  // Shared-with list — owner/employee only. Anyone with access can send a
+  // new invite above; only the owner/employee sees who currently has access
+  // or can revoke it.
+  const [shares, setShares] = useState([])
+  const [sharesLoaded, setSharesLoaded] = useState(false)
+  const [revokingId, setRevokingId] = useState(null)
+
+  const refreshShares = async () => {
+    if (!canManageShares || !reportId) return
+    try {
+      const res = await fetch(
+        `/api/roi-report-shares?reportId=${encodeURIComponent(reportId)}`,
+      )
+      if (!res.ok) return
+      const data = await res.json()
+      setShares(data.shares ?? [])
     } catch (err) {
-      setShareError(true)
+      // best-effort — the list is a convenience, not core functionality
     } finally {
-      setShareSending(false)
+      setSharesLoaded(true)
+    }
+  }
+
+  useEffect(() => {
+    refreshShares()
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [reportId, canManageShares])
+
+  const handleRevoke = async (grantId) => {
+    setRevokingId(grantId)
+    try {
+      const res = await fetch('/api/roi-report-shares', {
+        method: 'DELETE',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ reportId, grantId }),
+      })
+      if (res.ok) setShares((prev) => prev.filter((s) => s.id !== grantId))
+    } catch (err) {
+      // best-effort
+    } finally {
+      setRevokingId(null)
     }
   }
 
@@ -167,25 +197,25 @@ export default function EndingSection({
           title="Loop in a colleague"
           body="Forward it to whoever signs off — CFO, CEO, whoever needs convincing."
         >
-          {!shareExpanded && !shareSent && (
+          {!emailControl.expanded && !emailControl.sent && (
             <button
               type="button"
-              onClick={() => setShareExpanded(true)}
+              onClick={emailControl.open}
               className="rounded-[9px] border-none bg-[#5B48F8] px-3.5 py-2.5 text-[12.5px] font-bold text-white hover:bg-[#4A3CE8]"
             >
-              Share via email
+              Send via email
             </button>
           )}
-          {shareExpanded && (
+          {emailControl.expanded && (
             <div className="flex flex-col gap-2">
               <input
                 type="email"
-                value={shareEmail}
-                onChange={(e) => setShareEmail(e.target.value)}
+                value={emailControl.email}
+                onChange={(e) => emailControl.setEmail(e.target.value)}
                 placeholder="colleague@company.com"
                 className="rounded-lg border border-[#E5E7EB] px-2.5 py-2 text-[12.5px] outline-none"
               />
-              {shareError && (
+              {emailControl.error && (
                 <div className="text-[11px] text-[#DC2626]">
                   Couldn&apos;t send that — try again.
                 </div>
@@ -193,38 +223,67 @@ export default function EndingSection({
               <div className="flex gap-2">
                 <button
                   type="button"
-                  onClick={() => setShareExpanded(false)}
+                  onClick={emailControl.cancel}
                   className="flex-1 rounded-lg border border-[#E5E7EB] bg-transparent px-2.5 py-2 text-xs text-[#6B7280]"
                 >
                   Cancel
                 </button>
                 <button
                   type="button"
-                  onClick={handleSendShare}
-                  disabled={!shareEmail.trim() || shareSending}
+                  onClick={emailControl.send}
+                  disabled={!emailControl.email.trim() || emailControl.sending}
                   className={`flex-1 rounded-lg px-2.5 py-2 text-xs font-semibold text-white ${
-                    shareEmail.trim()
+                    emailControl.email.trim()
                       ? 'cursor-pointer bg-[#0F172A]'
                       : 'cursor-not-allowed bg-[#D1D5DB]'
                   }`}
                 >
-                  {shareSending ? 'Sending…' : 'Send'}
+                  {emailControl.sending ? 'Sending…' : 'Send'}
                 </button>
               </div>
             </div>
           )}
-          {shareSent && !shareExpanded && (
+          {emailControl.sent && !emailControl.expanded && (
             <>
               <div className="mb-2 text-xs font-semibold text-[#059669]">
-                Sent to {shareEmail} ✓
+                Sent ✓
               </div>
               <div
-                onClick={() => setShareExpanded(true)}
+                onClick={emailControl.open}
                 className="cursor-pointer text-[11.5px] font-semibold text-[#5B48F8]"
               >
                 Share with someone else
               </div>
             </>
+          )}
+
+          {canManageShares && sharesLoaded && shares.length > 0 && (
+            <div className="mt-3 flex flex-col gap-1.5 border-t border-[#F3F4F6] pt-3">
+              <div className="text-[10.5px] font-bold tracking-[0.04em] text-[#9CA3AF] uppercase">
+                Shared with
+              </div>
+              {shares.map((s) => (
+                <div
+                  key={s.id}
+                  className="flex items-center justify-between gap-2"
+                >
+                  <span className="truncate text-[11.5px] text-[#374151]">
+                    {s.invitedEmail}
+                    {!s.claimed && (
+                      <span className="text-[#9CA3AF]"> · pending</span>
+                    )}
+                  </span>
+                  <button
+                    type="button"
+                    onClick={() => handleRevoke(s.id)}
+                    disabled={revokingId === s.id}
+                    className="shrink-0 text-[11px] font-semibold text-[#DC2626] hover:text-[#991B1B]"
+                  >
+                    {revokingId === s.id ? '…' : 'Revoke'}
+                  </button>
+                </div>
+              ))}
+            </div>
           )}
         </ActionCard>
 

@@ -32,6 +32,8 @@ export async function getServerSideProps({
     viewerUserId,
     viewerEmail,
     isAlpha,
+    isOwner,
+    isColleague,
     token,
   } = access
 
@@ -54,19 +56,16 @@ export async function getServerSideProps({
   const admin = createAdminClient()
   const initialState = buildStateFromReportRow(report)
 
-  // Load chat history and usage count in parallel.
-  // Share-link visitors see the full thread so they have the owner's prior
-  // context; their per-report cap lives on reports.share_message_count, not
-  // chat_usage.
-  let msgQuery = admin
+  // Chat history belongs to the report, not the viewer — anyone who reached
+  // this point already passed hasReportAccess (owner, employee, or an
+  // invited colleague), so everyone sees the same full thread. Usage is the
+  // one thing that's per-user (chat_usage, queried below).
+  const msgQuery = admin
     .from('chat_messages')
     .select('role, content')
     .eq('report_id', report.id)
     .order('created_at', { ascending: true })
     .limit(20)
-  if (!isShareLink && !isEmployee) {
-    msgQuery = msgQuery.eq('user_id', viewerUserId)
-  }
 
   let initialMessagesUsed = 0
   if (isShareLink) {
@@ -113,6 +112,8 @@ export async function getServerSideProps({
       reportId: report.id,
       isEmployee,
       isAlpha,
+      isOwner,
+      isColleague,
       initialMessagesUsed,
       initialChatHistory,
       isShareLink,
@@ -128,6 +129,8 @@ export default function ReportPage({
   reportId,
   isEmployee,
   isAlpha,
+  isOwner,
+  isColleague,
   initialMessagesUsed,
   initialChatHistory,
   isShareLink,
@@ -205,6 +208,8 @@ export default function ReportPage({
           reportId={reportId}
           isEmployee={isEmployee}
           isAlpha={isAlpha}
+          isOwner={isOwner}
+          isColleague={isColleague}
           initialMessagesUsed={initialMessagesUsed}
           initialChatHistory={initialChatHistory}
           isShareLink={isShareLink}
