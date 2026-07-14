@@ -8,10 +8,11 @@
 // the admin client server-side, is the only way to see this data at all.
 //
 // Every number below is wrapped in an envelope (value/unit/label/explains/
-// formula/sample/caveat/ready) instead of being a bare number. The reasoning
-// lives here, once, in the code that computes it — the dashboard UI reads
-// `explains`/`formula`/`caveat` off the payload rather than re-deriving or
-// duplicating this logic in a second place where it could drift out of sync.
+// formula/sample/caveat/confidence/healthy) instead of being a bare number.
+// The reasoning lives here, once, in the code that computes it — the
+// dashboard UI reads `explains`/`formula`/`caveat`/`healthy` off the payload
+// rather than re-deriving or duplicating this logic in a second place where
+// it could drift out of sync.
 
 import { createRouteClient } from '@/src/lib/supabaseRouteClient'
 import { getRoleForUser } from '@/src/lib/authHelpers'
@@ -19,12 +20,26 @@ import { getSupabaseAdmin } from '@/src/lib/supabaseAdmin'
 
 // A PMF score computed from a handful of respondents is not a rough version
 // of the truth, it is noise that happens to look like a percentage. 20 is a
-// deliberately conservative floor — below it we still show the raw counts
-// (so the team can see the trickle of data coming in) but withhold the
-// derived score, because a stakeholder skimming a dashboard cannot tell "82%
-// from 3 people" apart from "82% from 80 people" unless we refuse to render
-// the first one as a percentage at all.
+// deliberately conservative floor. We used to withhold the score entirely
+// below this floor — but a hidden number just invites people to go compute
+// their own from the raw counts anyway, with none of the caveats attached.
+// Instead the score always ships, tagged confidence: 'low' with a caveat
+// spelling out exactly how many more responses would make it trustworthy.
+// The launch readiness gate is the one place that still hard-fails below
+// this floor — showing a number and being willing to act on it are two
+// different bars.
 const PMF_MIN_SAMPLE = 20
+
+// Base "new issue" URL for a specific Linear team, e.g.
+// https://linear.app/<workspace-slug>/team/<TEAM-KEY>/new — title and
+// description are appended as query params per what_to_fix item at request
+// time. Deliberately a separate env var from LINEAR_TEAM_ID (see
+// pages/api/linear/triage.js): that one is the internal team UUID the
+// GraphQL API needs, this one is the human-facing workspace/team slug a
+// browser URL needs, and the two are not interchangeable. Read from env
+// rather than hardcoded so the target team can move without a code change;
+// if unset, linear_url is just null and the UI has nothing to link to.
+const LINEAR_NEW_ISSUE_URL = process.env.LINEAR_NEW_ISSUE_URL
 
 const FUNNEL_STEPS = [
   'reached_intake',
@@ -63,10 +78,32 @@ function one(relation) {
   return Array.isArray(relation) ? (relation[0] ?? null) : relation
 }
 
+function slugify(text) {
+  return String(text)
+    .toLowerCase()
+    .replace(/[^a-z0-9]+/g, '-')
+    .replace(/(^-|-$)/g, '')
+}
+
+// Confidence is a pure function of sample size, not a judgment call made at
+// each call site — the same three thresholds apply everywhere so "reliable"
+// means the same thing on every metric on this page. It is deliberately
+// separate from whether a *value* can even be computed (a 0/0 division still
+// yields value: null regardless of what confidence tier the sample falls
+// into).
+function confidenceFromSample(sample) {
+  if (sample >= 20) return 'reliable'
+  if (sample >= 5) return 'building'
+  return 'low'
+}
+
 // Every computed number in this payload is wrapped the same way so the UI
 // never has to re-derive what a number means or duplicate this logic.
 // `sample` is mandatory: a number with no stated sample size invites a
-// reader to treat 3 respondents and 300 the same way.
+// reader to treat 3 respondents and 300 the same way. `healthy` is a static,
+// direction-only hint ("which way is good") and stays null for metrics where
+// that judgment doesn't apply — a plain count of testers isn't "healthy" or
+// "unhealthy", it just is what it is.
 function metric({
   value,
   unit,
@@ -75,9 +112,19 @@ function metric({
   formula,
   sample,
   caveat = null,
-  ready = true,
+  healthy = null,
 }) {
-  return { value, unit, label, explains, formula, sample, caveat, ready }
+  return {
+    value,
+    unit,
+    label,
+    explains,
+    formula,
+    sample,
+    caveat,
+    confidence: confidenceFromSample(sample),
+    healthy,
+  }
 }
 
 // ── "Real tester" ────────────────────────────────────────────────────────
@@ -255,6 +302,8 @@ export default async function handler(req, res) {
       formula: 'count of real testers with reached_generation = true',
       sample: totalTesters,
       caveat: funnelIntegrityWarning,
+      healthy:
+        'should stay close to reached_intake — a big drop here means testers abandon between intake and generation',
     }),
     reached_validation: metric({
       value: funnelCounts.reached_validation,
@@ -265,6 +314,8 @@ export default async function handler(req, res) {
       formula: 'count of real testers with reached_validation = true',
       sample: totalTesters,
       caveat: funnelIntegrityWarning,
+      healthy:
+        'should stay close to reached_generation — a big drop here means testers abandon before validation',
     }),
     reached_report: metric({
       value: funnelCounts.reached_report,
@@ -274,6 +325,8 @@ export default async function handler(req, res) {
       formula: 'count of real testers with reached_report = true',
       sample: totalTesters,
       caveat: funnelIntegrityWarning,
+      healthy:
+        'should stay close to reached_validation — a big drop here means testers abandon before seeing the report',
     }),
     reached_survey: metric({
       value: funnelCounts.reached_survey,
@@ -284,6 +337,8 @@ export default async function handler(req, res) {
       formula: 'count of real testers with reached_survey = true',
       sample: totalTesters,
       caveat: funnelIntegrityWarning,
+      healthy:
+        'should stay close to reached_report — a big drop here means testers see the report but skip the survey',
     }),
   }
 
@@ -384,7 +439,7 @@ export default async function handler(req, res) {
       formula: 'kept workflows / total workflows proposed',
       sample: totalProposed,
       caveat: accuracyCaveat,
-      ready: totalProposed > 0,
+      healthy: "high is good — low means we propose work that doesn't exist",
     }),
     volume_drift: metric({
       value: volumeDeltas.length > 0 ? round(mean(volumeDeltas)) : null,
@@ -395,7 +450,8 @@ export default async function handler(req, res) {
       formula: 'mean(volumePct) across kept workflows',
       sample: volumeDeltas.length,
       caveat: accuracyCaveat,
-      ready: volumeDeltas.length > 0,
+      healthy:
+        'near 0% is healthy — large positive or negative means our volume estimates are systematically off',
     }),
     duration_drift: metric({
       value: durationDeltas.length > 0 ? round(mean(durationDeltas)) : null,
@@ -406,14 +462,15 @@ export default async function handler(req, res) {
       formula: 'mean(durationPct) across kept workflows',
       sample: durationDeltas.length,
       caveat: accuracyCaveat,
-      ready: durationDeltas.length > 0,
+      healthy:
+        'near 0% is healthy — large positive or negative means our time estimates are systematically off',
     }),
     workflows_added: metric({
       value: workflowsAdded,
       unit: 'count',
       label: 'Workflows testers added',
       explains:
-        'Total workflows testers added via chat that our AI missed entirely in its first pass. This is a count of misses, not a percentage — there is no fixed denominator for "workflows we could have proposed but didn\'t".',
+        'Unit: workflows, not testers — a single tester can add more than one missed workflow, so this can exceed the tester count. Total individual workflows testers added via chat that our AI missed entirely in its first pass. This is a count of misses, not a percentage — there is no fixed denominator for "workflows we could have proposed but didn\'t". `sample` below counts the reports this was tallied across, not the workflows themselves.',
       formula: 'sum of workflowChanges.added.length across counted reports',
       sample: reportsWithGenerationBaseline.length,
       caveat: accuracyCaveat,
@@ -423,7 +480,7 @@ export default async function handler(req, res) {
       unit: 'count',
       label: 'Workflows testers removed',
       explains:
-        'Total workflows testers explicitly rejected as not applicable to their company. Overlaps conceptually with the inverse of workflows_kept_pct, but is reported separately as a plain count since it\'s the more actionable number for "which proposed workflows should we stop proposing".',
+        'Unit: workflows, not testers — a single tester can remove more than one workflow, so this can exceed the tester count. Total individual workflows testers explicitly rejected as not applicable to their company. Overlaps conceptually with the inverse of workflows_kept_pct, but is reported separately as a plain count since it\'s the more actionable number for "which proposed workflows should we stop proposing". `sample` below counts the reports this was tallied across, not the workflows themselves.',
       formula: 'sum of workflowChanges.removed.length across counted reports',
       sample: reportsWithGenerationBaseline.length,
       caveat: accuracyCaveat,
@@ -455,7 +512,6 @@ export default async function handler(req, res) {
         "Mean self-reported trust in the AI's numbers, asked before the tester corrects anything in the validation wizard.",
       formula: 'mean(trust_before) over testers who answered both questions',
       sample: pairedTrust.length,
-      ready: pairedTrust.length > 0,
     }),
     trust_after: metric({
       value: round(meanTrustAfter, 2),
@@ -465,7 +521,6 @@ export default async function handler(req, res) {
         "Mean self-reported trust after the tester has seen and corrected the AI's numbers.",
       formula: 'mean(trust_after) over testers who answered both questions',
       sample: pairedTrust.length,
-      ready: pairedTrust.length > 0,
     }),
     delta: metric({
       value:
@@ -478,7 +533,8 @@ export default async function handler(req, res) {
         "How much correcting the AI's numbers themselves moved trust, on average. Positive means the validation step itself builds trust (seeing and fixing the model increases confidence); negative means it erodes it (the corrections needed were big enough to undermine confidence in the original report).",
       formula: 'mean(trust_after) - mean(trust_before), same paired testers',
       sample: pairedTrust.length,
-      ready: pairedTrust.length > 0,
+      healthy:
+        'positive is good — validation should build confidence, not erode it',
     }),
   }
 
@@ -523,7 +579,8 @@ export default async function handler(req, res) {
       explains: 'Mean self-reported ease of the intake step (1-5 scale).',
       formula: 'mean(intake_ease) over testers who answered it',
       sample: intakeEaseValues.length,
-      ready: intakeEaseValues.length > 0,
+      healthy:
+        'high is good — low means the intake step itself is a barrier, independent of the report being accurate',
     }),
     report_clarity: metric({
       value:
@@ -536,7 +593,8 @@ export default async function handler(req, res) {
         'Mean self-reported clarity of the finished report (1-5 scale).',
       formula: 'mean(report_clarity) over testers who answered it',
       sample: reportClarityValues.length,
-      ready: reportClarityValues.length > 0,
+      healthy:
+        'high is good — low means the report is hard to understand even when the numbers are right',
     }),
     unclear_reason: unclearRanked,
   }
@@ -546,6 +604,14 @@ export default async function handler(req, res) {
   // question (pmf_disappointed) — that's the question the score is built
   // from, so it's the right denominator, independent of whether they also
   // answered the optional free-text follow-ups.
+  //
+  // raw_pmf and segmented_pmf always compute and ship a value once the
+  // denominator is nonzero — pmfReady no longer decides whether the number
+  // is *shown*, only what caveat (if any) rides along with it. Confidence
+  // (derived from `sample` in metric()) already tells the reader how much
+  // to trust it; hiding the number on top of that would just be redundant
+  // and would invite people to reconstruct it themselves from the raw
+  // counts anyway.
   const pmfCounts = { very: 0, somewhat: 0, not: 0 }
   for (const row of realTesterRows) {
     if (row.pmf_disappointed === 'Very disappointed') pmfCounts.very += 1
@@ -556,6 +622,9 @@ export default async function handler(req, res) {
   const completedSurveys = pmfCounts.very + pmfCounts.somewhat + pmfCounts.not
   const pmfReady = completedSurveys >= PMF_MIN_SAMPLE
   const segmentedDenominator = pmfCounts.very + pmfCounts.somewhat
+  const pmfCaveat = pmfReady
+    ? null
+    : `Needs ${PMF_MIN_SAMPLE - completedSurveys} more completed survey(s) before this is trustworthy.`
 
   const pmf = {
     very_disappointed: metric({
@@ -585,33 +654,34 @@ export default async function handler(req, res) {
       sample: completedSurveys,
     }),
     raw_pmf: metric({
-      value: pmfReady ? round((pmfCounts.very / completedSurveys) * 100) : null,
+      value:
+        completedSurveys > 0
+          ? round((pmfCounts.very / completedSurveys) * 100)
+          : null,
       unit: 'percent',
       label: 'Raw PMF score',
       explains:
-        'The classic Sean Ellis "40% rule" score: share of all respondents who would be very disappointed. Below the sample floor this is withheld rather than shown, because a percentage computed from a handful of people looks exactly as authoritative as one computed from a real sample, and readers cannot tell the difference just by looking at it.',
+        'The classic Sean Ellis "40% rule" score: share of all respondents who would be very disappointed. Below the sample floor this still computes and ships — hiding it just pushes people to do the division themselves from the raw counts, with none of the caveats attached. Instead it carries confidence: \'low\' and a caveat spelling out exactly how many more responses would make it trustworthy; treat it as a rough read until then, not a number to act on.',
       formula: 'very / (very + somewhat + not disappointed)',
       sample: completedSurveys,
-      caveat: pmfReady
-        ? null
-        : `Needs ${PMF_MIN_SAMPLE - completedSurveys} more completed survey(s) before a score is shown.`,
-      ready: pmfReady,
+      caveat: pmfCaveat,
+      healthy:
+        '40%+ is the traditional bar for product-market fit — higher is better',
     }),
     segmented_pmf: metric({
       value:
-        pmfReady && segmentedDenominator > 0
+        segmentedDenominator > 0
           ? round((pmfCounts.very / segmentedDenominator) * 100)
           : null,
       unit: 'percent',
       label: 'Segmented PMF score (Vohra)',
       explains:
-        'Rahul Vohra\'s variant: share of engaged respondents (very + somewhat disappointed) who said very. Excludes "not disappointed" respondents from the denominator on the theory that they may not be the target user at all. Same sample floor and same reasoning as the raw score above.',
+        'Rahul Vohra\'s variant: share of engaged respondents (very + somewhat disappointed) who said very. Excludes "not disappointed" respondents from the denominator on the theory that they may not be the target user at all. Same sample floor and same reasoning as the raw score above — always shown, confidence and caveat carry the "how much to trust this" signal instead of hiding the number.',
       formula: 'very / (very + somewhat disappointed)',
       sample: completedSurveys,
-      caveat: pmfReady
-        ? null
-        : `Needs ${PMF_MIN_SAMPLE - completedSurveys} more completed survey(s) before a score is shown.`,
-      ready: pmfReady && segmentedDenominator > 0,
+      caveat: pmfCaveat,
+      healthy:
+        '40%+ among engaged users signals product-market fit — higher is better',
     }),
   }
 
@@ -756,6 +826,155 @@ export default async function handler(req, res) {
     OPEN_TEXT_FIELDS.map((field) => [field, openTextEntries(field)]),
   )
 
+  // ── 10. WHAT TO FIX ───────────────────────────────────────────────────
+  // A ranked list of concrete problems, built only from things we can
+  // already count — not from clustering open-text themes (we don't do that
+  // yet, same reasoning as OPEN TEXT above). Three kinds of evidence feed
+  // this:
+  //   1. Each unclear_reason option is its own candidate problem — we
+  //      already know how many testers picked it, and unclear_note answers
+  //      from those same testers attach as supporting quotes, because
+  //      unclear_reason and unclear_note are collected together in the same
+  //      moment (see report/[id].jsx's tour-exit handler).
+  //   2. The single biggest raw drop between two consecutive funnel steps —
+  //      the step where testers most concretely stopped continuing.
+  //   3. A funnel integrity_warning, if present, becomes its own problem: it
+  //      isn't a UX issue to fix, it's a reason not to trust the funnel
+  //      numbers at all until it's fixed — so its tester_count is set to
+  //      every real tester, which naturally ranks it at or near the top.
+  // Every other open-text answer (validation_note, pmf_main_benefit,
+  // pmf_improvement, not_disappointed_reason, and any unclear_note that
+  // didn't attach to an unclear_reason problem above) lands in one
+  // ungrouped bucket rather than being force-fit into a category we didn't
+  // actually detect. Ranked by tester_count, descending — the problem
+  // touching the most people sorts first.
+  const whatToFix = []
+
+  for (const [reason, count] of unclearCounts.entries()) {
+    const quotes = realTesterRows
+      .filter(
+        (row) =>
+          row.unclear_reason === reason &&
+          typeof row.unclear_note === 'string' &&
+          row.unclear_note.trim(),
+      )
+      .map((row) => ({
+        email: one(row.invite)?.email ?? null,
+        text: row.unclear_note,
+      }))
+    whatToFix.push({
+      id: `unclear-reason-${slugify(reason)}`,
+      title: `Testers found "${reason}" unclear`,
+      evidence: `${count} of ${unclearTotal} low-clarity testers (report_clarity <= 3) named "${reason}" as the specific thing that was unclear.`,
+      tester_count: count,
+      share_pct: unclearTotal > 0 ? round((count / unclearTotal) * 100) : null,
+      quotes,
+      source: 'unclear_reason',
+    })
+  }
+
+  // Only a real, positive drop counts as a "problem" here — if the funnel
+  // isn't monotonic (funnelIntegrityWarning is set), a negative "drop" is a
+  // data bug, not a UX finding, and is surfaced separately below instead of
+  // being reported as attrition that didn't actually happen.
+  let biggestDrop = null
+  for (let i = 1; i < FUNNEL_STEPS.length; i++) {
+    const fromStep = FUNNEL_STEPS[i - 1]
+    const toStep = FUNNEL_STEPS[i]
+    const drop = funnelCounts[fromStep] - funnelCounts[toStep]
+    if (drop > 0 && (biggestDrop == null || drop > biggestDrop.drop)) {
+      biggestDrop = { fromStep, toStep, drop }
+    }
+  }
+  if (biggestDrop) {
+    const fromCount = funnelCounts[biggestDrop.fromStep]
+    const fromLabel = biggestDrop.fromStep.replace('reached_', '')
+    const toLabel = biggestDrop.toStep.replace('reached_', '')
+    const dropPct =
+      fromCount > 0 ? round((biggestDrop.drop / fromCount) * 100) : null
+    whatToFix.push({
+      id: `funnel-dropoff-${fromLabel}-${toLabel}`,
+      title: `Biggest drop-off: ${fromLabel} → ${toLabel}`,
+      evidence: `${biggestDrop.drop} of ${fromCount} testers who reached ${fromLabel} never reached ${toLabel}${dropPct != null ? ` (${dropPct}% attrition at this step)` : ''}.`,
+      tester_count: biggestDrop.drop,
+      share_pct: dropPct,
+      quotes: [],
+      source: 'funnel',
+    })
+  }
+
+  if (funnelIntegrityWarning) {
+    whatToFix.push({
+      id: 'funnel-integrity',
+      title: 'Funnel counts are internally inconsistent',
+      evidence: funnelIntegrityWarning,
+      tester_count: totalTesters,
+      share_pct: null,
+      quotes: [],
+      source: 'integrity',
+    })
+  }
+
+  const OTHER_OPEN_TEXT_FIELDS = OPEN_TEXT_FIELDS.filter(
+    (field) => field !== 'unclear_note',
+  )
+  const ungroupedQuotes = []
+  for (const row of realTesterRows) {
+    const email = one(row.invite)?.email ?? null
+    for (const field of OTHER_OPEN_TEXT_FIELDS) {
+      const value = row[field]
+      if (typeof value === 'string' && value.trim()) {
+        ungroupedQuotes.push({ email, text: value })
+      }
+    }
+    // unclear_note only lands here if it didn't already attach to an
+    // unclear_reason problem above (i.e. this tester had no unclear_reason).
+    if (
+      row.unclear_reason == null &&
+      typeof row.unclear_note === 'string' &&
+      row.unclear_note.trim()
+    ) {
+      ungroupedQuotes.push({ email, text: row.unclear_note })
+    }
+  }
+  if (ungroupedQuotes.length > 0) {
+    const contributingTesters = new Set(
+      ungroupedQuotes.map((q) => q.email).filter(Boolean),
+    )
+    whatToFix.push({
+      id: 'open-text-ungrouped',
+      title: 'Other open-text feedback (not yet clustered)',
+      evidence: `${ungroupedQuotes.length} free-text answer(s) across intake, validation, and PMF questions that don't map to a specific counted problem above — read these directly, they are not auto-clustered into themes yet.`,
+      tester_count: contributingTesters.size,
+      share_pct: null,
+      quotes: ungroupedQuotes,
+      source: 'open_text',
+    })
+  }
+
+  whatToFix.sort((a, b) => b.tester_count - a.tester_count)
+
+  function buildLinearUrl(item) {
+    if (!LINEAR_NEW_ISSUE_URL) return null
+    const descriptionParts = [item.evidence]
+    if (item.quotes.length > 0) {
+      descriptionParts.push(
+        '',
+        'Quotes:',
+        ...item.quotes.map((q) => `- "${q.text}" — ${q.email ?? 'unknown'}`),
+      )
+    }
+    const params = new URLSearchParams({
+      title: item.title,
+      description: descriptionParts.join('\n'),
+    })
+    return `${LINEAR_NEW_ISSUE_URL}?${params.toString()}`
+  }
+
+  for (const item of whatToFix) {
+    item.linear_url = buildLinearUrl(item)
+  }
+
   res.status(200).json({
     testers: {
       total: metric({
@@ -778,5 +997,6 @@ export default async function handler(req, res) {
     intent,
     recruiting_target: recruitingTarget,
     open_text: openText,
+    what_to_fix: whatToFix,
   })
 }
