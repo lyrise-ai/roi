@@ -186,48 +186,6 @@ export default function ReportPage({
   const [unclearReason, setUnclearReason] = useState(null)
   const [unclearNote, setUnclearNote] = useState('')
   const [tourExitSubmitting, setTourExitSubmitting] = useState(false)
-  const [showNudge, setShowNudge] = useState(false)
-  const [scrolled, setScrolled] = useState(false)
-
-  // Nudge the tester to share feedback exactly once, tied to a meaningful
-  // moment (having scrolled through most of the report) rather than a
-  // repeating timer. The report scrolls inside its own container
-  // (id="report-scroll-container", rendered by ReportContent) rather than
-  // the outer window, so we poll for that element and listen on it directly.
-  useEffect(() => {
-    if (!isAlpha) return undefined
-
-    const onScroll = (e) => {
-      const el = e.target
-      if ((el.scrollTop + el.clientHeight) / el.scrollHeight >= 0.8) {
-        setScrolled(true)
-        setShowNudge(true)
-        setTimeout(() => setShowNudge(false), 3000)
-        el.removeEventListener('scroll', onScroll)
-      }
-    }
-
-    let scrollEl = null
-    let poll = null
-    const findScrollContainer = () => {
-      const el = document.getElementById('report-scroll-container')
-      if (!el) return false
-      scrollEl = el
-      el.addEventListener('scroll', onScroll)
-      return true
-    }
-
-    if (!findScrollContainer()) {
-      poll = setInterval(() => {
-        if (findScrollContainer()) clearInterval(poll)
-      }, 300)
-    }
-
-    return () => {
-      if (poll) clearInterval(poll)
-      scrollEl?.removeEventListener('scroll', onScroll)
-    }
-  }, [isAlpha])
 
   // Track that the tester reached and loaded the report page
   useEffect(() => {
@@ -378,114 +336,86 @@ export default function ReportPage({
       {/* Alpha-only overlays — all use fixed positioning clear of the chat panel */}
       {isAlpha && (
         <>
-          {/* Finish tour button — left side, clear of chat panel */}
+          {/* End-of-tour card — docked to the left sidebar column (216px,
+              flush left), vertically centered in the empty space below the
+              "On this page" nav list (~520px, toolbar + 11 nav items) so it
+              reads as part of that panel rather than a widget floating over
+              the report. */}
           <div
             style={{
               position: 'fixed',
               left: '16px',
-              bottom: '96px',
+              top: '520px',
+              bottom: '0px',
+              width: '184px',
               zIndex: 50,
+              display: 'flex',
+              alignItems: 'center',
             }}
           >
             <div
               style={{
-                position: 'absolute',
-                bottom: 'calc(100% + 8px)',
-                left: '50%',
-                opacity: showNudge ? 1 : 0,
-                transition: 'opacity 0.3s ease',
+                background: '#fff',
+                border: '1px solid #E5E7EB',
+                borderRadius: '16px',
+                padding: '16px 14px',
+                animation: 'alpha-card-glow 3.5s ease-in-out infinite',
               }}
             >
-              <svg
-                width="44"
-                height="38"
-                viewBox="0 0 44 38"
-                fill="none"
+              <div
                 style={{
-                  animation: 'alpha-bubble-float 1.8s ease-in-out infinite',
+                  fontSize: '10.5px',
+                  fontWeight: 700,
+                  textTransform: 'uppercase',
+                  letterSpacing: '0.08em',
+                  color: '#5B48F8',
+                  marginBottom: '6px',
                 }}
               >
-                <rect
-                  x="1"
-                  y="1"
-                  width="42"
-                  height="28"
-                  rx="8"
-                  fill="#5B48F8"
-                />
-                <polygon points="16,28 22,36 28,28" fill="#5B48F8" />
-                <circle
-                  cx="12"
-                  cy="15"
-                  r="3"
-                  fill="#fff"
-                  style={{
-                    animation: 'alpha-dot-bounce 1.4s ease-in-out infinite',
-                    animationDelay: '0s',
-                  }}
-                />
-                <circle
-                  cx="22"
-                  cy="15"
-                  r="3"
-                  fill="#fff"
-                  style={{
-                    animation: 'alpha-dot-bounce 1.4s ease-in-out infinite',
-                    animationDelay: '0.15s',
-                  }}
-                />
-                <circle
-                  cx="32"
-                  cy="15"
-                  r="3"
-                  fill="#fff"
-                  style={{
-                    animation: 'alpha-dot-bounce 1.4s ease-in-out infinite',
-                    animationDelay: '0.3s',
-                  }}
-                />
-              </svg>
+                You&apos;ve reached the end
+              </div>
+              <p
+                style={{
+                  fontSize: '12.5px',
+                  lineHeight: 1.5,
+                  color: '#374151',
+                  margin: '0 0 12px',
+                }}
+              >
+                Nice, that&apos;s the full report. One quick thing left: a
+                2-minute survey to shape the alpha.
+              </p>
+              <button
+                ref={feedbackButtonRef}
+                type="button"
+                onClick={() => setShowTourExit(true)}
+                style={{
+                  width: '100%',
+                  background: '#5B48F8',
+                  color: '#fff',
+                  borderRadius: '10px',
+                  padding: '10px 14px',
+                  fontSize: '13px',
+                  fontWeight: 700,
+                  border: 'none',
+                  cursor: 'pointer',
+                  boxShadow: '0 4px 14px rgba(91,72,248,0.35)',
+                }}
+                onMouseEnter={(e) => {
+                  e.currentTarget.style.background = '#4a3ce8'
+                }}
+                onMouseLeave={(e) => {
+                  e.currentTarget.style.background = '#5B48F8'
+                }}
+              >
+                One step left →
+              </button>
             </div>
-            <button
-              ref={feedbackButtonRef}
-              type="button"
-              onClick={() => setShowTourExit(true)}
-              style={{
-                background: '#5B48F8',
-                color: '#fff',
-                borderRadius: '12px',
-                padding: '10px 16px',
-                fontSize: '14px',
-                fontWeight: 600,
-                border: 'none',
-                cursor: 'pointer',
-                boxShadow: '0 4px 14px rgba(91,72,248,0.35)',
-                ...(scrolled
-                  ? { animation: 'alpha-btn-glow 2s ease-in-out 3' }
-                  : {}),
-              }}
-              onMouseEnter={(e) => {
-                e.currentTarget.style.background = '#4a3ce8'
-              }}
-              onMouseLeave={(e) => {
-                e.currentTarget.style.background = '#5B48F8'
-              }}
-            >
-              Finish Tour →
-            </button>
           </div>
           <style>{`
-            @keyframes alpha-btn-glow {
-              0%, 100% { box-shadow: 0 4px 14px rgba(91,72,248,0.35); }
-              50% { box-shadow: 0 4px 32px rgba(91,72,248,0.85), 0 0 0 10px rgba(91,72,248,0.2); }
-            }
-            @keyframes alpha-dot-bounce {
-              0%, 80%, 100% { transform: translateY(0); }
-              40% { transform: translateY(-4px); }
-            }
-            @keyframes alpha-bubble-float {
-              0%, 100% { transform: translateX(-50%) translateY(0); }
-              50% { transform: translateX(-50%) translateY(-5px); }
+            @keyframes alpha-card-glow {
+              0%, 100% { box-shadow: 0 1px 3px rgba(0,0,0,0.06); }
+              50% { box-shadow: 0 0 22px 5px rgba(91,72,248,0.35); }
             }
           `}</style>
 

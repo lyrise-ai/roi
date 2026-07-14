@@ -1,6 +1,3 @@
-import NumberScale from '../../NumberScale'
-import { INTER_FONT_FAMILY } from '@/src/utilities/fonts'
-
 export default function FeedbackStep({
   wizard,
   onSkip,
@@ -10,7 +7,9 @@ export default function FeedbackStep({
 }) {
   // Alpha tour tracking — best-effort, fire-and-forget. Must never block
   // leaving this step: it fires right before onSkip/onSubmit, never awaited.
-  const trackTrustAfter = () => {
+  // trust_after is tracked separately, from CompleteStep, where the
+  // validated numbers are actually visible.
+  const trackValidationNote = () => {
     if (!isAlpha) return
     try {
       const token = localStorage.getItem('alpha_token')
@@ -21,30 +20,32 @@ export default function FeedbackStep({
         body: JSON.stringify({
           session_token: token,
           report_id: reportId,
-          trust_after: wizard.feedback.reportFitRating || null,
           validation_note: wizard.feedback.comment?.trim() || null,
         }),
       })
         .then((res) => {
           if (!res.ok) {
-            console.error('[alpha] trust_after tracking failed:', res.status)
+            console.error(
+              '[alpha] validation_note tracking failed:',
+              res.status,
+            )
           }
         })
         .catch((err) => {
-          console.error('[alpha] trust_after tracking failed:', err)
+          console.error('[alpha] validation_note tracking failed:', err)
         })
     } catch (err) {
-      console.error('[alpha] trust_after tracking failed:', err)
+      console.error('[alpha] validation_note tracking failed:', err)
     }
   }
 
   const handleSkip = () => {
-    trackTrustAfter()
+    trackValidationNote()
     onSkip()
   }
 
   const handleSubmit = () => {
-    trackTrustAfter()
+    trackValidationNote()
     onSubmit()
   }
 
@@ -54,27 +55,13 @@ export default function FeedbackStep({
         Step 5 of 5 — Quick feedback
       </div>
       <h2 className="mb-1.5 text-[22px] font-extrabold text-[#0F172A]">
-        Before you see the full report — 2 quick questions.
+        Before you see the full report — 1 quick question.
       </h2>
       <p className="mb-5 text-[13.5px] leading-[1.6] text-[#6B7280]">
         30 seconds. This directly shapes the next version of the tool.
       </p>
 
       <div className="mb-5 rounded-2xl border border-[#E5E7EB] bg-white px-6 py-[22px]">
-        <div className="mb-5">
-          <div
-            style={{ fontFamily: INTER_FONT_FAMILY, letterSpacing: '-0.2px' }}
-            className="mb-2 text-[14.5px] font-normal text-[#0F172A]"
-          >
-            Now, how much do you trust these numbers?
-          </div>
-          <NumberScale
-            value={wizard.feedback.reportFitRating}
-            onChange={(v) => wizard.setFeedback('reportFitRating', v)}
-            lowLabel="Not at all"
-            highLabel="Completely"
-          />
-        </div>
         <div>
           <div className="mb-2 text-[13px] text-[#374151]">
             What would make this validation step better?{' '}

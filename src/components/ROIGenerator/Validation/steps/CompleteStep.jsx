@@ -3,6 +3,8 @@ import { useRouter } from 'next/router'
 import clsx from 'clsx'
 import { VALIDATION_QUALIFY_MONTHLY_THRESHOLD } from '@/src/lib/roi/constants'
 import { fmtCurrency } from '../../Report/format'
+import NumberScale from '../../NumberScale'
+import { INTER_FONT_FAMILY } from '@/src/utilities/fonts'
 
 const BUDGET_OPTIONS = [
   { value: 'this_quarter', label: 'This quarter' },
@@ -59,6 +61,7 @@ export default function CompleteStep({ wizard, reportId, currency, isAlpha }) {
                 reached_validation: true,
                 report_id: reportId,
                 intent_timeline: wizard.budgetTiming || null,
+                trust_after: wizard.feedback.reportFitRating || null,
               }),
             })
               .then((trackRes) => {
@@ -119,6 +122,22 @@ export default function CompleteStep({ wizard, reportId, currency, isAlpha }) {
             ? `Validated value is ~${fmtCurrency(monthlyGain, currency)}/mo, above our qualification bar. These workflows are a strong candidate for a process-mapping engagement.`
             : `Validated value is ~${fmtCurrency(monthlyGain, currency)}/mo, against our ${fmtCurrency(VALIDATION_QUALIFY_MONTHLY_THRESHOLD, currency)}/mo qualification bar. Adding a workflow or confirming higher volume in the steps above could close the gap.`}
         </div>
+      </div>
+
+      <div className="mx-auto mb-5 max-w-[480px] rounded-xl border border-[#E5E7EB] bg-white px-6 py-[22px] text-left">
+        <div
+          style={{ fontFamily: INTER_FONT_FAMILY, letterSpacing: '-0.2px' }}
+          className="mb-2 text-[14.5px] font-normal text-[#0F172A]"
+        >
+          Now that you've seen the validated numbers, how much do you trust
+          them?
+        </div>
+        <NumberScale
+          value={wizard.feedback.reportFitRating}
+          onChange={(v) => wizard.setFeedback('reportFitRating', v)}
+          lowLabel="Not at all"
+          highLabel="Completely"
+        />
       </div>
 
       <div className="mx-auto mb-5 max-w-[480px] rounded-xl border border-[#E5E7EB] bg-white px-6 py-[22px] text-left">
