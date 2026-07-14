@@ -870,6 +870,7 @@ export default async function handler(req, res) {
       share_pct: unclearTotal > 0 ? round((count / unclearTotal) * 100) : null,
       quotes,
       source: 'unclear_reason',
+      confidence: confidenceFromSample(unclearTotal),
     })
   }
 
@@ -900,6 +901,7 @@ export default async function handler(req, res) {
       share_pct: dropPct,
       quotes: [],
       source: 'funnel',
+      confidence: confidenceFromSample(totalTesters),
     })
   }
 
@@ -912,6 +914,7 @@ export default async function handler(req, res) {
       share_pct: null,
       quotes: [],
       source: 'integrity',
+      confidence: confidenceFromSample(totalTesters),
     })
   }
 
@@ -949,10 +952,183 @@ export default async function handler(req, res) {
       share_pct: null,
       quotes: ungroupedQuotes,
       source: 'open_text',
+      confidence: confidenceFromSample(contributingTesters.size),
     })
   }
 
-  whatToFix.sort((a, b) => b.tester_count - a.tester_count)
+  // ── Model accuracy failure candidates ───────────────────────────────────
+  // Same population and per-metric sample sizes as modelAccuracy above.
+  // Thresholds are deliberately more permissive than "any drift at all" —
+  // some correction is expected and healthy; these fire only once the model
+  // is systematically wrong, not merely imperfect.
+  if (
+    modelAccuracy.workflows_kept_pct.value != null &&
+    modelAccuracy.workflows_kept_pct.value < 80
+  ) {
+    whatToFix.push({
+      id: 'model-accuracy-workflows-kept',
+      title: "We propose workflows that don't exist",
+      evidence: `Only ${modelAccuracy.workflows_kept_pct.value}% of proposed workflows survived tester validation unchanged (threshold: 80%), across ${reportsWithGenerationBaseline.length} report(s).`,
+      tester_count: reportsWithGenerationBaseline.length,
+      share_pct: null,
+      quotes: [],
+      source: 'model_accuracy',
+      confidence: modelAccuracy.workflows_kept_pct.confidence,
+    })
+  }
+
+  if (
+    modelAccuracy.volume_drift.value != null &&
+    Math.abs(modelAccuracy.volume_drift.value) > 25
+  ) {
+    whatToFix.push({
+      id: 'model-accuracy-volume-drift',
+      title: 'Our volume estimates are systematically off',
+      evidence: `Mean volume correction was ${modelAccuracy.volume_drift.value > 0 ? '+' : ''}${modelAccuracy.volume_drift.value}% across kept workflows (threshold: ±25%).`,
+      tester_count: reportsWithGenerationBaseline.length,
+      share_pct: null,
+      quotes: [],
+      source: 'model_accuracy',
+      confidence: modelAccuracy.volume_drift.confidence,
+    })
+  }
+
+  if (
+    modelAccuracy.duration_drift.value != null &&
+    Math.abs(modelAccuracy.duration_drift.value) > 25
+  ) {
+    whatToFix.push({
+      id: 'model-accuracy-duration-drift',
+      title: 'Our duration estimates are systematically off',
+      evidence: `Mean duration correction was ${modelAccuracy.duration_drift.value > 0 ? '+' : ''}${modelAccuracy.duration_drift.value}% across kept workflows (threshold: ±25%).`,
+      tester_count: reportsWithGenerationBaseline.length,
+      share_pct: null,
+      quotes: [],
+      source: 'model_accuracy',
+      confidence: modelAccuracy.duration_drift.confidence,
+    })
+  }
+
+  if (modelAccuracy.workflows_added.value > 0) {
+    whatToFix.push({
+      id: 'model-accuracy-workflows-added',
+      title: 'Our research misses workflows entirely',
+      evidence: `Testers manually added ${modelAccuracy.workflows_added.value} workflow(s) our AI missed entirely, across ${reportsWithGenerationBaseline.length} report(s).`,
+      tester_count: reportsWithGenerationBaseline.length,
+      share_pct: null,
+      quotes: [],
+      source: 'model_accuracy',
+      confidence: modelAccuracy.workflows_added.confidence,
+    })
+  }
+
+  // ── Trust delta failure candidate ───────────────────────────────────────
+  if (trust.delta.value != null && trust.delta.value < 0) {
+    whatToFix.push({
+      id: 'trust-delta-negative',
+      title: 'Validation destroys confidence instead of building it',
+      evidence: `Trust moved ${trust.delta.value} (before ${trust.trust_before.value} → after ${trust.trust_after.value}) across ${pairedTrust.length} tester(s) who answered both questions.`,
+      tester_count: pairedTrust.length,
+      share_pct: null,
+      quotes: [],
+      source: 'trust_delta',
+      confidence: trust.delta.confidence,
+    })
+  }
+
+  // ── Tester experience failure candidates ────────────────────────────────
+  if (
+    experience.intake_ease.value != null &&
+    experience.intake_ease.value < 3
+  ) {
+    whatToFix.push({
+      id: 'experience-intake-ease',
+      title: 'The intake form is a barrier',
+      evidence: `Mean intake ease was ${experience.intake_ease.value} / 5 (threshold: 3), across ${intakeEaseValues.length} tester(s).`,
+      tester_count: intakeEaseValues.length,
+      share_pct: null,
+      quotes: [],
+      source: 'experience',
+      confidence: experience.intake_ease.confidence,
+    })
+  }
+
+  if (
+    experience.report_clarity.value != null &&
+    experience.report_clarity.value < 3
+  ) {
+    whatToFix.push({
+      id: 'experience-report-clarity',
+      title: "People don't understand the report",
+      evidence: `Mean report clarity was ${experience.report_clarity.value} / 5 (threshold: 3), across ${reportClarityValues.length} tester(s).`,
+      tester_count: reportClarityValues.length,
+      share_pct: null,
+      quotes: [],
+      source: 'experience',
+      confidence: experience.report_clarity.confidence,
+    })
+  }
+
+  // ── PMF failure candidate ────────────────────────────────────────────────
+  // Gated on the trustworthy-sample floor so this doesn't duplicate the
+  // "need more surveys" signal already carried by gap_a — it only fires once
+  // the score itself is reliable enough to act on.
+  if (
+    completedSurveys >= PMF_MIN_SAMPLE &&
+    pmf.segmented_pmf.value != null &&
+    pmf.segmented_pmf.value < 40
+  ) {
+    whatToFix.push({
+      id: 'pmf-below-bar',
+      title: "People don't need this enough",
+      evidence: `${pmf.segmented_pmf.value}% of engaged testers said "very disappointed" without LyRise (bar: 40%), across ${completedSurveys} completed survey(s).`,
+      tester_count: completedSurveys,
+      share_pct: null,
+      quotes: [],
+      source: 'pmf',
+      confidence: pmf.segmented_pmf.confidence,
+    })
+  }
+
+  // ── Rank by severity, not just reach ────────────────────────────────────
+  // Tester count only breaks ties *within* a severity tier. If the data
+  // itself is lying (integrity), nothing else on this page can be trusted;
+  // if the model is wrong (model_accuracy), no UI polish saves the product;
+  // a trust delta that goes negative means the one moment we ask testers to
+  // trust us is actively working against us. Everything below that is
+  // progressively closer to polish than substance. `open_text` sits last
+  // because it is explicitly ungrouped, uncounted feedback (see its push()
+  // above) rather than a specific, measured problem.
+  const SEVERITY_ORDER = [
+    'integrity',
+    'model_accuracy',
+    'trust_delta',
+    'funnel',
+    'unclear_reason',
+    'experience',
+    'pmf',
+    'open_text',
+  ]
+  whatToFix.sort((a, b) => {
+    const tierDiff =
+      SEVERITY_ORDER.indexOf(a.source) - SEVERITY_ORDER.indexOf(b.source)
+    return tierDiff !== 0 ? tierDiff : b.tester_count - a.tester_count
+  })
+
+  // A low-confidence candidate (sample < 5) can still appear in the ranked
+  // list — it just cannot be the single headline item a reader sees first.
+  // Promote the first reliable-enough candidate to the top instead; if every
+  // candidate is low-confidence, there is nothing safer to promote to, so
+  // the severity ordering above stands as-is.
+  if (whatToFix.length > 0 && whatToFix[0].confidence === 'low') {
+    const promoteIndex = whatToFix.findIndex(
+      (item) => item.confidence !== 'low',
+    )
+    if (promoteIndex > 0) {
+      const [promoted] = whatToFix.splice(promoteIndex, 1)
+      whatToFix.unshift(promoted)
+    }
+  }
 
   function buildLinearUrl(item) {
     if (!LINEAR_NEW_ISSUE_URL) return null

@@ -1,0 +1,347 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Alpha Readiness Dashboard — Developer Guide</title>
+<link href="https://fonts.googleapis.com/css2?family=IBM+Plex+Sans:wght@400;500;600&family=IBM+Plex+Mono:wght@400;500&display=swap" rel="stylesheet">
+<style>
+:root{
+  --ink:#171a21; --ink-2:#4b5563; --ink-3:#8a909c;
+  --line:#e6e8ec; --paper:#fff; --wash:#f7f8f9;
+  --violet:#5B48F8; --violet-wash:#f0eeff;
+  --green:#137a52; --green-wash:#e9f6f0;
+  --amber:#8a6d1e; --amber-wash:#fdf4e3;
+  --red:#b02a2a; --red-wash:#fcefef;
+}
+*{margin:0;padding:0;box-sizing:border-box}
+body{font-family:'IBM Plex Sans',system-ui,sans-serif;color:var(--ink);background:var(--wash);line-height:1.65;-webkit-font-smoothing:antialiased}
+.layout{display:flex;max-width:1180px;margin:0 auto;gap:36px;padding:0 28px}
+nav{position:sticky;top:0;align-self:flex-start;width:210px;padding:40px 0;flex-shrink:0}
+nav a{display:block;font-size:13px;color:var(--ink-3);text-decoration:none;padding:6px 0 6px 12px;border-left:2px solid transparent}
+nav a:hover{color:var(--violet);border-left-color:var(--violet)}
+nav .navhead{font-family:'IBM Plex Mono',monospace;font-size:10px;letter-spacing:.12em;text-transform:uppercase;color:var(--ink-3);margin:18px 0 6px 12px}
+main{flex:1;min-width:0;padding-bottom:80px}
+.mono{font-family:'IBM Plex Mono',monospace}
+
+header{background:var(--ink);color:#fff;padding:52px 0;margin-bottom:36px}
+header .inner{max-width:1180px;margin:0 auto;padding:0 28px}
+header h1{font-size:32px;font-weight:600;letter-spacing:-.02em;margin-bottom:8px}
+header p{color:#9aa1ad;max-width:62ch}
+
+section{background:var(--paper);border:1px solid var(--line);border-radius:14px;padding:26px 30px;margin-bottom:18px;scroll-margin-top:20px}
+.eyebrow{font-family:'IBM Plex Mono',monospace;font-size:10px;letter-spacing:.12em;text-transform:uppercase;color:var(--violet);margin-bottom:8px}
+h2{font-size:21px;font-weight:600;letter-spacing:-.01em;margin-bottom:8px}
+h3{font-size:15px;font-weight:600;margin:16px 0 4px}
+p{color:var(--ink-2);margin-bottom:10px}
+p:last-child{margin-bottom:0}
+.lede{font-size:16px;margin-bottom:16px}
+code{font-family:'IBM Plex Mono',monospace;font-size:13px;background:var(--wash);padding:2px 6px;border-radius:4px;color:var(--ink);border:1px solid var(--line)}
+strong{color:var(--ink);font-weight:600}
+
+.flow{display:flex;align-items:center;gap:8px;flex-wrap:wrap;margin:16px 0}
+.node{background:var(--wash);border:1px solid var(--line);border-radius:8px;padding:9px 13px;font-size:13px;font-weight:500}
+.node.v{background:var(--violet-wash);border-color:#d8d3fc;color:var(--violet)}
+.arr{color:var(--ink-3);font-size:13px}
+
+table{width:100%;border-collapse:collapse;margin:12px 0;font-size:14px}
+th{text-align:left;font-family:'IBM Plex Mono',monospace;font-size:10px;letter-spacing:.08em;text-transform:uppercase;color:var(--ink-3);padding:8px 10px;border-bottom:1px solid var(--line)}
+td{padding:10px;border-bottom:1px solid var(--line);color:var(--ink-2);vertical-align:top}
+td:first-child{color:var(--ink);font-weight:500}
+tr:last-child td{border-bottom:none}
+.sev{font-family:'IBM Plex Mono',monospace;font-size:11px;padding:2px 7px;border-radius:4px;white-space:nowrap}
+.s1{background:var(--red-wash);color:var(--red)}
+.s2{background:var(--amber-wash);color:var(--amber)}
+.s3{background:var(--wash);color:var(--ink-3);border:1px solid var(--line)}
+
+.callout{border-left:3px solid var(--violet);background:var(--violet-wash);padding:13px 17px;border-radius:0 8px 8px 0;margin:14px 0}
+.callout p{color:#3a2fa8;font-size:14px;margin:0}
+.danger{border-left-color:var(--red);background:var(--red-wash)}
+.danger p{color:var(--red)}
+
+.scen{border:1px solid var(--line);border-radius:10px;margin-bottom:10px;overflow:hidden}
+.scen-top{display:flex;align-items:center;gap:12px;padding:12px 16px;background:var(--wash);border-bottom:1px solid var(--line);flex-wrap:wrap}
+.gates{font-family:'IBM Plex Mono',monospace;font-weight:500;font-size:14px;padding:4px 10px;border-radius:6px}
+.g-red{background:var(--red-wash);color:var(--red)}
+.g-amber{background:var(--amber-wash);color:var(--amber)}
+.g-green{background:var(--green-wash);color:var(--green)}
+.verdict{font-size:13px;font-style:italic;color:var(--ink)}
+.scen-body{padding:12px 16px;font-size:14px;color:var(--ink-2)}
+.do{font-weight:600;color:var(--ink)}
+
+.chips{display:flex;gap:8px;flex-wrap:wrap;margin-top:10px}
+.chip{display:flex;align-items:center;gap:6px;font-size:12px;padding:5px 11px;border-radius:20px;border:1px solid var(--line);background:var(--wash)}
+.dot{width:7px;height:7px;border-radius:50%}
+.d-g{background:#18936a}.d-a{background:#e0a020}.d-x{background:#b0b5bf}
+
+pre{background:var(--ink);color:#dfe3ea;padding:14px 16px;border-radius:8px;font-family:'IBM Plex Mono',monospace;font-size:12.5px;line-height:1.7;overflow-x:auto;margin:12px 0}
+pre .c{color:#8a919e}
+pre .k{color:#a99cff}
+
+ol.steps{list-style:none;counter-reset:s;margin-top:10px}
+ol.steps li{counter-increment:s;position:relative;padding:11px 0 11px 40px;border-bottom:1px solid var(--line);font-size:14px;color:var(--ink-2)}
+ol.steps li:last-child{border-bottom:none}
+ol.steps li::before{content:counter(s);position:absolute;left:0;top:11px;width:24px;height:24px;border-radius:50%;background:var(--violet);color:#fff;font-family:'IBM Plex Mono',monospace;font-size:11px;display:flex;align-items:center;justify-content:center}
+
+@media(max-width:900px){nav{display:none}.layout{padding:0 20px}}
+</style>
+</head>
+<body>
+
+<header>
+  <div class="inner">
+    <h1>Alpha Readiness Dashboard</h1>
+    <p>Developer guide. What this dashboard is, where its data comes from, how it decides what to tell you, and what to do when you get lost.</p>
+  </div>
+</header>
+
+<div class="layout">
+<nav>
+  <div class="navhead">Start</div>
+  <a href="#what">What it is</a>
+  <a href="#data">Where data comes from</a>
+  <a href="#pipeline">The pipeline</a>
+  <div class="navhead">Reading it</div>
+  <a href="#gates">The four gates</a>
+  <a href="#confidence">Confidence</a>
+  <a href="#metrics">Every metric</a>
+  <div class="navhead">Behaviour</div>
+  <a href="#detect">What it detects</a>
+  <a href="#scenarios">Scenarios</a>
+  <a href="#thin">Thin data</a>
+  <div class="navhead">Working on it</div>
+  <a href="#change">How to change it</a>
+  <a href="#omitted">Deliberate omissions</a>
+  <a href="#ritual">The weekly ritual</a>
+</nav>
+
+<main>
+
+<section id="what">
+  <div class="eyebrow">01 — Orientation</div>
+  <h2>What this dashboard is</h2>
+  <p class="lede">It answers <strong>one question</strong>: is the AI Profit Map ready to open to the public?</p>
+  <p>Every number on it exists to move that verdict, or to tell someone what to fix so it moves. If a number does neither, it doesn't belong.</p>
+  <p>It is <strong>not</strong> a usage or growth dashboard. It measures whether an alpha product has become a real one — and it is built to <em>refuse to lie</em> when the data is thin or broken.</p>
+  <div class="callout">
+    <p><strong>The principle running through everything:</strong> a number that can't be trusted must never look like one that can. Every value carries its sample size and a confidence dot. Always. No exceptions.</p>
+  </div>
+</section>
+
+<section id="data">
+  <div class="eyebrow">02 — Sources</div>
+  <h2>Where the data comes from</h2>
+  <table>
+    <tr><th>Layer</th><th>Gives us</th><th>Cost to tester</th></tr>
+    <tr><td>Inline questions</td><td>intake ease · trust before/after · report clarity · why it was unclear</td><td>~4 taps across the tour</td></tr>
+    <tr><td>Passive capture</td><td>model accuracy · workflow adds &amp; removes · funnel progress · chat usage</td><td><strong>nothing</strong></td></tr>
+    <tr><td>PMF survey</td><td>disappointment · persona · benefit · improvement · virality</td><td>the closing survey</td></tr>
+  </table>
+  <div class="callout">
+    <p><strong>The passive layer is the most valuable part of this system.</strong> When a tester corrects a volume in the validation wizard, they are telling us our model was wrong, and by exactly how much. We record it automatically. They never know they gave feedback.</p>
+  </div>
+</section>
+
+<section id="pipeline">
+  <div class="eyebrow">03 — Architecture</div>
+  <h2>The pipeline</h2>
+  <div class="flow">
+    <div class="node">Tour</div><span class="arr">→</span>
+    <div class="node v">/api/alpha/progress</div><span class="arr">→</span>
+    <div class="node">alpha_feedback</div><span class="arr">→</span>
+    <div class="node v">/api/alpha/dashboard</div><span class="arr">→</span>
+    <div class="node">AlphaDashboardPanel</div>
+  </div>
+  <p><code>alpha_feedback</code> is RLS-locked, service-role only. <strong>Nothing reads or writes it from the browser.</strong> All writes go through <code>/api/alpha/progress</code>; all reads through <code>/api/alpha/dashboard</code>.</p>
+
+  <h3>Why it's built this way</h3>
+  <p>The old table was created by hand in the Supabase UI, with no migration. The code drifted from the schema — it wrote columns that didn't exist — and <strong>Postgres silently rejected every row containing them.</strong> The PMF survey discarded every response for weeks. Nobody noticed, because nothing ever threw.</p>
+  <div class="callout danger">
+    <p><strong>Rules that exist because of that bug, and must not be relaxed:</strong> the schema lives in a migration file, never in the UI. Writes go through a server route that fails loudly. Every funnel flag is written independently, so one failing write can never mask another.</p>
+  </div>
+
+  <h3>Identity</h3>
+  <p>A tester is real only if they arrived through a live invite. The chain: <code>alpha_invites</code> → <code>user_metadata.invite_id</code> → <code>alpha_feedback.invite_id</code>, joined to <code>reports</code> for the company name. Internal <code>@lyrise.ai</code> testing is filtered out and never counted.</p>
+</section>
+
+<section id="gates">
+  <div class="eyebrow">04 — The verdict</div>
+  <h2>The four launch gates</h2>
+  <p class="lede">All four must pass. They are the entire point of the dashboard.</p>
+  <table>
+    <tr><th>Gate</th><th>Passes when</th><th>Why it exists</th></tr>
+    <tr><td>Sample size</td><td>≥ 20 completed surveys</td><td>Below 20, no score here is trustworthy. Stops us acting on noise.</td></tr>
+    <tr><td>Product–market fit</td><td>Segmented PMF ≥ 40%</td><td>Sean Ellis's benchmark. Below it we have interest, not fit.</td></tr>
+    <tr><td>Theme saturation</td><td>Last 3 testers raised nothing new</td><td>If people still surface new problems, we haven't heard the whole story.</td></tr>
+    <tr><td>Funnel health</td><td>No integrity warning</td><td>If a later step outnumbers an earlier one, a write failed and every number is suspect.</td></tr>
+  </table>
+</section>
+
+<section id="confidence">
+  <div class="eyebrow">05 — The rule</div>
+  <h2>Confidence</h2>
+  <div class="chips">
+    <div class="chip"><span class="dot d-g"></span> Reliable <span class="mono">n ≥ 20</span></div>
+    <div class="chip"><span class="dot d-a"></span> Building <span class="mono">n ≥ 5</span></div>
+    <div class="chip"><span class="dot d-x"></span> Low <span class="mono">n &lt; 5</span></div>
+  </div>
+  <div class="callout danger">
+    <p><strong>A number never appears without its dot and its n.</strong> The old dashboard showed "PMF: 100%" from three responses — technically correct, completely misleading. A percentage from three people looks exactly as authoritative as one from three hundred. The chip makes it impossible to read the number without also reading how much to trust it.</p>
+  </div>
+  <p><strong>PMF is always shown, even at n=3</strong> — but always chipped and caveated. Showing a number and passing a gate are two different things.</p>
+</section>
+
+<section id="metrics">
+  <div class="eyebrow">06 — Reference</div>
+  <h2>Every metric</h2>
+
+  <h3>Model accuracy — the most valuable numbers here</h3>
+  <table>
+    <tr><th>Metric</th><th>Healthy</th><th>What bad means</th></tr>
+    <tr><td>Workflows kept</td><td>high</td><td>We're proposing work that doesn't exist at that company.</td></tr>
+    <tr><td>Volume drift</td><td>near 0%</td><td>Negative = we overestimate how often a workflow runs. Positive = we underestimate.</td></tr>
+    <tr><td>Duration drift</td><td>near 0%</td><td>The same, for minutes-per-item.</td></tr>
+    <tr><td>Workflows added</td><td>0</td><td>Our research is blind to entire categories of work. <strong>Unit: workflows, not testers.</strong></td></tr>
+    <tr><td>Workflows removed</td><td>0</td><td>The ones we should stop proposing.</td></tr>
+  </table>
+  <div class="callout">
+    <p><strong>Drift is a mean of signed values.</strong> An overestimate on one workflow and an underestimate on another cancel out. It tells you our <em>bias</em>, not our <em>error size</em>. A drift of 0% could mean we're perfect — or wildly wrong in both directions.</p>
+  </div>
+  <p><strong>Why some reports are excluded:</strong> reports made before baseline tracking existed have no record of the AI's original guess. Their "baseline" would be the tester's <em>already-corrected</em> numbers, so drift against it would read as zero — a silent lie. They're excluded, and the count is shown.</p>
+
+  <h3>Trust delta</h3>
+  <p>Trust <strong>before</strong> → <strong>after</strong>, either side of the validation wizard. The wizard exists to turn "a starting guess" into "the truth." The delta is the entire proof it works. <strong>Negative means validation is destroying confidence</strong> — the corrections needed were big enough to undermine the whole report.</p>
+
+  <h3>Experience</h3>
+  <p><strong>Intake ease</strong> — is the form losing people before they see value? <strong>Report clarity</strong> — do they understand the output? <strong>Why it was unclear</strong> — asked only when clarity ≤ 3, and <strong>the most actionable thing on the dashboard</strong>: it names <em>which part</em> confuses people, rather than just that they are confused.</p>
+
+  <h3>Recruiting target</h3>
+  <pre><span class="c">// how many testers to go find this week</span>
+target = max(gap_a, gap_b)
+
+gap_a = <span class="k">max</span>(0, 20 − completed_surveys)   <span class="c">// sample floor</span>
+gap_b = 3 <span class="k">if</span> last 3 testers raised new themes <span class="k">else</span> 0</pre>
+  <p>When this reaches zero and the gates pass, <strong>the alpha is done</strong>.</p>
+
+  <h3>Purchase intent</h3>
+  <p>This quarter / next quarter / exploring. A <strong>commercial</strong> signal, not product feedback. It goes to Marc. It never becomes a Linear ticket — routing sales intent to engineering is a category error.</p>
+</section>
+
+<section id="detect">
+  <div class="eyebrow">07 — Behaviour</div>
+  <h2>What the dashboard can detect</h2>
+  <p class="lede">"What to fix" is generated, not hardcoded. Every metric has a healthy range; anything outside it becomes a ranked candidate.</p>
+  <table>
+    <tr><th>Severity</th><th>Detected when</th><th>Surfaces as</th></tr>
+    <tr><td><span class="sev s1">1 — critical</span></td><td>Funnel counts inconsistent</td><td>"A write is failing. Every number below is unreliable."</td></tr>
+    <tr><td><span class="sev s1">2 — critical</span></td><td>Workflows kept &lt; 80% · drift beyond ±25% · workflows added &gt; 0</td><td>"We propose work that doesn't exist" / "Our estimates are systematically off"</td></tr>
+    <tr><td><span class="sev s2">3 — serious</span></td><td>Trust delta &lt; 0</td><td>"Validation destroys confidence instead of building it"</td></tr>
+    <tr><td><span class="sev s2">4 — serious</span></td><td>A steep drop between two funnel steps</td><td>"Testers abandon between X and Y"</td></tr>
+    <tr><td><span class="sev s3">5 — fixable</span></td><td>Clarity or intake ease &lt; 3 · unclear-reason clusters</td><td>"People don't understand X"</td></tr>
+    <tr><td><span class="sev s3">6 — strategic</span></td><td>PMF &lt; 40% once n ≥ 20</td><td>"People don't need this enough"</td></tr>
+  </table>
+  <div class="callout danger">
+    <p><strong>Why this ordering.</strong> If the data is lying, nothing else on the page can be trusted — integrity first. If the model is wrong, no amount of UI polish saves the product — accuracy second. A beautiful, clear report full of invented numbers is worse than an ugly one full of true ones.</p>
+  </div>
+
+  <h3>What it cannot detect</h3>
+  <p>Anything nobody thought to measure. A tester who hates the pricing, wants a feature that doesn't exist, or found the tone patronising — none of that has a metric. <strong>That is what the open-text boxes are for, and why a human reads them every week.</strong> The system finds known failure modes; humans find unknown ones. No amount of cleverness removes that division of labour.</p>
+</section>
+
+<section id="scenarios">
+  <div class="eyebrow">08 — Dynamics</div>
+  <h2>The same dashboard, six stories</h2>
+  <p class="lede">The verdict is synthesised from whichever gate is failing, ordered by severity. Same code, different message.</p>
+
+  <div class="scen">
+    <div class="scen-top"><span class="gates g-red">0 / 4</span><span class="verdict">"Funnel data is inconsistent — a write is failing."</span></div>
+    <div class="scen-body"><span class="do">Do:</span> stop reading the dashboard. Fix the write. This exact failure produced the old "89% generated vs 78% intake" — impossible, and hidden for weeks.</div>
+  </div>
+
+  <div class="scen">
+    <div class="scen-top"><span class="gates g-red">1 / 4</span><span class="verdict">"Testers are removing 40% of the workflows we propose."</span></div>
+    <div class="scen-body"><span class="do">Do:</span> fix the research pipeline, not the UI. <strong>The most serious failure mode there is</strong> — the core product is wrong, and no interface work saves it.</div>
+  </div>
+
+  <div class="scen">
+    <div class="scen-top"><span class="gates g-red">1 / 4</span><span class="verdict">"You need 17 more surveys before any score here can be trusted."</span></div>
+    <div class="scen-body"><span class="do">Do:</span> recruit. Ignore every other number — they are noise until the sample clears. <em>This is where the project stands today.</em></div>
+  </div>
+
+  <div class="scen">
+    <div class="scen-top"><span class="gates g-amber">2 / 4</span><span class="verdict">"Validation is eroding trust rather than building it."</span></div>
+    <div class="scen-body"><span class="do">Do:</span> the corrections testers make are large enough to destroy their confidence. That is a model problem wearing a UX mask.</div>
+  </div>
+
+  <div class="scen">
+    <div class="scen-top"><span class="gates g-amber">3 / 4</span><span class="verdict">"Testers drop 12% between validation and report."</span></div>
+    <div class="scen-body"><span class="do">Do:</span> look at that step. Usually UX, sometimes a bug.</div>
+  </div>
+
+  <div class="scen">
+    <div class="scen-top"><span class="gates g-green">4 / 4</span><span class="verdict">"Ready to ship."</span></div>
+    <div class="scen-body"><span class="do">Do:</span> launch.</div>
+  </div>
+</section>
+
+<section id="thin">
+  <div class="eyebrow">09 — Today</div>
+  <h2>How thin data behaves</h2>
+  <p>At <strong>n = 4</strong>: PMF bars are stubs. Most quote sections say "No responses yet." Model accuracy shows ~16 workflows across 4 reports — <em>Building</em> at best. The recruiting target dominates, <strong>because it should</strong>.</p>
+  <div class="callout danger">
+    <p><strong>Do not act on any ⚪ Low-confidence number.</strong> It is displayed so you know it exists — not so you can decide from it. Low-confidence candidates can appear in "What to fix", but are never allowed to be the headline.</p>
+  </div>
+</section>
+
+<section id="change">
+  <div class="eyebrow">10 — Working on it</div>
+  <h2>How to change it safely</h2>
+
+  <h3>Adding a question</h3>
+  <ol class="steps">
+    <li>Add the column in a <strong>new migration file</strong>. Never edit an applied one. Never touch the Supabase UI.</li>
+    <li>Add the field to the whitelist in <code>/api/alpha/progress</code>. Anything not whitelisted is silently dropped.</li>
+    <li>Put the UI where the experience is <em>fresh</em> — not bundled into the end survey. Only 22% of testers ever reach the end.</li>
+    <li>Add the metric to <code>/api/alpha/dashboard</code> with <code>explains</code>, <code>formula</code>, <code>sample</code>, <code>caveat</code>, <code>healthy</code>. <strong>All five. A metric without a sample size is a rumour.</strong></li>
+    <li>If it has a failure mode, add it to the <code>what_to_fix</code> candidates with a threshold and a severity — otherwise it will be invisible when it breaks.</li>
+  </ol>
+
+  <h3>Rules that are not negotiable</h3>
+  <table>
+    <tr><td>Never write to <code>alpha_feedback</code> from the client</td><td>RLS-locked. It will fail, and it will fail silently.</td></tr>
+    <tr><td>Never render a number without its <code>sample</code></td><td>The entire integrity of this dashboard rests on it.</td></tr>
+    <tr><td>Never hardcode an explanation in the UI</td><td>The route is the single source of truth for what every number means.</td></tr>
+    <tr><td>Never let a write fail quietly</td><td>Loud failure is the feature. Silence is the bug that cost weeks of PMF data.</td></tr>
+  </table>
+</section>
+
+<section id="omitted">
+  <div class="eyebrow">11 — On purpose</div>
+  <h2>What is <em>not</em> here, and why</h2>
+  <table>
+    <tr><td>Usage &amp; growth metrics</td><td>Not what an alpha measures.</td></tr>
+    <tr><td>A "demo data" toggle</td><td>The prototype had one. A real dashboard must never have a fake-data mode — someone will eventually mistake it for real.</td></tr>
+    <tr><td>Auto-created Linear tickets</td><td>Feedback becomes a ticket only after a human decides. Automation collects and ranks; humans judge. Without that gate, Linear fills with noise and the team stops reading it.</td></tr>
+    <tr><td>Word clouds</td><td>They need hundreds of responses to mean anything. We will never have that.</td></tr>
+    <tr><td>A dashboard tour</td><td>Tooltips explain at the moment of confusion, which is when explanation actually lands. This document covers the rest.</td></tr>
+  </table>
+</section>
+
+<section id="ritual">
+  <div class="eyebrow">12 — Twenty minutes</div>
+  <h2>The weekly ritual</h2>
+  <ol class="steps">
+    <li>Open <strong>What to fix</strong>. Read the top item. It is ranked by severity, so the top item genuinely is the most important thing.</li>
+    <li>Decide: <strong>act / monitor / close</strong>. Only "act" becomes a Linear ticket. The button prefills it; a human reviews before creating it.</li>
+    <li>Check the <strong>recruiting target</strong>. Give Marc the number and the persona.</li>
+    <li>Glance at the <strong>verdict</strong>. If a gate changed, ask why.</li>
+  </ol>
+  <div class="callout">
+    <p>That is the whole ritual. The dashboard's job is to make those four steps obvious. <strong>If it ever takes longer than twenty minutes, something on it has stopped earning its place — remove it.</strong></p>
+  </div>
+</section>
+
+</main>
+</div>
+</body>
+</html>
