@@ -26,7 +26,7 @@ function initState(workflows) {
     decisions: initDecisions(workflows),
     workflowsAnswer: null, // 'yes' | 'no'
     additionalContext: '',
-    feedback: { reportFitRating: 0, aiHelpfulnessRating: 0, comment: '' },
+    feedback: { reportFitRating: 0, comment: '' },
     budgetTiming: null,
     xp: 0,
   }

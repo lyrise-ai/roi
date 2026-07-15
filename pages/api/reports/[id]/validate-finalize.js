@@ -17,6 +17,7 @@ import {
 } from '@/src/lib/roi/pipeline/workflowMutations'
 import { loadTemplate } from '@/src/lib/roi/pipeline/renderTemplate'
 import { VALIDATION_QUALIFY_MONTHLY_THRESHOLD } from '@/src/lib/roi/constants'
+import { buildBaselineSnapshot } from '@/src/lib/roi/pipeline/validationBaseline'
 
 function logEvent(admin, row) {
   admin
@@ -25,6 +26,24 @@ function logEvent(admin, row) {
     .then(({ error }) => {
       if (error) console.error(`event insert failed (${row.type})`, error)
     })
+}
+
+// Diffs the current workflow list against the baseline snapshot: names that
+// weren't in the baseline were added via chat since it was captured; names
+// from the baseline the user chose not to keep were removed. Only meaningful
+// across separate finalize calls — within a single call, chat-added
+// workflows are already part of `workflows` by the time baseline is taken
+// (see the comment on validate-finalize's handler above).
+function buildWorkflowChanges(workflows, baseline, workflowDecisions) {
+  const baselineNames = new Set(Object.keys(baseline.workflows))
+  return {
+    added: (workflows ?? [])
+      .map((w) => w.name)
+      .filter((name) => !baselineNames.has(name)),
+    removed: Object.keys(baseline.workflows).filter(
+      (name) => workflowDecisions[name]?.kept === false,
+    ),
+  }
 }
 
 export default async function handler(req, res) {
@@ -66,13 +85,29 @@ export default async function handler(req, res) {
 
   const nowIso = new Date().toISOString()
 
+  // Normally already set at report-generation time (pages/api/roi-agent.js,
+  // before any chat edit can touch the report) — this is a fallback only for
+  // reports generated before that hook existed. Preserve whichever snapshot
+  // exists rather than recapturing on a re-run, where state.workflows would
+  // already reflect a prior adjustment.
+  const existingBaseline = report.validation_data?.baseline ?? null
+
   // Skip path (employee/bulk preview only — see pages/report/[id]/validate.jsx's
   // canSkip) — mark validated without touching the workflow model.
   if (skipped) {
+    const baseline =
+      existingBaseline ??
+      buildBaselineSnapshot(
+        buildStateFromReportRow(report).workflows,
+        nowIso,
+        'finalize-fallback',
+      )
     const nextValidationData = {
       ...(report.validation_data ?? {}),
       completedAt: nowIso,
       skipped: true,
+      baseline,
+      workflowChanges: { added: [], removed: [] },
     }
     const { error } = await admin
       .from('reports')
@@ -98,6 +133,18 @@ export default async function handler(req, res) {
       .status(400)
       .json({ error: 'Report has no workflows to validate' })
   }
+
+  // Fallback snapshot (see existingBaseline above) — taken before anything
+  // below mutates state.workflows, so it still includes workflows the user
+  // is about to remove, not just the ones that survive.
+  const baseline =
+    existingBaseline ??
+    buildBaselineSnapshot(state.workflows, nowIso, 'finalize-fallback')
+  const workflowChanges = buildWorkflowChanges(
+    state.workflows,
+    baseline,
+    workflowDecisions,
+  )
 
   // Remove first so the volume/duration pass below only ever touches
   // workflows the user actually kept.
@@ -157,6 +204,8 @@ export default async function handler(req, res) {
     xp,
     qualifies,
     skipped: false,
+    baseline,
+    workflowChanges,
   }
 
   const { error } = await admin

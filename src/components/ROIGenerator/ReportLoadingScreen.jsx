@@ -1,6 +1,7 @@
 import { useEffect, useLayoutEffect, useMemo, useRef, useState } from 'react'
 import { motion, AnimatePresence } from 'framer-motion'
-import { loadSentryFeedback, setFeedbackSource } from '@/src/lib/sentryFeedback'
+import NumberScale from './NumberScale'
+import { INTER_FONT_FAMILY } from '@/src/utilities/fonts'
 
 const PHASES = [
   {
@@ -80,6 +81,8 @@ export default function ReportLoadingScreen({
   sseEvents = [],
   viewState = 'generating',
   onOpen,
+  isAlpha = false,
+  reportId = null,
 }) {
   const [phaseIndex, setPhaseIndex] = useState(0)
   const [logs, setLogs] = useState([])
@@ -89,7 +92,44 @@ export default function ReportLoadingScreen({
   const startTime = useRef(new Date())
   const lastProcessedSseIndex = useRef(0)
   const lastLogAppendAt = useRef(0)
-  const proposalFeedbackRef = useRef(null)
+  const [intakeEase, setIntakeEase] = useState(0)
+  const [intakeEaseNote, setIntakeEaseNote] = useState('')
+
+  // Alpha tour tracking — best-effort, fire-and-forget. Sends the current
+  // rating and note together every time either changes; never awaited, never
+  // blocks the generation wait it's shown alongside.
+  const trackIntakeEase = (rating, note) => {
+    if (!isAlpha) return
+    try {
+      const token = localStorage.getItem('alpha_token')
+      if (!token) return
+      fetch('/api/alpha/progress', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          session_token: token,
+          report_id: reportId,
+          intake_ease: rating || null,
+          intake_ease_note: note?.trim() || null,
+        }),
+      })
+        .then((res) => {
+          if (!res.ok) {
+            console.error('[alpha] intake_ease tracking failed:', res.status)
+          }
+        })
+        .catch((err) => {
+          console.error('[alpha] intake_ease tracking failed:', err)
+        })
+    } catch (err) {
+      console.error('[alpha] intake_ease tracking failed:', err)
+    }
+  }
+
+  const rateIntakeEase = (value) => {
+    setIntakeEase(value)
+    trackIntakeEase(value, intakeEaseNote)
+  }
 
   useEffect(() => {
     if (sseEvents.length === 0) {
@@ -281,33 +321,6 @@ export default function ReportLoadingScreen({
     }
   }, [isComplete, isFinalising, activePhase])
 
-  useEffect(() => {
-    if (!isComplete || !onOpen) return undefined
-    let unsub
-    let cancelled = false
-
-    let el
-    let onClick
-    loadSentryFeedback()
-      .then((feedback) => {
-        if (cancelled || !feedback || !proposalFeedbackRef.current) return
-        el = proposalFeedbackRef.current
-        onClick = () => setFeedbackSource('proposal')
-        el.addEventListener('click', onClick)
-        unsub = feedback.attachTo(el, {
-          formTitle: 'Before you decide — anything unclear?',
-          tags: { 'feedback.source': 'proposal' },
-        })
-      })
-      .catch(() => {})
-
-    return () => {
-      cancelled = true
-      el?.removeEventListener('click', onClick)
-      unsub?.()
-    }
-  }, [isComplete, onOpen])
-
   return (
     <div className="relative min-h-screen w-full bg-gray-50">
       {/* Progress bar */}
@@ -424,6 +437,46 @@ export default function ReportLoadingScreen({
             />
           </div>
 
+          {/* Intake-ease question — alpha-only, during the active wait */}
+          {isAlpha && !isDoneOrFinalising && (
+            <motion.div
+              initial={{ opacity: 0, y: 6 }}
+              animate={{ opacity: 1, y: 0 }}
+              transition={{ duration: 0.35, ease: [0.22, 1, 0.36, 1] }}
+              className="mt-5 rounded-lg border border-gray-100 bg-white px-4 py-3.5"
+            >
+              <p
+                style={{
+                  fontFamily: INTER_FONT_FAMILY,
+                  letterSpacing: '-0.2px',
+                }}
+                className="text-[14.5px] font-normal text-navy"
+              >
+                While we build this, how easy was it to tell us about your
+                company?
+              </p>
+              <div className="mt-2">
+                <NumberScale
+                  value={intakeEase}
+                  onChange={rateIntakeEase}
+                  lowLabel="Very hard"
+                  highLabel="Very easy"
+                />
+              </div>
+              {intakeEase > 0 && intakeEase <= 3 && (
+                <textarea
+                  value={intakeEaseNote}
+                  onChange={(e) => setIntakeEaseNote(e.target.value)}
+                  onBlur={() => trackIntakeEase(intakeEase, intakeEaseNote)}
+                  placeholder="What was awkward or missing? (optional)"
+                  rows={2}
+                  style={{ fontFamily: INTER_FONT_FAMILY }}
+                  className="mt-2 w-full resize-none rounded-md border border-gray-200 px-2.5 py-2 text-[11.5px] text-navy outline-none focus:border-[#5B48F8]"
+                />
+              )}
+            </motion.div>
+          )}
+
           {/* Open Profit Map CTA — shown when complete and a handler is provided */}
           {isComplete && onOpen && (
             <motion.div
@@ -439,13 +492,6 @@ export default function ReportLoadingScreen({
                 style={{ background: '#5B48F8' }}
               >
                 Open my Profit Map →
-              </button>
-              <button
-                ref={proposalFeedbackRef}
-                type="button"
-                className="text-xs text-gray-400 hover:text-gray-600 transition-colors py-1"
-              >
-                Before you decide — anything unclear?
               </button>
             </motion.div>
           )}
