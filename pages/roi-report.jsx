@@ -1102,8 +1102,7 @@ export default function ROIReport({ isEmployee, isAlpha }) {
         } catch (err) {
           console.error('[alpha] intake tracking failed:', err)
         }
-      }
-
+	}
       const payload = {
         'Company Name': s1.companyName.trim(),
         'Company Website URL': s1.website.trim(),

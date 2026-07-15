@@ -200,8 +200,9 @@ export default function AlphaSurvey() {
       }
     } catch (err) {
       // eslint-disable-next-line no-console
-      console.error('alpha_feedback save error:', err)
-    } finally {
+
+	console.error('alpha_feedback insert error:', err.message)
+	 } finally {
       // Feedback collection is best-effort and must never block the tester from
       // completing the tour.
       localStorage.removeItem('alpha_token')
