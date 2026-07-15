@@ -32,6 +32,7 @@ import {
   splitStoredState,
 } from '@/src/lib/roi/reportState'
 import { persistReportEvidence } from '@/src/lib/roi/reportEvidence'
+import { buildBaselineSnapshot } from '@/src/lib/roi/pipeline/validationBaseline'
 import { persistUsage } from '@/src/lib/roi/services/usageStore'
 import { assessReportSpecificity } from '@/src/lib/roi/specificity'
 import { isEmployeeUser } from '@/src/lib/isEmployee'
@@ -601,6 +602,11 @@ export default async function handler(req, res) {
       const { stateData, renderedHtml, renderedFullHtml } =
         splitStoredState(state)
       generatedShareToken = crypto.randomBytes(24).toString('base64url')
+      const validationBaseline = buildBaselineSnapshot(
+        state.workflows,
+        new Date().toISOString(),
+        'generation',
+      )
       const { data: savedReport, error: saveError } = await supabase
         .from('reports')
         .insert({
@@ -618,6 +624,7 @@ export default async function handler(req, res) {
           state_data: stateData,
           share_token: generatedShareToken,
           is_alpha: Boolean(isAlpha),
+          validation_data: { baseline: validationBaseline },
         })
         .select('id')
         .single()

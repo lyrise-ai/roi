@@ -2,6 +2,8 @@ import { useMemo, useState } from 'react'
 import { fmtCurrency, fmtCurrencyShort, fmtNumber } from '../../Report/format'
 import { statusStyle, statusDef } from '../../Report/shared/statusMeta'
 import KpiTile from '../KpiTile'
+import NumberScale from '../../NumberScale'
+import { INTER_FONT_FAMILY } from '@/src/utilities/fonts'
 
 // Merges WorkflowInput + WorkflowCalc by name, mirroring
 // reportViewModel.js's `merged` construction — kept local rather than
@@ -107,12 +109,49 @@ function OverviewRow({ row }) {
   )
 }
 
-export default function OverviewStep({ wizard, currency, onStart }) {
+export default function OverviewStep({
+  wizard,
+  currency,
+  onStart,
+  isAlpha,
+  reportId,
+}) {
   const rows = useMemo(
     () => buildOverviewRows(wizard.baseline, wizard.liveCalcOutput, currency),
     [wizard.baseline, wizard.liveCalcOutput, currency],
   )
   const s = wizard.liveCalcOutput?.summary
+  const [trustBefore, setTrustBefore] = useState(0)
+
+  // Alpha tour tracking — one tap, fire-and-forget. Never blocks starting
+  // the wizard: not awaited, errors only go to console.
+  const rateTrustBefore = (value) => {
+    setTrustBefore(value)
+    if (!isAlpha) return
+    try {
+      const token = localStorage.getItem('alpha_token')
+      if (!token) return
+      fetch('/api/alpha/progress', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          session_token: token,
+          report_id: reportId,
+          trust_before: value,
+        }),
+      })
+        .then((res) => {
+          if (!res.ok) {
+            console.error('[alpha] trust_before tracking failed:', res.status)
+          }
+        })
+        .catch((err) => {
+          console.error('[alpha] trust_before tracking failed:', err)
+        })
+    } catch (err) {
+      console.error('[alpha] trust_before tracking failed:', err)
+    }
+  }
 
   return (
     <div>
@@ -181,6 +220,26 @@ export default function OverviewStep({ wizard, currency, onStart }) {
         <div className="mx-auto mb-6 max-w-[440px] text-[13.5px] leading-[1.65] text-[#9AA7C4]">
           Confirm what&apos;s real for your business in 4 quick steps.
         </div>
+
+        {isAlpha && (
+          <div className="mx-auto mb-6 max-w-[360px] border-t border-[rgba(124,140,176,0.25)] pt-6">
+            <div
+              style={{ fontFamily: INTER_FONT_FAMILY, letterSpacing: '-0.2px' }}
+              className="mb-2 text-[14.5px] font-normal text-white"
+            >
+              Before you validate, how much do you trust these numbers?
+            </div>
+            <NumberScale
+              value={trustBefore}
+              onChange={rateTrustBefore}
+              lowLabel="Not at all"
+              highLabel="Completely"
+              variant="dark"
+              align="center"
+            />
+          </div>
+        )}
+
         <button
           type="button"
           onClick={onStart}

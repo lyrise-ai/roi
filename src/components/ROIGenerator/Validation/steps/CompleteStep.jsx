@@ -3,6 +3,8 @@ import { useRouter } from 'next/router'
 import clsx from 'clsx'
 import { VALIDATION_QUALIFY_MONTHLY_THRESHOLD } from '@/src/lib/roi/constants'
 import { fmtCurrency } from '../../Report/format'
+import NumberScale from '../../NumberScale'
+import { INTER_FONT_FAMILY } from '@/src/utilities/fonts'
 
 const BUDGET_OPTIONS = [
   { value: 'this_quarter', label: 'This quarter' },
@@ -10,7 +12,7 @@ const BUDGET_OPTIONS = [
   { value: 'exploring', label: 'Just exploring' },
 ]
 
-export default function CompleteStep({ wizard, reportId, currency }) {
+export default function CompleteStep({ wizard, reportId, currency, isAlpha }) {
   const router = useRouter()
   const [status, setStatus] = useState('idle') // idle | saving | error
 
@@ -44,6 +46,41 @@ export default function CompleteStep({ wizard, reportId, currency }) {
         }),
       })
       if (!res.ok) throw new Error(`HTTP ${res.status}`)
+
+      // Alpha tour tracking — best-effort. Validation is already saved above;
+      // this must never block or break navigation to the finished report.
+      if (isAlpha) {
+        try {
+          const token = localStorage.getItem('alpha_token')
+          if (token) {
+            fetch('/api/alpha/progress', {
+              method: 'POST',
+              headers: { 'Content-Type': 'application/json' },
+              body: JSON.stringify({
+                session_token: token,
+                reached_validation: true,
+                report_id: reportId,
+                intent_timeline: wizard.budgetTiming || null,
+                trust_after: wizard.feedback.reportFitRating || null,
+              }),
+            })
+              .then((trackRes) => {
+                if (!trackRes.ok) {
+                  console.error(
+                    '[alpha] validation tracking failed:',
+                    trackRes.status,
+                  )
+                }
+              })
+              .catch((err) => {
+                console.error('[alpha] validation tracking failed:', err)
+              })
+          }
+        } catch (err) {
+          console.error('[alpha] validation tracking failed:', err)
+        }
+      }
+
       router.push(`/report/${reportId}`)
     } catch (err) {
       console.error('[CompleteStep] finalize failed:', err)
@@ -85,6 +122,22 @@ export default function CompleteStep({ wizard, reportId, currency }) {
             ? `Validated value is ~${fmtCurrency(monthlyGain, currency)}/mo, above our qualification bar. These workflows are a strong candidate for a process-mapping engagement.`
             : `Validated value is ~${fmtCurrency(monthlyGain, currency)}/mo, against our ${fmtCurrency(VALIDATION_QUALIFY_MONTHLY_THRESHOLD, currency)}/mo qualification bar. Adding a workflow or confirming higher volume in the steps above could close the gap.`}
         </div>
+      </div>
+
+      <div className="mx-auto mb-5 max-w-[480px] rounded-xl border border-[#E5E7EB] bg-white px-6 py-[22px] text-left">
+        <div
+          style={{ fontFamily: INTER_FONT_FAMILY, letterSpacing: '-0.2px' }}
+          className="mb-2 text-[14.5px] font-normal text-[#0F172A]"
+        >
+          Now that you've seen the validated numbers, how much do you trust
+          them?
+        </div>
+        <NumberScale
+          value={wizard.feedback.reportFitRating}
+          onChange={(v) => wizard.setFeedback('reportFitRating', v)}
+          lowLabel="Not at all"
+          highLabel="Completely"
+        />
       </div>
 
       <div className="mx-auto mb-5 max-w-[480px] rounded-xl border border-[#E5E7EB] bg-white px-6 py-[22px] text-left">
