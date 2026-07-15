@@ -1,8 +1,18 @@
 /* eslint-disable no-console */
 // ─────────────────────────────────────────────────────────────────────────────
-// POST /api/roi-email — Re-render, re-generate PDF, and re-send report email
+// POST /api/roi-share-email — "Send via email". Used both by the report
+// toolbar (send/resend to your own stored address) and the report-ending
+// panel's "Loop in a colleague" card (send to anyone). Same endpoint either
+// way — the only difference is what happens to the recipient:
+//   - sending to your own address: reuses the existing share_token deep link
+//   - sending to anyone else: provisions (or reuses) a colleague invite —
+//     a chat_usage grant keyed by a durable, revocable token — and the
+//     email links to /report/{id}?invite={token}, which silently
+//     authenticates the colleague on arrival (see reportViewerAccess.js).
+// Any accessor with legitimate report access (owner, employee, or an
+// already-invited colleague) may use this, not just the owner.
 //
-// Body: { state: ReportState }
+// Body: { reportId: string, to: string }
 // Response: { ok: true } | { error: string }
 // ─────────────────────────────────────────────────────────────────────────────
 
@@ -14,12 +24,30 @@ import { generatePdf } from '@/src/lib/roi/services/pdf'
 import { sendReportEmail } from '@/src/lib/roi/services/email'
 import { createClient, createAdminClient } from '../../src/lib/supabase-server'
 import { buildStateFromReportRow } from '@/src/lib/roi/reportState'
+import { isEmployeeUser } from '@/src/lib/isEmployee'
+import {
+  hasReportAccess,
+  getGrantForUser,
+  createColleagueInvite,
+} from '@/src/lib/roi/reportGrants'
 
 export const config = {
   maxDuration: 120,
 }
 
 const IS_DEV = process.env.NODE_ENV === 'development'
+const EMAIL_RE = /^[^\s@]+@[^\s@]+\.[^\s@]+$/
+
+function buildBaseUrl(req) {
+  const host = req.headers?.host
+  const proto =
+    req.headers?.['x-forwarded-proto'] ||
+    (host && host.startsWith('localhost') ? 'http' : 'https')
+  return (
+    process.env.NEXT_PUBLIC_BASE_URL ??
+    (host ? `${proto}://${host}` : 'https://lyrise.ai')
+  )
+}
 
 export default async function handler(req, res) {
   if (req.method !== 'POST') {
@@ -37,12 +65,18 @@ export default async function handler(req, res) {
     return
   }
 
-  const { reportId } = req.body ?? {}
+  const { reportId, to } = req.body ?? {}
 
   if (!reportId) {
     res.status(400).json({ error: 'reportId is required' })
     return
   }
+
+  if (!to || typeof to !== 'string' || !EMAIL_RE.test(to.trim())) {
+    res.status(400).json({ error: 'A valid recipient email is required' })
+    return
+  }
+  const recipient = to.trim()
 
   const admin = createAdminClient()
   const [{ data: userData }, { data: report }] = await Promise.all([
@@ -56,22 +90,27 @@ export default async function handler(req, res) {
       .single(),
   ])
 
-  const isEmployee =
-    userData?.role === 'EMPLOYEE' || user.email?.endsWith('@lyrise.ai')
+  const isEmployee = isEmployeeUser(user, userData)
+  const grant = report
+    ? await getGrantForUser({ admin, reportId, userId: user.id })
+    : null
 
-  if (!report || (!isEmployee && report.user_id !== user.id)) {
+  if (
+    !report ||
+    !hasReportAccess({ report, userId: user.id, isEmployee, grant })
+  ) {
     res.status(403).json({ error: 'Unauthorized' })
     return
   }
 
   const state = buildStateFromReportRow(report)
 
-  if (!state?.assembled || !state?.normInput?.email) {
-    res
-      .status(400)
-      .json({ error: 'state.assembled and state.normInput.email are required' })
+  if (!state?.assembled) {
+    res.status(400).json({ error: 'state.assembled is required' })
     return
   }
+
+  const isSelf = recipient.toLowerCase() === (user.email ?? '').toLowerCase()
 
   if (IS_DEV) {
     res.status(200).json({ ok: true, skipped: true })
@@ -92,21 +131,26 @@ export default async function handler(req, res) {
     const pdf = await generatePdf(renderedHtml, filename)
 
     let chatUrl
-    if (report.share_token && !report.share_revoked_at) {
-      const host = req.headers?.host
-      const proto =
-        req.headers?.['x-forwarded-proto'] ||
-        (host && host.startsWith('localhost') ? 'http' : 'https')
-      const base =
-        process.env.NEXT_PUBLIC_BASE_URL ??
-        (host ? `${proto}://${host}` : 'https://lyrise.ai')
-      chatUrl = `${base.replace(/\/$/, '')}/report/${
-        report.id
-      }?t=${encodeURIComponent(report.share_token)}`
+    const base = buildBaseUrl(req).replace(/\/$/, '')
+    if (isSelf) {
+      if (report.share_token && !report.share_revoked_at) {
+        chatUrl = `${base}/report/${report.id}?t=${encodeURIComponent(
+          report.share_token,
+        )}`
+      }
+    } else {
+      const invite = await createColleagueInvite({
+        admin,
+        reportId: report.id,
+        email: recipient,
+      })
+      chatUrl = `${base}/report/${report.id}?invite=${encodeURIComponent(
+        invite.invite_token,
+      )}`
     }
 
     await sendReportEmail(
-      state.normInput.email,
+      recipient,
       company,
       pdf.base64,
       pdf.filename,
@@ -116,7 +160,7 @@ export default async function handler(req, res) {
 
     res.status(200).json({ ok: true })
   } catch (err) {
-    console.error('[roi-email] Error:', err)
+    console.error('[roi-share-email] Error:', err)
     res.status(500).json({ error: err?.message ?? 'Failed to send email' })
   }
 }

@@ -37,6 +37,7 @@ import { persistUsage } from '@/src/lib/roi/services/usageStore'
 import { assessReportSpecificity } from '@/src/lib/roi/specificity'
 import { isEmployeeUser } from '@/src/lib/isEmployee'
 import { REPORT_CHAT_MESSAGE_LIMIT } from '@/src/lib/roi/constants'
+import { hasReportAccess, getGrantForUser } from '@/src/lib/roi/reportGrants'
 
 export const config = {
   maxDuration: 300,
@@ -228,47 +229,54 @@ export default async function handler(req, res) {
         .single(),
     ])
     const isEmployeeChat = isEmployeeUser(user, userData)
+    const grant = report
+      ? await getGrantForUser({
+          admin: adminSupabase,
+          reportId,
+          userId: user.id,
+        })
+      : null
 
-    // Employees see all messages on the report; clients see only their own
-    let msgQuery = adminSupabase
+    if (
+      !report ||
+      !hasReportAccess({
+        report,
+        userId: user.id,
+        isEmployee: isEmployeeChat,
+        grant,
+      })
+    ) {
+      res.status(403).json({ error: 'Unauthorized' })
+      return
+    }
+
+    // Chat history belongs to the report — every accessor (owner, employee,
+    // or invited colleague) sees the same full thread; only the quota below
+    // is per-user.
+    const { data: messages } = await adminSupabase
       .from('chat_messages')
       .select('role, content')
       .eq('report_id', reportId)
       .order('created_at', { ascending: true })
       .limit(20)
-    if (!isEmployeeChat) msgQuery = msgQuery.eq('user_id', user.id)
-    const { data: messages } = await msgQuery
     chatUserRole = isEmployeeChat ? 'EMPLOYEE' : (userData?.role ?? 'CLIENT')
 
-    if (!report || (report.user_id !== user.id && !isEmployeeChat)) {
-      res.status(403).json({ error: 'Unauthorized' })
+    // Employees chat without limits; clients, alpha testers, and invited
+    // colleagues are capped — each against their own chat_usage row.
+    if (!isEmployeeChat && grant && grant.message_count >= CHAT_LIMIT) {
+      adminSupabase
+        .from('events')
+        .insert({
+          user_id: user.id,
+          report_id: reportId,
+          type: 'chat_limit_reached',
+        })
+        .then(({ error }) => {
+          if (error)
+            console.error('event insert failed (chat_limit_reached)', error)
+        })
+      res.status(403).json({ error: 'limit_reached' })
       return
-    }
-
-    // Employees chat without limits; clients and alpha testers are capped.
-    if (!isEmployeeChat) {
-      const { data: usage } = await adminSupabase
-        .from('chat_usage')
-        .select('id, message_count')
-        .eq('user_id', user.id)
-        .eq('report_id', reportId)
-        .single()
-
-      if (usage && usage.message_count >= CHAT_LIMIT) {
-        adminSupabase
-          .from('events')
-          .insert({
-            user_id: user.id,
-            report_id: reportId,
-            type: 'chat_limit_reached',
-          })
-          .then(({ error }) => {
-            if (error)
-              console.error('event insert failed (chat_limit_reached)', error)
-          })
-        res.status(403).json({ error: 'limit_reached' })
-        return
-      }
     }
 
     persistedReport = report

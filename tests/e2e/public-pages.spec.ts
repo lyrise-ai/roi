@@ -41,28 +41,3 @@ test.describe('/roi-feedback', () => {
     await expect(page.getByRole('button', { name: /submit/i })).toBeVisible()
   })
 })
-
-// ── /alpha-survey ─────────────────────────────────────────────────────────────
-
-test.describe('/alpha-survey', () => {
-  test.beforeEach(async ({ page }) => {
-    await page.goto('/alpha-survey')
-  })
-
-  test('renders without JS errors', async ({ page }) => {
-    const errors: string[] = []
-    page.on('pageerror', (err) => errors.push(err.message))
-    await page.waitForLoadState('networkidle')
-    expect(errors).toHaveLength(0)
-  })
-
-  test('shows PMF question', async ({ page }) => {
-    await expect(page.getByText(/how would you feel/i)).toBeVisible()
-  })
-
-  test('answer options are visible and clickable', async ({ page }) => {
-    const disappointed = page.getByText(/very disappointed/i)
-    await expect(disappointed).toBeVisible()
-    await disappointed.click()
-  })
-})

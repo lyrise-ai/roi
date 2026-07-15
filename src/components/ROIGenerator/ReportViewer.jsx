@@ -9,6 +9,7 @@ import { useSpotlightTour } from '@/src/hooks/useSpotlightTour'
 import SpotlightTourOverlay from '@/src/components/shared/SpotlightTourOverlay'
 import ReportContent from './Report/ReportContent'
 import TerminologyGuide from './Report/TerminologyGuide'
+import EmailSendPopover from './Report/EmailSendPopover'
 import { NAV_ITEMS } from './Report/navItems'
 
 const TOUR_JOURNEY = [
@@ -131,6 +132,9 @@ export default function ReportViewer({
   shareToken = null,
   validatedAt = null,
   forceTour = false,
+  isAlpha = false,
+  isOwner = false,
+  isColleague = false,
 }) {
   const [reportState, setReportState] = useState(initialState)
   const [chatHistory, setChatHistory] = useState(initialChatHistory)
@@ -139,7 +143,6 @@ export default function ReportViewer({
   const [activeTool, setActiveTool] = useState(null)
   const [isAgentRunning, setIsAgentRunning] = useState(false)
   const [input, setInput] = useState('')
-  const [emailStatus, setEmailStatus] = useState('idle')
   // Nav-sidebar keys touched by the most recent chat edit — persists until the
   // next message (drives the "Sections updated" chip row); `flashSections` is
   // the same set but auto-clears after a few seconds (drives the highlight
@@ -152,6 +155,9 @@ export default function ReportViewer({
   const [userSentCount, setUserSentCount] = useState(initialMessagesUsed)
   const [showCallPrompt, setShowCallPrompt] = useState(false)
   const [downloadStatus, setDownloadStatus] = useState('idle')
+  const [creditsEarned, setCreditsEarned] = useState(0)
+  const [toastMsg, setToastMsg] = useState(null)
+  const toastTimerRef = useRef(null)
 
   useEffect(() => {
     if (!showCallPrompt) return undefined
@@ -452,23 +458,39 @@ export default function ReportViewer({
     }
   }, [downloadStatus, reportId, isShareLink, shareToken])
 
-  const handleResendEmail = useCallback(async () => {
-    if (!reportId || emailStatus === 'sending') return
-    setEmailStatus('sending')
-    try {
-      const res = await fetch('/api/roi-email', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ reportId }),
-      })
-      if (!res.ok) throw new Error(`HTTP ${res.status}`)
-      setEmailStatus('sent')
-      setTimeout(() => setEmailStatus('idle'), 3000)
-    } catch {
-      setEmailStatus('error')
-      setTimeout(() => setEmailStatus('idle'), 3000)
-    }
-  }, [emailStatus, reportId])
+  // Cosmetic delight loop for the report-ending panel — mirrors how credits
+  // already behave elsewhere in the product (ValidationWizard's XP is
+  // likewise never actually redeemed against REPORT_CHAT_MESSAGE_LIMIT).
+  const award = useCallback((msg) => {
+    setCreditsEarned((c) => c + 1)
+    setToastMsg(msg)
+    clearTimeout(toastTimerRef.current)
+    toastTimerRef.current = setTimeout(() => setToastMsg(null), 2600)
+  }, [])
+
+  const handleCredibilityAnswer = useCallback(
+    async ({ choice, comment }) => {
+      if (!isAlpha) return
+      try {
+        const token = localStorage.getItem('alpha_token')
+        if (!token) return
+        const { createClient } = await import('@/src/lib/supabase-browser')
+        await createClient()
+          .from('alpha_feedback')
+          .upsert(
+            {
+              alpha_token: token,
+              step_credibility_choice: choice,
+              step_credibility_comment: comment ?? null,
+            },
+            { onConflict: 'alpha_token' },
+          )
+      } catch (err) {
+        console.error('[alpha] credibility pulse tracking failed:', err)
+      }
+    },
+    [isAlpha],
+  )
 
   const handleKeyDown = useCallback(
     (e) => {
@@ -596,17 +618,77 @@ export default function ReportViewer({
                 padding: '3px 10px',
                 letterSpacing: '0.02em',
               }}
-              title={`Validated by you on ${new Date(validatedAt).toLocaleDateString()}`}
+              title={`Validated by you on ${new Date(validatedAt).toLocaleDateString('en-GB', { day: 'numeric', month: 'short', year: 'numeric' })}`}
             >
               ✓ Validated{' '}
-              {new Date(validatedAt).toLocaleDateString(undefined, {
+              {new Date(validatedAt).toLocaleDateString('en-GB', {
                 month: 'short',
                 day: 'numeric',
               })}
             </span>
           )}
+          {isColleague && (
+            <span
+              style={{
+                fontSize: 11,
+                fontWeight: 600,
+                color: '#5B48F8',
+                background: '#F5F3FF',
+                borderRadius: 999,
+                padding: '3px 10px',
+                letterSpacing: '0.02em',
+              }}
+              title={`Shared with you${email ? ` by ${email}` : ''} — you're viewing as an invited collaborator, not the owner.`}
+            >
+              🤝 Shared with you
+            </span>
+          )}
         </div>
         <div style={{ display: 'flex', gap: 8, alignItems: 'center' }}>
+          <div
+            role="button"
+            tabIndex={0}
+            onClick={() => scrollToSectionRef.current?.('ending')}
+            onKeyDown={(e) => {
+              if (e.key === 'Enter' || e.key === ' ')
+                scrollToSectionRef.current?.('ending')
+            }}
+            style={{
+              fontSize: 12.5,
+              color: '#6b7280',
+              fontWeight: 600,
+              cursor: 'pointer',
+            }}
+            onMouseEnter={(e) => {
+              e.currentTarget.style.color = '#5B48F8'
+            }}
+            onMouseLeave={(e) => {
+              e.currentTarget.style.color = '#6b7280'
+            }}
+          >
+            Wrap up →
+          </div>
+          {creditsEarned > 0 && (
+            <div
+              style={{
+                background: '#F5F3FF',
+                color: '#5B48F8',
+                borderRadius: 999,
+                padding: '5px 12px',
+                fontSize: 11.5,
+                fontWeight: 700,
+                display: 'flex',
+                alignItems: 'center',
+                gap: 5,
+              }}
+            >
+              <span>⚡</span>
+              <span>
+                {creditsEarned} chat credit{creditsEarned === 1 ? '' : 's'}{' '}
+                earned
+              </span>
+            </div>
+          )}
           <button
             ref={downloadRef}
             type="button"
@@ -654,44 +736,11 @@ export default function ReportViewer({
           </button>
           <TerminologyGuide triggerRef={terminologyGuideRef} />
           {!isShareLink && (
-            <button
-              ref={resendEmailRef}
-              type="button"
-              onClick={handleResendEmail}
-              disabled={!reportId || emailStatus === 'sending'}
-              style={{
-                padding: '6px 14px',
-                fontSize: 13,
-                fontWeight: 500,
-                border: '1px solid #5B48F8',
-                borderRadius: 6,
-                background:
-                  emailStatus === 'sent'
-                    ? '#dcfce7'
-                    : emailStatus === 'error'
-                      ? '#fee2e2'
-                      : '#5B48F8',
-                color:
-                  emailStatus === 'sent'
-                    ? '#166534'
-                    : emailStatus === 'error'
-                      ? '#991b1b'
-                      : '#fff',
-                cursor:
-                  !reportId || emailStatus === 'sending'
-                    ? 'not-allowed'
-                    : 'pointer',
-                opacity: !reportId || emailStatus === 'sending' ? 0.7 : 1,
-              }}
-            >
-              {emailStatus === 'sending'
-                ? 'Sending…'
-                : emailStatus === 'sent'
-                  ? 'Email Sent!'
-                  : emailStatus === 'error'
-                    ? 'Send Failed'
-                    : 'Re-send Email'}
-            </button>
+            <EmailSendPopover
+              reportId={reportId}
+              defaultEmail={email}
+              triggerRef={resendEmailRef}
+            />
           )}
           {batchContext &&
             (batchContext.currentIndex + 1 < batchContext.total ? (
@@ -768,6 +817,13 @@ export default function ReportViewer({
           highlightedSections={flashSections}
           navRef={sectionNavRef}
           onReady={handleReportContentReady}
+          isAlpha={isAlpha}
+          reportId={reportId}
+          canManageShares={isOwner || isEmployee}
+          onDownload={handleDownload}
+          downloadStatus={downloadStatus}
+          onAward={award}
+          onCredibilityAnswer={handleCredibilityAnswer}
         />
 
         {/* Chat panel */}
@@ -1235,6 +1291,26 @@ export default function ReportViewer({
           onClose={closeTour}
           lastStepLabel="Got it"
         />
+      )}
+
+      {toastMsg && (
+        <div
+          style={{
+            position: 'fixed',
+            bottom: 24,
+            right: 24,
+            background: '#0F172A',
+            color: '#fff',
+            padding: '12px 18px',
+            borderRadius: 10,
+            fontSize: 12.5,
+            fontWeight: 600,
+            boxShadow: '0 10px 30px rgba(0,0,0,0.25)',
+            zIndex: 100,
+          }}
+        >
+          ⚡ {toastMsg}
+        </div>
       )}
 
       <style>{`

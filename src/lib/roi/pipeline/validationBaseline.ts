@@ -15,7 +15,8 @@ export function buildBaselineSnapshot(workflows, capturedAt, source) {
     if (Array.isArray(workflows)) {
       workflows.forEach((w) => {
         if (!w || typeof w.name !== 'string' || !w.name) return
-        const entry = {}
+        const entry: { monthlyVolume?: number; minutesPerItemBefore?: number } =
+          {}
         if (
           typeof w.monthlyVolume === 'number' &&
           Number.isFinite(w.monthlyVolume)
