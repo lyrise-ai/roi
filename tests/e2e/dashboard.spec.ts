@@ -70,4 +70,20 @@ test.describe('api with valid session', () => {
     expect(res.status()).not.toBe(401)
     expect(res.status()).not.toBe(500)
   })
+
+  test('GET /api/roi-report-shares with auth and missing reportId → 400', async ({
+    request,
+  }) => {
+    const res = await request.get('/api/roi-report-shares')
+    expect(res.status()).toBe(400)
+  })
+
+  test('POST /api/roi-share-email with auth and missing recipient → 400', async ({
+    request,
+  }) => {
+    const res = await request.post('/api/roi-share-email', {
+      data: { reportId: 'test-id' },
+    })
+    expect(res.status()).toBe(400)
+  })
 })

@@ -1,7 +1,7 @@
 /**
  * Public page tests — pages accessible without authentication.
- * Verifies the feedback and survey flows that customers interact with
- * after receiving a report.
+ * Verifies the feedback flow that customers interact with after receiving
+ * a report.
  */
 import { test, expect } from '@playwright/test'
 

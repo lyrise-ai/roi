@@ -17,7 +17,7 @@ test.describe('method guards (GET on POST-only endpoints → 405)', () => {
   // both require auth — so GET unauthenticated returns 401, not 405.
   const postOnlyRoutes = [
     '/api/roi-pdf',
-    '/api/roi-email',
+    '/api/roi-share-email',
     '/api/feedback',
     '/api/auth/login',
     '/api/auth/signup',
@@ -41,6 +41,13 @@ test.describe('method guards (GET-only endpoints → 405 for POST)', () => {
   })
 })
 
+test.describe('method guards (GET/DELETE-only endpoints → 405 for POST)', () => {
+  test('POST /api/roi-report-shares → 405', async ({ request }) => {
+    const res = await request.post('/api/roi-report-shares', { data: {} })
+    expect(res.status()).toBe(405)
+  })
+})
+
 // ── 2. Auth guards ────────────────────────────────────────────────────────────
 
 test.describe('auth guards (unauthenticated → 401, not 500)', () => {
@@ -58,9 +65,9 @@ test.describe('auth guards (unauthenticated → 401, not 500)', () => {
     expect(res.status()).toBe(401)
   })
 
-  test('POST /api/roi-email without auth → 401', async ({ request }) => {
-    const res = await request.post('/api/roi-email', {
-      data: { reportId: 'test-id' },
+  test('POST /api/roi-share-email without auth → 401', async ({ request }) => {
+    const res = await request.post('/api/roi-share-email', {
+      data: { reportId: 'test-id', to: 'someone@example.com' },
     })
     expect(res.status()).toBe(401)
   })
@@ -72,6 +79,20 @@ test.describe('auth guards (unauthenticated → 401, not 500)', () => {
 
   test('GET /api/usage/summary without auth → 401', async ({ request }) => {
     const res = await request.get('/api/usage/summary')
+    expect(res.status()).toBe(401)
+  })
+
+  test('GET /api/roi-report-shares without auth → 401', async ({ request }) => {
+    const res = await request.get('/api/roi-report-shares?reportId=test-id')
+    expect(res.status()).toBe(401)
+  })
+
+  test('DELETE /api/roi-report-shares without auth → 401', async ({
+    request,
+  }) => {
+    const res = await request.delete('/api/roi-report-shares', {
+      data: { reportId: 'test-id', grantId: 'test-grant' },
+    })
     expect(res.status()).toBe(401)
   })
 })
