@@ -12,6 +12,17 @@ test.describe('ROI report form (authenticated)', () => {
   test.beforeEach(async ({ page }) => {
     await page.goto('/roi-report')
     await expect(page).toHaveURL('/roi-report', { timeout: 15_000 })
+
+    // Alpha accounts see an intro splash first (auto-dismisses after 8s —
+    // see SplashScreen's setTimeout in pages/roi-report.jsx). Dismiss it
+    // immediately so assertions with the default 5s expect-timeout don't
+    // race it; tests using .fill()/.click() alone happened to outlast it
+    // since action waits are bounded by the much longer test timeout, which
+    // is what made this intermittent rather than a hard failure everywhere.
+    const skipSplash = page.getByRole('button', { name: 'Skip →' })
+    if (await skipSplash.isVisible().catch(() => false)) {
+      await skipSplash.click()
+    }
   })
 
   test('loads without redirect and without JS errors', async ({ page }) => {
@@ -64,15 +75,29 @@ test.describe('ROI report form (authenticated)', () => {
   test('industry pill selection toggles active state and can be cleared', async ({
     page,
   }) => {
-    const pill = page.getByText('Technology / SaaS', { exact: true })
-    await expect(pill).not.toHaveClass(/bg-gray-900/)
+    // Don't assume a starting state: the IS_DEV preset pre-selects this
+    // exact pill locally (DEV_STEP1_PRESET.industry), so it's already
+    // active in dev but blank in the CI production build. Assert the
+    // click actually flips it, and flips it back — real behavior, not an
+    // environment-dependent starting point.
+    const pill = page.getByRole('button', {
+      name: 'Technology / SaaS',
+      exact: true,
+    })
+    const isActive = async () =>
+      ((await pill.getAttribute('class')) ?? '').includes('bg-gray-900')
 
+    const before = await isActive()
     await pill.click()
-    await expect(pill).toHaveClass(/bg-gray-900/)
+    await expect(async () => {
+      expect(await isActive()).toBe(!before)
+    }).toPass({ timeout: 5_000 })
 
     // Clicking an already-active pill deselects it (PillGroup's onChange
     // toggles rather than just re-selecting).
     await pill.click()
-    await expect(pill).not.toHaveClass(/bg-gray-900/)
+    await expect(async () => {
+      expect(await isActive()).toBe(before)
+    }).toPass({ timeout: 5_000 })
   })
 })
