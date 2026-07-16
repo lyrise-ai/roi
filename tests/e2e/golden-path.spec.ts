@@ -38,6 +38,14 @@ test('generate (mocked) → validate wizard → report view', async ({ page }) =
   await page.goto('/roi-report')
   await expect(page).toHaveURL('/roi-report', { timeout: 15_000 })
 
+  // Alpha accounts see an intro splash first (auto-dismisses after 8s —
+  // see SplashScreen's setTimeout in pages/roi-report.jsx). Dismiss it
+  // immediately rather than relying on action timeouts to outlast it.
+  const skipSplash = page.getByRole('button', { name: 'Skip →' })
+  if (await skipSplash.isVisible().catch(() => false)) {
+    await skipSplash.click()
+  }
+
   const companyName = `E2E Golden Path ${Date.now()}`
   await page.getByPlaceholder('e.g. Acme Corp').fill(companyName)
   await page.getByRole('button', { name: /continue/i }).click()
@@ -51,10 +59,26 @@ test('generate (mocked) → validate wizard → report view', async ({ page }) =
 
   await page.getByRole('button', { name: /fast mock preview/i }).click()
 
+  // Alpha accounts land on a completion screen and navigate manually via
+  // "Open my Profit Map →" (see the isAlpha branch of the COMPLETE
+  // viewState effect in pages/roi-report.jsx) — everyone else auto-redirects
+  // ~400ms after generation finishes. Wait for whichever applies.
+  const openButton = page.getByRole('button', { name: /open my profit map/i })
+  try {
+    await openButton.waitFor({ state: 'visible', timeout: 20_000 })
+    await openButton.click()
+  } catch {
+    // non-alpha accounts skip straight to the auto-redirect below
+  }
+
   // Generation redirects into the validation wizard (reports aren't
-  // considered validated until that wizard completes or is skipped).
+  // considered validated until that wizard completes or is skipped). The
+  // wizard's overview shows the generated figures/workflows but not the
+  // company name itself — that only appears on the final report view.
   await page.waitForURL(/\/report\/.+\/validate/, { timeout: 30_000 })
-  await expect(page.getByText(companyName)).toBeVisible({ timeout: 15_000 })
+  await expect(
+    page.getByRole('heading', { name: /AI Profit & Productivity Report/i }),
+  ).toBeVisible({ timeout: 15_000 })
 
   const reportId = page.url().match(/\/report\/([^/]+)\/validate/)?.[1]
   expect(reportId).toBeTruthy()

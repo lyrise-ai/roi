@@ -50,6 +50,19 @@ async function claimInviteIfPresent({ admin, supabase, report, inviteToken }) {
     await supabase.auth.signOut()
   }
 
+  // generateLink({ type: 'magiclink' }) only verifies cleanly for an email
+  // that already has an auth user — for a genuinely new colleague (the
+  // common case) verifyOtp fails with otp_expired even immediately after
+  // generation. Create the auth user first so the same magic-link
+  // generate+verify pairing used by pages/auth/alpha.js actually succeeds.
+  // Ignore "already registered" — the invited email may already have an
+  // account from a previous invite, an unrelated signup, etc.
+  const { error: createError } = await admin.auth.admin.createUser({
+    email: grant.invited_email,
+    email_confirm: true,
+  })
+  if (createError && createError.code !== 'email_exists') return
+
   const { data: linkData, error: linkError } =
     await admin.auth.admin.generateLink({
       type: 'magiclink',
