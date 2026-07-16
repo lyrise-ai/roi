@@ -1323,7 +1323,8 @@ export default function ROIReport({ isEmployee, isAlpha }) {
       if (tourSeen) {
         await runGeneration()
       } else {
-        setViewState(VIEW_STATES.CHOICE)
+        //setViewState(VIEW_STATES.CHOICE) // retired the demo till furthure notice.
+        await runGeneration()
       }
     },
     [step, s1, s2, runGeneration],
@@ -1411,7 +1412,8 @@ export default function ROIReport({ isEmployee, isAlpha }) {
     )
   }
 
-  if (viewState === VIEW_STATES.CHOICE) {
+  // retiring the demo as it was designed around the old UI.
+  /* if (viewState === VIEW_STATES.CHOICE) {
     return (
       <div className="rebranding-landing-page -mt-[12px]">
         <MainHeader />
@@ -1459,7 +1461,7 @@ export default function ROIReport({ isEmployee, isAlpha }) {
         </div>
       </div>
     )
-  }
+  } */
 
   if (viewState === VIEW_STATES.ERROR) {
     return (
