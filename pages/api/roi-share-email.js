@@ -38,15 +38,19 @@ export const config = {
 const IS_DEV = process.env.NODE_ENV === 'development'
 const EMAIL_RE = /^[^\s@]+@[^\s@]+\.[^\s@]+$/
 
+// Prefer the request's own host over NEXT_PUBLIC_BASE_URL: the header always
+// matches whatever domain actually served this request (production, a Vercel
+// preview deploy, or localhost), whereas the env var is one fixed value per
+// environment and easy to leave stale (e.g. copied from .env.local).
 function buildBaseUrl(req) {
-  const host = req.headers?.host
-  const proto =
-    req.headers?.['x-forwarded-proto'] ||
-    (host && host.startsWith('localhost') ? 'http' : 'https')
-  return (
-    process.env.NEXT_PUBLIC_BASE_URL ??
-    (host ? `${proto}://${host}` : 'https://lyrise.ai')
-  )
+  const host = req.headers?.['x-forwarded-host'] || req.headers?.host
+  if (host) {
+    const proto =
+      req.headers?.['x-forwarded-proto'] ||
+      (host.startsWith('localhost') ? 'http' : 'https')
+    return `${proto}://${host}`
+  }
+  return process.env.NEXT_PUBLIC_BASE_URL ?? 'https://lyrise.ai'
 }
 
 export default async function handler(req, res) {
