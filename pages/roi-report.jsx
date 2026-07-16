@@ -1323,7 +1323,7 @@ export default function ROIReport({ isEmployee, isAlpha }) {
       if (tourSeen) {
         await runGeneration()
       } else {
-        //setViewState(VIEW_STATES.CHOICE) // retired the demo till furthure notice.
+        // setViewState(VIEW_STATES.CHOICE) // retired the demo till furthure notice.
         await runGeneration()
       }
     },
