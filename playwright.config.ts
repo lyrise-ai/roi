@@ -30,7 +30,12 @@ export default defineConfig({
         ...devices['Desktop Chrome'],
         storageState: { cookies: [], origins: [] },
       },
-      testIgnore: ['**/dashboard.spec.ts', '**/roi-report-form.spec.ts'],
+      testIgnore: [
+        '**/dashboard.spec.ts',
+        '**/roi-report-form.spec.ts',
+        '**/report-access.spec.ts',
+        '**/golden-path.spec.ts',
+      ],
     },
 
     // Authenticated project — uses the session saved by global-setup.
@@ -41,7 +46,12 @@ export default defineConfig({
         ...devices['Desktop Chrome'],
         storageState: 'tests/.auth/session.json',
       },
-      testMatch: ['**/dashboard.spec.ts', '**/roi-report-form.spec.ts'],
+      testMatch: [
+        '**/dashboard.spec.ts',
+        '**/roi-report-form.spec.ts',
+        '**/report-access.spec.ts',
+        '**/golden-path.spec.ts',
+      ],
     },
   ],
 
