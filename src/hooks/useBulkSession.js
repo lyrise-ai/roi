@@ -1,5 +1,4 @@
 import { useCallback, useEffect, useState } from 'react'
-import { nanoid } from 'nanoid'
 import { drainSSE } from '../lib/drainSSE'
 import { loginRedirect } from '../lib/routes'
 
@@ -254,7 +253,7 @@ function scheduleAll(sessionId) {
 function buildInitialSession(payloads, { emailOverride } = {}) {
   const now = Date.now()
   return {
-    id: nanoid(),
+    id: crypto.randomUUID(),
     createdAt: now,
     cursor: 0,
     emailOverride: emailOverride || null,

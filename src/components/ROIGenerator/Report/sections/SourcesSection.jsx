@@ -52,7 +52,18 @@ export default function SourcesSection({ sources }) {
             <div className="mb-2 text-xs text-[#4B5563]">{src.detail}</div>
             <div className="flex items-center justify-between gap-2">
               <div className="text-[11px] text-[#9CA3AF]">
-                {src.sourceLabel}
+                {src.sourceUrl ? (
+                  <a
+                    href={src.sourceUrl}
+                    target="_blank"
+                    rel="noreferrer"
+                    className="underline hover:text-[#5B48F8]"
+                  >
+                    {src.sourceLabel}
+                  </a>
+                ) : (
+                  src.sourceLabel
+                )}
               </div>
               <StatusPill id={`src-${i}`} status={src.status} />
             </div>

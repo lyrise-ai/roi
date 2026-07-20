@@ -3,14 +3,6 @@ const { withSentryConfig } = require('@sentry/nextjs')
 
 const nextConfig = {
   reactStrictMode: false,
-  modularizeImports: {
-    '@mui/material': {
-      transform: '@mui/material/{{member}}',
-    },
-    '@mui/icons-material': {
-      transform: '@mui/icons-material/{{member}}',
-    },
-  },
   turbopack: {
     resolveAlias: {
       '@components': path.resolve(__dirname, 'src/components'),

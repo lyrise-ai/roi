@@ -1,17 +1,13 @@
-const MONTHS_SHORT = [
-  'Jan',
-  'Feb',
-  'Mar',
-  'Apr',
-  'May',
-  'Jun',
-  'Jul',
-  'Aug',
-  'Sep',
-  'Oct',
-  'Nov',
-  'Dec',
-]
+const DTF = new Intl.DateTimeFormat('en-US', {
+  day: 'numeric',
+  month: 'short',
+  year: 'numeric',
+  hour: 'numeric',
+  minute: '2-digit',
+  second: '2-digit',
+  hour12: true,
+  timeZone: 'UTC',
+})
 
 function parse(iso) {
   if (!iso) return null
@@ -23,13 +19,8 @@ function parse(iso) {
 export function fmtDateTime(iso) {
   const d = parse(iso)
   if (!d) return '—'
-  const day = d.getUTCDate()
-  const mon = MONTHS_SHORT[d.getUTCMonth()]
-  const yr = d.getUTCFullYear()
-  let hr = d.getUTCHours()
-  const min = String(d.getUTCMinutes()).padStart(2, '0')
-  const sec = String(d.getUTCSeconds()).padStart(2, '0')
-  const ampm = hr >= 12 ? 'PM' : 'AM'
-  hr = hr % 12 || 12
-  return `${day} ${mon} ${yr}, ${hr}:${min}:${sec} ${ampm}`
+  const p = Object.fromEntries(
+    DTF.formatToParts(d).map((x) => [x.type, x.value]),
+  )
+  return `${p.day} ${p.month} ${p.year}, ${p.hour}:${p.minute}:${p.second} ${p.dayPeriod.toUpperCase()}`
 }

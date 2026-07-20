@@ -26,6 +26,11 @@ import { roiCalculator } from '@/src/lib/roi/pipeline/roiCalculator'
 import { assembleReport } from '@/src/lib/roi/pipeline/assembleReport'
 import { renderTemplate } from '@/src/lib/roi/pipeline/renderTemplate'
 import {
+  buildReportModel,
+  mergeWorkflows,
+} from '@/src/lib/roi/pipeline/reportModel'
+import { fmtCurrency, fmtNumber, currencySymbolFor } from '@/src/lib/roi/format'
+import {
   patchWorkflow,
   removeWorkflowByName,
   appendWorkflow,
@@ -275,6 +280,145 @@ const SALARY_SEARCH_POOL = [
 const SALARY_SEARCH_RE =
   /salary|hourly rate|compensation|glassdoor|bayt\.com|gulftalent|payscale|naukrigulf|wuzzuf|comparably|talent\.com/i
 
+// Mirrors NAV_ITEMS' keys in src/components/ROIGenerator/Report/navItems.js
+// (kept as a plain literal rather than importing that client-tree module —
+// these 11 ids are stable UI section anchors, not business logic).
+const REPORT_SECTION_KEYS = [
+  'overview',
+  'snapshot',
+  'workflows',
+  'uplift',
+  'outlook',
+  'delay',
+  'resilience',
+  'sources',
+  'risks',
+  'roadmap',
+  'next',
+] as const
+type ReportSectionKey = (typeof REPORT_SECTION_KEYS)[number]
+
+// Formats the shared report model as plain text for a given visible section —
+// lets the chat agent ground itself in the ACTUAL current report content on
+// demand instead of only reasoning from the once-per-turn system-prompt
+// snapshot, which never described several of these sections at all.
+export function formatReportSection(
+  state: ReportState,
+  section: ReportSectionKey,
+): string {
+  const { company, globals, copy, calcOutput, confidenceLevel, coreThesis } =
+    state
+  if (!company || !globals || !copy || !calcOutput) {
+    return 'Report not fully generated yet.'
+  }
+  const model = buildReportModel(state)
+  const cur = (n: number) => fmtCurrency(n, globals.currency)
+  const s = calcOutput.summary
+
+  switch (section) {
+    case 'overview': {
+      const conf =
+        confidenceLevel === 'high'
+          ? 'Insight-Driven Analysis'
+          : 'Hypothesis-Driven Projection'
+      const revLine =
+        model.revenueContext.known && model.revenueContext.base > 0
+          ? `Total Financial Gain is ~${model.revenueContext.pct}% of estimated annual revenue.`
+          : 'Annual revenue was not provided.'
+      return [
+        `Company: ${company.company} (${company.industry}${company.country ? ', ' + company.country : ''})`,
+        coreThesis
+          ? `Core thesis: ${coreThesis}`
+          : copy.unified_pattern_thesis
+            ? `Pattern: ${copy.unified_pattern_thesis}`
+            : '',
+        `Confidence: ${conf}`,
+        `Totals (12mo): ${fmtNumber(s.totalAnnualHours)} hrs/yr | OD ${cur(s.operationalDividend12mo)} | PU ${cur(s.profitUplift12mo)} | TFG ${cur(s.totalFinancialGain12mo)}`,
+        revLine,
+        'Operational Dividend = direct labor value recaptured from freed hours. Profit Uplift = additional profit from redirecting that capacity into higher-value work.',
+      ]
+        .filter(Boolean)
+        .join('\n')
+    }
+    case 'snapshot':
+      return (
+        model.companySnapshot
+          .map((r) => `- ${r.text} [${r.label}]`)
+          .join('\n') || 'No snapshot rows.'
+      )
+    case 'workflows': {
+      const lines = model.workflows.map(
+        (w) =>
+          `- ${w.name}: ${fmtNumber(w.monthlyVolume)}/mo, ${w.minutesPerItemBefore}min → ${w.minutesPerItemAfter}min, rate ${cur(w.effectiveRate)}/hr, ${fmtNumber(w.monthlyHours)} hrs/mo freed, ${cur(w.monthlyValue)}/mo`,
+      )
+      const { workflow, adoptionFactor, monthlyValue } = model.workedExample
+      const worked = workflow
+        ? `\nWorked example (${workflow.name}): ${fmtNumber(workflow.monthlyVolume)} × ${(workflow.timeSaved / 60).toFixed(2)} hrs × ${cur(workflow.effectiveRate)}/hr × ${adoptionFactor.toFixed(2)} adoption ramp factor = ${cur(monthlyValue)}/mo`
+        : ''
+      return lines.join('\n') + worked
+    }
+    case 'uplift': {
+      const lines = model.levers.map(
+        (l) =>
+          `- ${l.lever_name} (from ${l.derived_from}): ${l.rationale}${
+            l.monthlyProfitUplift != null
+              ? ` → ${cur(l.monthlyProfitUplift)}/mo`
+              : ''
+          }`,
+      )
+      return `${lines.join('\n')}\nTotal Profit Uplift (12mo): ${cur(s.profitUplift12mo)}`
+    }
+    case 'outlook':
+      return [
+        `Year 1: OD ${cur(s.operationalDividend12mo)} | PU ${cur(s.profitUplift12mo)} | TFG ${cur(s.totalFinancialGain12mo)} | ${fmtNumber(s.totalAnnualHours)} hrs`,
+        `Year 2 (cumulative): OD ${cur(s.operationalDividend24mo)} | PU ${cur(s.profitUplift24mo)} | TFG ${cur(s.totalFinancialGain24mo)} | ${fmtNumber(s.totalAnnualHours24mo)} hrs`,
+        `Year 3 (cumulative): OD ${cur(s.operationalDividend36mo)} | PU ${cur(s.profitUplift36mo)} | TFG ${cur(s.totalFinancialGain36mo)} | ${fmtNumber(s.totalAnnualHours36mo)} hrs`,
+      ].join('\n')
+    case 'delay':
+      return `Monthly cost of delay: ${cur(model.costOfDelayMonthly)}\n${copy.cost_of_delay?.narrative ?? ''}`
+    case 'resilience':
+      return (
+        (copy.resilience_rows ?? [])
+          .map(
+            (r) =>
+              `- ${r.dimension}: act now = ${r.act_now}; defer = ${r.defer}`,
+          )
+          .join('\n') || 'No resilience rows.'
+      )
+    case 'sources':
+      return model.sources
+        .map(
+          (r) =>
+            `- ${r.input}: ${r.detail} [${r.sourceLabel}${r.sourceUrl ? ' ' + r.sourceUrl : ''}] — ${r.status}`,
+        )
+        .join('\n')
+    case 'risks':
+      return (
+        (copy.risks ?? [])
+          .map((r) => `- ${r.risk}: ${r.detail} (mitigation: ${r.mitigation})`)
+          .join('\n') || 'No risks listed.'
+      )
+    case 'roadmap': {
+      const pilot = model.topWorkflow?.name ?? 'the top workflow'
+      return [
+        copy.pilot_recommendation
+          ? `Recommended starting point: ${copy.pilot_recommendation}`
+          : '',
+        `Weeks 1-2: Rapid discovery & validation for ${pilot}.`,
+        `Weeks 3-6: Pilot build & testing.`,
+        `Weeks 7-8: Controlled go-live.`,
+        `Weeks 9-10: ROI validation & expansion.`,
+      ]
+        .filter(Boolean)
+        .join('\n')
+    }
+    case 'next':
+      return copy.cta_paragraph || 'No CTA copy set.'
+    default:
+      return `Unknown section "${section}".`
+  }
+}
+
 function buildTools(
   state: ReportState,
   execTemplateHtml: string,
@@ -429,6 +573,21 @@ function buildTools(
               : undefined,
         }
       },
+    }),
+
+    read_report_section: tool({
+      description:
+        "Read the CURRENT actual content of a visible report section — use this whenever the user references something you're not fully sure about (a number, a table, a section you don't have verbatim in front of you), instead of guessing. Covers every visible section, including ones not directly editable (outlook, sources, roadmap).",
+      inputSchema: z.object({
+        section: z
+          .enum(REPORT_SECTION_KEYS)
+          .describe(
+            'overview | snapshot | workflows | uplift | outlook | delay | resilience | sources | risks | roadmap | next',
+          ),
+      }),
+      execute: async ({ section }: { section: ReportSectionKey }) => ({
+        content: formatReportSection(state, section),
+      }),
     }),
 
     // ── Generation tools (sequenced during initial generation) ──────────────
@@ -726,22 +885,6 @@ function buildTools(
               }
             : null
 
-        // Currencies whose official symbols are non-Latin script — built once outside the loop
-        const SCRIPT_SYMBOL_CODES = new Set([
-          'SAR',
-          'AED',
-          'QAR',
-          'KWD',
-          'BHD',
-          'OMR',
-          'EGP',
-          'JOD',
-          'IQD',
-          'LBP',
-          'IRR',
-          'YER',
-        ])
-
         const modelerUserContent = JSON.stringify({
           company_profile: state.company,
           // Fix 3: include owner so modeler can differentiate by seniority
@@ -818,13 +961,6 @@ function buildTools(
 
           const modelerOut = result.object as ModelerResult
 
-          const rawCurrencySym = modelerOut.currency.symbol
-          // eslint-disable-next-line no-control-regex
-          const hasNonAscii = /[^\x00-\x7F]/.test(rawCurrencySym)
-          const cleanSym =
-            SCRIPT_SYMBOL_CODES.has(modelerOut.currency.code) || hasNonAscii
-              ? modelerOut.currency.code
-              : rawCurrencySym
           globals = {
             laborRate: modelerOut.labor.fullyLoadedHourlyCost,
             implementationCost: modelerOut.costs.implementationCost,
@@ -837,10 +973,7 @@ function buildTools(
             workWeeksPerYear: modelerOut.labor.workWeeksPerYear,
             currency: {
               ...modelerOut.currency,
-              symbol:
-                cleanSym.length > 1 && !cleanSym.endsWith(' ')
-                  ? cleanSym + ' '
-                  : cleanSym,
+              symbol: currencySymbolFor(modelerOut.currency),
             },
           }
 
@@ -1752,24 +1885,20 @@ WORKFLOWS REQUIREMENT (critical):
 • Infer realistic volumes from team size and industry — do NOT submit 0 or omit these fields`
 }
 
-function buildChatSystemPrompt(state: ReportState): string {
+export function buildChatSystemPrompt(state: ReportState): string {
   const calc = state.calcOutput!
   const copy = state.copy!
   const company = state.company!
   const globals = state.globals!
-  // Fall back to ISO code if symbol contains non-ASCII characters (e.g. Arabic script)
-  // eslint-disable-next-line no-control-regex
-  const sym = /[^\x00-\x7F]/.test(globals.currency.symbol)
-    ? globals.currency.code + ' '
-    : globals.currency.symbol
+  const sym = currencySymbolFor(globals.currency)
   const s = calc.summary
 
-  // Merge WorkflowInput (raw) with WorkflowCalc (derived) by name
-  const merged = calc.workflows.map((wc) => {
-    const inp =
-      state.workflows!.find((w) => w.name === wc.name) ?? state.workflows![0]
-    return { ...inp, ...wc }
-  })
+  // Same canonical join+sort as the PDF/web/wizard (reportModel.ts) — this
+  // used to be its own unsorted copy, so "the top workflow" (used below for
+  // COMPOSITION EXAMPLES and lever positional fallback) could silently mean
+  // a different workflow to the chat agent than what's actually shown on
+  // the page.
+  const merged = mergeWorkflows(state.workflows!, calc.workflows)
 
   const workflowSection = merged
     .map((w) => {
@@ -1976,6 +2105,7 @@ NUMBERS   update_workflow(name, patches)   — set volume, timeBefore, timeAfter
 CURRENCY  set_currency(code)              — change display symbol/code only; pair with scale_rates when converting values
 COPY      update_copy(patches)            — update any combination of copy sections in one call
 STRUCTURE add_workflow | remove_workflow
+READ      read_report_section(section) — read the CURRENT actual content of any visible section (overview, snapshot, workflows, uplift, outlook, delay, resilience, sources, risks, roadmap, next), including ones not covered above (outlook, sources, roadmap). Call this whenever the user references a number or section you're not certain of, instead of guessing.
 RESEARCH  search_evidence(query)        — look up sources for any figure already found during generation
           web_search | fetch_page       — search/scrape new data not in evidence
   When asked about sources: call search_evidence first. Only call web_search if evidence returns no match.

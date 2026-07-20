@@ -10,7 +10,7 @@ import SpotlightTourOverlay from '@/src/components/shared/SpotlightTourOverlay'
 import ReportContent from './Report/ReportContent'
 import TerminologyGuide from './Report/TerminologyGuide'
 import EmailSendPopover from './Report/EmailSendPopover'
-import { NAV_ITEMS } from './Report/navItems'
+import { NAV_ITEMS, buildChangedToNavKeys } from './Report/navItems'
 
 const TOUR_JOURNEY = [
   'Your Report',
@@ -87,20 +87,9 @@ const TOOL_LABELS = {
 }
 
 // Maps the agent's own section keys (from AgentEvent's `changedSections`) to
-// the report's nav-sidebar keys (see Report/navItems.js) — a single agent
-// edit can touch more than one visible section (e.g. a globals/currency
-// change recomputes both the hero metrics and the 3-year outlook).
-const CHANGED_TO_NAV_KEYS = {
-  financials: ['overview', 'outlook'],
-  thesis: ['overview'],
-  workflows: ['workflows'],
-  profit_levers: ['uplift'],
-  cost_of_delay: ['delay'],
-  resilience_rows: ['resilience'],
-  risks: ['risks'],
-  pilot: ['roadmap'],
-  cta: ['next'],
-}
+// the report's nav-sidebar keys — derived from NAV_ITEMS' changedKeys
+// (Report/navItems.js) so this and the nav sidebar can never drift apart.
+const CHANGED_TO_NAV_KEYS = buildChangedToNavKeys()
 
 const NAV_LABEL_BY_KEY = Object.fromEntries(
   NAV_ITEMS.map(({ key, label }) => [key, label]),

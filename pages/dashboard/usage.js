@@ -1,26 +1,6 @@
 import { useEffect, useState } from 'react'
 import Head from 'next/head'
-import Box from '@mui/material/Box'
-import Card from '@mui/material/Card'
-import CardContent from '@mui/material/CardContent'
-import Typography from '@mui/material/Typography'
-import Table from '@mui/material/Table'
-import TableBody from '@mui/material/TableBody'
-import TableCell from '@mui/material/TableCell'
-import TableHead from '@mui/material/TableHead'
-import TableRow from '@mui/material/TableRow'
-import Collapse from '@mui/material/Collapse'
-import IconButton from '@mui/material/IconButton'
-import Select from '@mui/material/Select'
-import MenuItem from '@mui/material/MenuItem'
-import CircularProgress from '@mui/material/CircularProgress'
-import Chip from '@mui/material/Chip'
-import Tabs from '@mui/material/Tabs'
-import Tab from '@mui/material/Tab'
-import Link from '@mui/material/Link'
-import OpenInNewIcon from '@mui/icons-material/OpenInNew'
-import KeyboardArrowDownIcon from '@mui/icons-material/KeyboardArrowDown'
-import KeyboardArrowUpIcon from '@mui/icons-material/KeyboardArrowUp'
+import { FaExternalLinkAlt, FaChevronDown, FaChevronUp } from 'react-icons/fa'
 import { createRouteClient } from '../../src/lib/supabaseRouteClient'
 import { createAdminClient } from '../../src/lib/supabase-server'
 import { fmtDateTime } from '../../src/utilities/formatDateTime'
@@ -73,6 +53,12 @@ const dur = (ms) => {
   return s ? `${m}m ${s}s` : `${m}m`
 }
 
+function Spinner() {
+  return (
+    <span className="inline-block h-8 w-8 animate-spin rounded-full border-[3px] border-[#5B48F8] border-t-transparent" />
+  )
+}
+
 export default function UsageDashboard() {
   const [days, setDays] = useState(30)
   const [tab, setTab] = useState(0)
@@ -116,137 +102,104 @@ export default function UsageDashboard() {
       <Head>
         <title>Usage Monitoring | LyRise</title>
       </Head>
-      <Box
-        sx={{
-          minHeight: '100vh',
-          bgcolor: '#E2DED8',
-          p: { xs: 2, md: 4 },
-          fontFamily: INTER_FONT_FAMILY,
-        }}
+      <div
+        className="min-h-screen bg-[#E2DED8] p-4 md:p-8"
+        style={{ fontFamily: INTER_FONT_FAMILY }}
       >
-        <Box
-          sx={{
-            display: 'flex',
-            justifyContent: 'space-between',
-            alignItems: 'center',
-            mb: 3,
-            flexWrap: 'wrap',
-            gap: 2,
-          }}
-        >
-          <Box>
-            <Typography
-              variant="h4"
-              fontWeight={700}
-              color="#0F172A"
-              sx={{
-                fontFamily: INTER_FONT_FAMILY,
-                letterSpacing: '-0.3px',
-              }}
-            >
+        <div className="mb-6 flex flex-wrap items-center justify-between gap-2">
+          <div>
+            <h1 className="text-[28px] font-bold tracking-[-0.3px] text-[#0F172A]">
               Usage Monitoring
-            </Typography>
-            <Typography
-              variant="body2"
-              color="#6B7280"
-              sx={{
-                fontFamily: INTER_FONT_FAMILY,
-              }}
-            >
+            </h1>
+            <p className="text-sm text-[#6B7280]">
               LLM cost &amp; time per report
-            </Typography>
-          </Box>
-          <Select
-            size="small"
+            </p>
+          </div>
+          <select
             value={days}
-            onChange={(e) => setDays(e.target.value)}
-            sx={{ bgcolor: '#fff', minWidth: 140 }}
+            onChange={(e) => setDays(Number(e.target.value))}
+            className="min-w-[140px] rounded-md border border-[#e5e7eb] bg-white px-3 py-2 text-sm text-[#0F172A]"
           >
-            <MenuItem value={7}>Last 7 days</MenuItem>
-            <MenuItem value={30}>Last 30 days</MenuItem>
-            <MenuItem value={90}>Last 90 days</MenuItem>
-            <MenuItem value={365}>Last year</MenuItem>
-          </Select>
-        </Box>
+            <option value={7}>Last 7 days</option>
+            <option value={30}>Last 30 days</option>
+            <option value={90}>Last 90 days</option>
+            <option value={365}>Last year</option>
+          </select>
+        </div>
 
         {loading && (
-          <Box sx={{ display: 'flex', justifyContent: 'center', py: 10 }}>
-            <CircularProgress />
-          </Box>
+          <div className="flex justify-center py-20">
+            <Spinner />
+          </div>
         )}
 
         {!loading && error && (
-          <Card sx={{ p: 3, bgcolor: '#fff7ed', border: '1px solid #fed7aa' }}>
-            <Typography fontWeight={600} color="#9a3412">
+          <div className="rounded-xl border border-[#fed7aa] bg-[#fff7ed] p-6">
+            <p className="font-semibold text-[#9a3412]">
               Could not load usage data
-            </Typography>
-            <Typography variant="body2" color="#9a3412" sx={{ mt: 1 }}>
-              {error}
-            </Typography>
-            <Typography variant="body2" color="text.secondary" sx={{ mt: 1 }}>
+            </p>
+            <p className="mt-2 text-sm text-[#9a3412]">{error}</p>
+            <p className="mt-2 text-sm text-[#6B7280]">
               If the <code>roi_usage</code> table doesn&apos;t exist yet, apply
               the migration <code>20260603_000005_roi_usage.sql</code> and
               reload.
-            </Typography>
-          </Card>
+            </p>
+          </div>
         )}
 
         {!loading && !error && data && data.ready === false && (
-          <Card sx={{ p: 3, bgcolor: '#eff6ff', border: '1px solid #bfdbfe' }}>
-            <Typography fontWeight={600} color="#1e40af">
+          <div className="rounded-xl border border-[#bfdbfe] bg-[#eff6ff] p-6">
+            <p className="font-semibold text-[#1e40af]">
               Waiting for the database
-            </Typography>
-            <Typography variant="body2" color="#1e40af" sx={{ mt: 1 }}>
+            </p>
+            <p className="mt-2 text-sm text-[#1e40af]">
               The <code>roi_usage</code> table isn&apos;t available yet. Once
               the migration is applied, generated reports will start appearing
               here.
-            </Typography>
-          </Card>
+            </p>
+          </div>
         )}
 
         {!loading && !error && data && data.ready !== false && (
           <>
-            <Tabs
-              value={tab}
-              onChange={(_, v) => setTab(v)}
-              sx={{
-                mb: 3,
-                borderBottom: '1px solid #e5e7eb',
-                '& .MuiTab-root': {
-                  textTransform: 'none',
-                  fontWeight: 600,
-                  fontSize: 14,
-                  color: '#6B7280',
-                  fontFamily: INTER_FONT_FAMILY,
-                },
-                '& .Mui-selected': { color: '#0F172A' },
-                '& .MuiTabs-indicator': { backgroundColor: '#5B48F8' },
-              }}
-            >
-              <Tab label="Our reports" />
-              <Tab
-                label={`Prospect activity${
+            <div className="mb-6 flex gap-6 border-b border-[#e5e7eb]">
+              {[
+                'Our reports',
+                `Prospect activity${
                   engagement?.perReport?.length
                     ? ` (${engagement.perReport.length})`
                     : ''
-                }`}
-              />
-            </Tabs>
+                }`,
+              ].map((label, i) => (
+                <button
+                  key={label}
+                  type="button"
+                  onClick={() => setTab(i)}
+                  className={`-mb-px border-b-2 pb-2.5 text-sm font-semibold ${
+                    tab === i
+                      ? 'border-[#5B48F8] text-[#0F172A]'
+                      : 'border-transparent text-[#6B7280]'
+                  }`}
+                >
+                  {label}
+                </button>
+              ))}
+            </div>
 
             {tab === 0 && <Dashboard data={data} />}
             {tab === 1 &&
               (engagement && engagement.ready !== false ? (
                 <EngagementPanel data={engagement} />
               ) : (
-                <Card sx={{ p: 4, textAlign: 'center' }}>
-                  <Typography color="text.secondary">
+                <div className="rounded-xl border border-[#F3F4F6] p-8 text-center">
+                  <p className="text-[#6B7280]">
                     No prospect activity available yet.
-                  </Typography>
-                </Card>
+                  </p>
+                </div>
               ))}
           </>
         )}
-      </Box>
+      </div>
     </>
   )
 }
@@ -256,32 +209,18 @@ export default function UsageDashboard() {
 // from prospects who used "Edit with chat" in the email.
 function ViewReportLink({ reportId, label = 'View' }) {
   if (!reportId) {
-    return (
-      <Typography component="span" variant="body2" color="text.disabled">
-        —
-      </Typography>
-    )
+    return <span className="text-sm text-[#9CA3AF]">—</span>
   }
   return (
-    <Link
+    <a
       href={`/report/${reportId}`}
       target="_blank"
       rel="noopener noreferrer"
-      sx={{
-        display: 'inline-flex',
-        alignItems: 'center',
-        gap: 0.5,
-        color: '#5B48F8',
-        fontWeight: 600,
-        fontSize: 14,
-        textDecoration: 'none',
-        whiteSpace: 'nowrap',
-        '&:hover': { textDecoration: 'underline' },
-      }}
+      className="inline-flex items-center gap-1 whitespace-nowrap text-sm font-semibold text-[#5B48F8] no-underline hover:underline"
     >
       {label}
-      <OpenInNewIcon sx={{ fontSize: 15 }} />
-    </Link>
+      <FaExternalLinkAlt size={12} />
+    </a>
   )
 }
 
@@ -290,25 +229,18 @@ function Dashboard({ data }) {
 
   if (!totals.reports) {
     return (
-      <Card sx={{ p: 4, textAlign: 'center' }}>
-        <Typography color="text.secondary">
+      <div className="rounded-xl border border-[#F3F4F6] p-8 text-center">
+        <p className="text-[#6B7280]">
           No reports recorded in this window yet.
-        </Typography>
-      </Card>
+        </p>
+      </div>
     )
   }
 
   return (
     <>
       {/* Summary cards */}
-      <Box
-        sx={{
-          display: 'grid',
-          gridTemplateColumns: { xs: '1fr 1fr', md: 'repeat(4, 1fr)' },
-          gap: 2,
-          mb: 3,
-        }}
-      >
+      <div className="mb-6 grid grid-cols-2 gap-4 md:grid-cols-4">
         <StatCard
           label="Total cost"
           value={usd(totals.costUsd)}
@@ -329,87 +261,69 @@ function Dashboard({ data }) {
           value={secs(totals.avgDurationMs)}
           accent="#ea580c"
         />
-      </Box>
+      </div>
 
       {/* Charts row */}
-      <Box
-        sx={{
-          display: 'grid',
-          gridTemplateColumns: { xs: '1fr', md: '2fr 1fr' },
-          gap: 2,
-          mb: 3,
-        }}
-      >
+      <div className="mb-6 grid grid-cols-1 gap-4 md:grid-cols-[2fr_1fr]">
         <Card>
-          <CardContent>
-            <Typography fontWeight={600} mb={2}>
-              Cost over time
-            </Typography>
-            <BarChart
-              items={perDay.map((d) => ({
-                label: d.day.slice(5), // MM-DD
-                value: d.costUsd,
-                caption: `${usd(d.costUsd)} · ${d.count} rpt`,
-              }))}
-              color="#5B48F8"
-            />
-          </CardContent>
+          <p className="mb-4 font-semibold text-[#0F172A]">Cost over time</p>
+          <BarChart
+            items={perDay.map((d) => ({
+              label: d.day.slice(5), // MM-DD
+              value: d.costUsd,
+              caption: `${usd(d.costUsd)} · ${d.count} rpt`,
+            }))}
+            color="#5B48F8"
+          />
         </Card>
         <Card>
-          <CardContent>
-            <Typography fontWeight={600} mb={2}>
-              Cost by model
-            </Typography>
-            <BarChart
-              items={perModel.map((m) => ({
-                label: m.model,
-                value: m.costUsd,
-                caption: `${usd(m.costUsd)} · ${num(m.totalTokens)} tok`,
-              }))}
-              color="#7c3aed"
-            />
-          </CardContent>
+          <p className="mb-4 font-semibold text-[#0F172A]">Cost by model</p>
+          <BarChart
+            items={perModel.map((m) => ({
+              label: m.model,
+              value: m.costUsd,
+              caption: `${usd(m.costUsd)} · ${num(m.totalTokens)} tok`,
+            }))}
+            color="#7c3aed"
+          />
         </Card>
-      </Box>
+      </div>
 
       {/* Mode breakdown chips */}
-      <Box sx={{ display: 'flex', gap: 1, mb: 3, flexWrap: 'wrap' }}>
+      <div className="mb-6 flex flex-wrap gap-2">
         {perMode.map((m) => (
-          <Chip
+          <span
             key={m.mode}
-            label={`${m.mode}: ${usd(m.costUsd)} (${m.count})`}
-            sx={{ bgcolor: '#fff', border: '1px solid #e5e7eb' }}
-          />
+            className="rounded-full border border-[#e5e7eb] bg-white px-3 py-1 text-xs text-[#0F172A]"
+          >
+            {m.mode}: {usd(m.costUsd)} ({m.count})
+          </span>
         ))}
-      </Box>
+      </div>
 
       {/* Recent reports table */}
       <Card>
-        <CardContent>
-          <Typography fontWeight={600} mb={2}>
-            Recent reports
-          </Typography>
-          <Table size="small">
-            <TableHead>
-              <TableRow>
-                <TableCell />
-                <TableCell>When</TableCell>
-                <TableCell>Company</TableCell>
-                <TableCell>Requested By</TableCell>
-                <TableCell>Mode</TableCell>
-                <TableCell align="right">Cost</TableCell>
-                <TableCell align="right">Duration</TableCell>
-                <TableCell align="right">Tokens</TableCell>
-                <TableCell align="right">Report&nbsp;&amp;&nbsp;chat</TableCell>
-              </TableRow>
-            </TableHead>
-            <TableBody>
-              {recent.map((r) => (
-                <ReportRow key={r.id} row={r} />
-              ))}
-            </TableBody>
-          </Table>
-        </CardContent>
+        <p className="mb-4 font-semibold text-[#0F172A]">Recent reports</p>
+        <table className="w-full text-sm">
+          <thead>
+            <tr className="text-left text-[#6B7280]">
+              <Th />
+              <Th>When</Th>
+              <Th>Company</Th>
+              <Th>Requested By</Th>
+              <Th>Mode</Th>
+              <Th align="right">Cost</Th>
+              <Th align="right">Duration</Th>
+              <Th align="right">Tokens</Th>
+              <Th align="right">Report&nbsp;&amp;&nbsp;chat</Th>
+            </tr>
+          </thead>
+          <tbody>
+            {recent.map((r) => (
+              <ReportRow key={r.id} row={r} />
+            ))}
+          </tbody>
+        </table>
       </Card>
     </>
   )
@@ -419,21 +333,14 @@ function Dashboard({ data }) {
 function EngagementPanel({ data }) {
   const { totals, perReport } = data
   return (
-    <Box>
-      <Typography variant="body2" color="text.secondary" mb={2}>
+    <div>
+      <p className="mb-4 text-sm text-[#6B7280]">
         Activity from prospects who opened &quot;Edit with chat&quot; in the
         report emails. Open any row to read the full report and their chat
         thread.
-      </Typography>
+      </p>
 
-      <Box
-        sx={{
-          display: 'grid',
-          gridTemplateColumns: { xs: '1fr 1fr', md: 'repeat(4, 1fr)' },
-          gap: 2,
-          mb: 3,
-        }}
-      >
+      <div className="mb-6 grid grid-cols-2 gap-4 md:grid-cols-4">
         <StatCard
           label="Reports opened"
           value={num(totals.reportsOpened)}
@@ -454,56 +361,48 @@ function EngagementPanel({ data }) {
           value={num(totals.downloads)}
           accent="#ea580c"
         />
-      </Box>
+      </div>
 
       <Card>
-        <CardContent>
-          <Typography fontWeight={600} mb={2}>
-            By report
-          </Typography>
-          {perReport.length === 0 ? (
-            <Typography variant="body2" color="text.secondary">
-              No recipient activity in this window yet.
-            </Typography>
-          ) : (
-            <Table size="small">
-              <TableHead>
-                <TableRow>
-                  <TableCell>Company</TableCell>
-                  <TableCell>Recipient</TableCell>
-                  <TableCell align="right">Opens</TableCell>
-                  <TableCell align="right">Avg time</TableCell>
-                  <TableCell align="right">Chat msgs</TableCell>
-                  <TableCell align="right">Downloads</TableCell>
-                  <TableCell align="right">Last activity</TableCell>
-                  <TableCell align="right">
-                    Report&nbsp;&amp;&nbsp;chat
-                  </TableCell>
-                </TableRow>
-              </TableHead>
-              <TableBody>
-                {perReport.map((r) => (
-                  <TableRow key={r.reportId} hover>
-                    <TableCell>{r.company}</TableCell>
-                    <TableCell>{r.email}</TableCell>
-                    <TableCell align="right">{num(r.opens)}</TableCell>
-                    <TableCell align="right">{dur(r.avgDurationMs)}</TableCell>
-                    <TableCell align="right">{num(r.chatMessages)}</TableCell>
-                    <TableCell align="right">{num(r.downloads)}</TableCell>
-                    <TableCell align="right">
-                      {fmtDateTime(r.lastActivity)}
-                    </TableCell>
-                    <TableCell align="right">
-                      <ViewReportLink reportId={r.reportId} />
-                    </TableCell>
-                  </TableRow>
-                ))}
-              </TableBody>
-            </Table>
-          )}
-        </CardContent>
+        <p className="mb-4 font-semibold text-[#0F172A]">By report</p>
+        {perReport.length === 0 ? (
+          <p className="text-sm text-[#6B7280]">
+            No recipient activity in this window yet.
+          </p>
+        ) : (
+          <table className="w-full text-sm">
+            <thead>
+              <tr className="text-left text-[#6B7280]">
+                <Th>Company</Th>
+                <Th>Recipient</Th>
+                <Th align="right">Opens</Th>
+                <Th align="right">Avg time</Th>
+                <Th align="right">Chat msgs</Th>
+                <Th align="right">Downloads</Th>
+                <Th align="right">Last activity</Th>
+                <Th align="right">Report&nbsp;&amp;&nbsp;chat</Th>
+              </tr>
+            </thead>
+            <tbody>
+              {perReport.map((r) => (
+                <tr key={r.reportId} className="border-t border-[#F3F4F6]">
+                  <Td>{r.company}</Td>
+                  <Td>{r.email}</Td>
+                  <Td align="right">{num(r.opens)}</Td>
+                  <Td align="right">{dur(r.avgDurationMs)}</Td>
+                  <Td align="right">{num(r.chatMessages)}</Td>
+                  <Td align="right">{num(r.downloads)}</Td>
+                  <Td align="right">{fmtDateTime(r.lastActivity)}</Td>
+                  <Td align="right">
+                    <ViewReportLink reportId={r.reportId} />
+                  </Td>
+                </tr>
+              ))}
+            </tbody>
+          </table>
+        )}
       </Card>
-    </Box>
+    </div>
   )
 }
 
@@ -511,111 +410,78 @@ function EngagementPanel({ data }) {
 // reports. Purple to stand apart from the blue "View" links and stat accents.
 function AlphaBadge() {
   return (
-    <Chip
-      label="Alpha"
-      size="small"
-      sx={{
-        height: 18,
-        fontSize: 10,
-        fontWeight: 700,
-        textTransform: 'uppercase',
-        letterSpacing: 0.4,
-        bgcolor: '#f3e8ff',
-        color: '#7c3aed',
-        '& .MuiChip-label': { px: 0.75 },
-      }}
-    />
+    <span className="rounded-full bg-[#f3e8ff] px-[6px] py-px text-[10px] font-bold uppercase tracking-[0.4px] text-[#7c3aed]">
+      Alpha
+    </span>
+  )
+}
+
+function Card({ children, className = '', style }) {
+  return (
+    <div
+      className={`rounded-xl border border-[#F3F4F6] bg-white p-5 shadow-[0_1px_6px_rgba(0,0,0,0.07)] ${className}`}
+      style={style}
+    >
+      {children}
+    </div>
+  )
+}
+
+function Th({ children, align }) {
+  return (
+    <th
+      className={`pb-2 text-xs font-semibold ${align === 'right' ? 'text-right' : 'text-left'}`}
+    >
+      {children}
+    </th>
+  )
+}
+
+function Td({ children, align }) {
+  return (
+    <td className={`py-2 ${align === 'right' ? 'text-right' : 'text-left'}`}>
+      {children}
+    </td>
   )
 }
 
 function StatCard({ label, value, accent }) {
   return (
-    <Card
-      sx={{
-        borderTop: `3px solid ${accent}`,
-        boxShadow: '0 1px 6px rgba(0,0,0,0.07)',
-        border: '1px solid #F3F4F6',
-        borderRadius: '12px',
-      }}
-    >
-      <CardContent>
-        <Typography
-          variant="body2"
-          sx={{
-            fontSize: 11,
-            textTransform: 'uppercase',
-            letterSpacing: '0.06em',
-            color: '#9CA3AF',
-            fontWeight: 600,
-            fontFamily: INTER_FONT_FAMILY,
-          }}
-        >
-          {label}
-        </Typography>
-        <Typography
-          variant="h5"
-          fontWeight={700}
-          sx={{
-            mt: 0.5,
-            color: '#0F172A',
-            fontFamily: INTER_FONT_FAMILY,
-          }}
-        >
-          {value}
-        </Typography>
-      </CardContent>
+    <Card className="!border-t-[3px]" style={{ borderTopColor: accent }}>
+      <p className="text-[11px] font-semibold uppercase tracking-[0.06em] text-[#9CA3AF]">
+        {label}
+      </p>
+      <p className="mt-0.5 text-xl font-bold text-[#0F172A]">{value}</p>
     </Card>
   )
 }
 
-// Lightweight horizontal bar chart — no chart dependency, just MUI Box.
+// Lightweight horizontal bar chart — no chart dependency, just plain divs.
 function BarChart({ items, color }) {
   if (!items.length) {
-    return (
-      <Typography variant="body2" color="text.secondary">
-        No data
-      </Typography>
-    )
+    return <p className="text-sm text-[#6B7280]">No data</p>
   }
   const max = Math.max(...items.map((i) => i.value), 0.000001)
   return (
-    <Box sx={{ display: 'flex', flexDirection: 'column', gap: 1 }}>
+    <div className="flex flex-col gap-2">
       {items.map((i, idx) => (
-        <Box key={`${i.label}-${idx}`}>
-          <Box
-            sx={{
-              display: 'flex',
-              justifyContent: 'space-between',
-              mb: 0.25,
-            }}
-          >
-            <Typography variant="caption" color="text.secondary" noWrap>
-              {i.label}
-            </Typography>
-            <Typography variant="caption" color="text.secondary">
-              {i.caption}
-            </Typography>
-          </Box>
-          <Box
-            sx={{
-              height: 8,
-              borderRadius: 4,
-              bgcolor: '#eef0f5',
-              overflow: 'hidden',
-            }}
-          >
-            <Box
-              sx={{
-                height: '100%',
+        <div key={`${i.label}-${idx}`}>
+          <div className="mb-0.5 flex justify-between">
+            <span className="truncate text-xs text-[#6B7280]">{i.label}</span>
+            <span className="text-xs text-[#6B7280]">{i.caption}</span>
+          </div>
+          <div className="h-2 overflow-hidden rounded-full bg-[#eef0f5]">
+            <div
+              className="h-full rounded-full"
+              style={{
                 width: `${Math.max((i.value / max) * 100, 2)}%`,
-                bgcolor: color,
-                borderRadius: 4,
+                backgroundColor: color,
               }}
             />
-          </Box>
-        </Box>
+          </div>
+        </div>
       ))}
-    </Box>
+    </div>
   )
 }
 
@@ -624,65 +490,70 @@ function ReportRow({ row }) {
   const calls = row.calls || []
   return (
     <>
-      <TableRow hover>
-        <TableCell sx={{ width: 40 }}>
+      <tr className="border-t border-[#F3F4F6] hover:bg-[#FAFAFA]">
+        <Td>
           {calls.length > 0 && (
-            <IconButton size="small" onClick={() => setOpen((o) => !o)}>
-              {open ? <KeyboardArrowUpIcon /> : <KeyboardArrowDownIcon />}
-            </IconButton>
+            <button
+              type="button"
+              onClick={() => setOpen((o) => !o)}
+              className="flex h-6 w-6 items-center justify-center text-[#6B7280]"
+              aria-label={open ? 'Collapse' : 'Expand'}
+            >
+              {open ? <FaChevronUp size={12} /> : <FaChevronDown size={12} />}
+            </button>
           )}
-        </TableCell>
-        <TableCell>{fmtDateTime(row.created_at)}</TableCell>
-        <TableCell>
-          <Box
-            component="span"
-            sx={{ display: 'inline-flex', alignItems: 'center', gap: 1 }}
-          >
+        </Td>
+        <Td>{fmtDateTime(row.created_at)}</Td>
+        <Td>
+          <span className="inline-flex items-center gap-1.5">
             {row.company || '—'}
             {row.is_alpha && <AlphaBadge />}
-          </Box>
-        </TableCell>
-        <TableCell>{row.requester_email || '—'}</TableCell>
-        <TableCell>{row.mode}</TableCell>
-        <TableCell align="right">{usd(row.cost_usd)}</TableCell>
-        <TableCell align="right">{secs(row.duration_ms)}</TableCell>
-        <TableCell align="right">{num(row.total_tokens)}</TableCell>
-        <TableCell align="right">
+          </span>
+        </Td>
+        <Td>{row.requester_email || '—'}</Td>
+        <Td>{row.mode}</Td>
+        <Td align="right">{usd(row.cost_usd)}</Td>
+        <Td align="right">{secs(row.duration_ms)}</Td>
+        <Td align="right">{num(row.total_tokens)}</Td>
+        <Td align="right">
           <ViewReportLink reportId={row.report_id} />
-        </TableCell>
-      </TableRow>
-      <TableRow>
-        <TableCell sx={{ py: 0, border: 0 }} colSpan={9}>
-          <Collapse in={open} timeout="auto" unmountOnExit>
-            <Box sx={{ my: 1, ml: 5 }}>
-              <Table size="small">
-                <TableHead>
-                  <TableRow>
-                    <TableCell>Step</TableCell>
-                    <TableCell>Model</TableCell>
-                    <TableCell align="right">Input</TableCell>
-                    <TableCell align="right">Output</TableCell>
-                    <TableCell align="right">Total</TableCell>
-                    <TableCell align="right">Cost</TableCell>
-                  </TableRow>
-                </TableHead>
-                <TableBody>
+        </Td>
+      </tr>
+      {open && (
+        <tr>
+          <td colSpan={9} className="border-0 py-0">
+            <div className="my-2 ml-10">
+              <table className="w-full text-sm">
+                <thead>
+                  <tr className="text-left text-[#6B7280]">
+                    <Th>Step</Th>
+                    <Th>Model</Th>
+                    <Th align="right">Input</Th>
+                    <Th align="right">Output</Th>
+                    <Th align="right">Total</Th>
+                    <Th align="right">Cost</Th>
+                  </tr>
+                </thead>
+                <tbody>
                   {calls.map((c, i) => (
-                    <TableRow key={`${c.call}-${i}`}>
-                      <TableCell>{c.call}</TableCell>
-                      <TableCell>{c.model}</TableCell>
-                      <TableCell align="right">{num(c.inputTokens)}</TableCell>
-                      <TableCell align="right">{num(c.outputTokens)}</TableCell>
-                      <TableCell align="right">{num(c.totalTokens)}</TableCell>
-                      <TableCell align="right">{usd(c.costUsd)}</TableCell>
-                    </TableRow>
+                    <tr
+                      key={`${c.call}-${i}`}
+                      className="border-t border-[#F3F4F6]"
+                    >
+                      <Td>{c.call}</Td>
+                      <Td>{c.model}</Td>
+                      <Td align="right">{num(c.inputTokens)}</Td>
+                      <Td align="right">{num(c.outputTokens)}</Td>
+                      <Td align="right">{num(c.totalTokens)}</Td>
+                      <Td align="right">{usd(c.costUsd)}</Td>
+                    </tr>
                   ))}
-                </TableBody>
-              </Table>
-            </Box>
-          </Collapse>
-        </TableCell>
-      </TableRow>
+                </tbody>
+              </table>
+            </div>
+          </td>
+        </tr>
+      )}
     </>
   )
 }

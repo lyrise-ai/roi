@@ -171,6 +171,8 @@ export interface WorkflowCalc {
 
 export interface RoiSummary {
   totalAnnualHours: number
+  totalAnnualHours24mo: number
+  totalAnnualHours36mo: number
   operationalDividend12mo: number
   profitUplift12mo: number
   totalFinancialGain12mo: number

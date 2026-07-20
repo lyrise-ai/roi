@@ -1,11 +1,21 @@
 import * as React from 'react'
-import CircularProgress from '@mui/material/CircularProgress'
+
+// Plain CSS spinner (Tailwind's animate-spin) — `border-current` inherits the
+// button's text color, matching MUI CircularProgress's `color="inherit"`.
+function Spinner({ size }) {
+  return (
+    <span
+      className="inline-block animate-spin rounded-full border-2 border-current border-t-transparent align-middle"
+      style={{ width: size, height: size }}
+      aria-hidden="true"
+    />
+  )
+}
 
 // Thin wrapper that gives any button a consistent "in flight" affordance:
 // disables itself and swaps its children for a spinner (or `loadingText`)
 // while `loading` is true. Renders a native <button> by default, or another
-// component (e.g. MUI's Button) via `as`, so it can drop into either style
-// system already used across this app without changing any button's look.
+// component via `as`.
 export default function LoadingButton({
   as: Component = 'button',
   loading = false,
@@ -17,11 +27,7 @@ export default function LoadingButton({
 }) {
   return (
     <Component disabled={disabled || loading} {...props}>
-      {loading
-        ? (loadingText ?? (
-            <CircularProgress size={spinnerSize} color="inherit" />
-          ))
-        : children}
+      {loading ? (loadingText ?? <Spinner size={spinnerSize} />) : children}
     </Component>
   )
 }

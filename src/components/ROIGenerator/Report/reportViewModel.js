@@ -1,16 +1,19 @@
 import { CASE_STUDIES } from '@/src/lib/roi/pipeline/assembleReport'
+import {
+  buildReportModel,
+  reconcilingAdoptionFactor,
+} from '@/src/lib/roi/pipeline/reportModel'
 import { fmtCurrency, fmtCurrencyShort, fmtNumber } from './format'
 
 // Builds the fully-shaped view model the report sections render from. Pure
-// function of `reportState` (the live ReportState object, which is already
-// fully computed server-side — see reportViewModel's sibling formulas against
-// src/lib/roi/pipeline/assembleReport.ts, which this intentionally mirrors so
-// the numbers shown here always reconcile with the calculator/PDF).
+// function of `reportState`. Merging/matching/dedup logic lives once in
+// buildReportModel (shared with the PDF and chat agent) — this file only
+// formats that shared data into the exact prop shapes the section components
+// expect.
 export function buildReportViewModel(reportState) {
   const {
     company,
     globals,
-    workflows: workflowInputs,
     copy,
     calcOutput,
     normInput,
@@ -18,29 +21,16 @@ export function buildReportViewModel(reportState) {
     assembled,
   } = reportState ?? {}
 
-  if (!company || !globals || !workflowInputs || !copy || !calcOutput) {
+  if (!company || !globals || !reportState?.workflows || !copy || !calcOutput) {
     return null
   }
 
+  const model = buildReportModel(reportState)
   const currency = globals.currency
   const summary = calcOutput.summary
-
-  // Merge WorkflowInput + WorkflowCalc, sorted desc by annual value — mirrors
-  // assembleReport.ts's `merged` so "the top workflow" means the same thing
-  // everywhere (roadmap pilot pick, calculation worked-example, etc).
-  const merged = [...calcOutput.workflows]
-    .sort((a, b) => b.annualValue - a.annualValue)
-    .map((calc) => ({
-      ...(workflowInputs.find((w) => w.name === calc.name) ??
-        workflowInputs[0]),
-      ...calc,
-    }))
-
+  const merged = model.workflows
   const totalMonthlyHours = calcOutput.totalMonthlyHours
-  const totalMonthlyValue = merged.reduce(
-    (a, w) => a + Math.round(w.monthlyHours * w.effectiveRate),
-    0,
-  )
+  const redirectionPct = Math.max(0, globals.profitMultiplier - 1)
 
   return {
     company,
@@ -53,37 +43,37 @@ export function buildReportViewModel(reportState) {
       merged,
       totalMonthlyHours,
       currency,
-      company,
-      normInput,
-      globals,
+      model,
+      redirectionPct,
     }),
     similarCompanies: CASE_STUDIES,
     patternText: copy.unified_pattern_thesis,
-    companySnapshot: buildCompanySnapshot({ company, copy, normInput }),
+    companySnapshot: model.companySnapshot.map((r) => ({
+      text: r.text,
+      status: r.label,
+    })),
     workflows: buildWorkflows(merged, currency),
     workflowTotals: buildWorkflowTotals({
       merged,
       totalMonthlyHours,
-      totalMonthlyValue,
+      totalMonthlyValue: model.totals.monthlyValue,
       currency,
     }),
-    levers: buildLevers({ copy, merged, globals, currency }),
-    leverTotal: buildLeverTotal({ copy, merged, globals, summary, currency }),
+    levers: buildLevers(model.levers, currency, redirectionPct),
+    leverTotal: buildLeverTotal({ model, summary, currency, redirectionPct }),
     odVsPu: buildOdVsPu(summary),
     outlook: buildOutlook(summary, currency),
-    costOfDelay: buildCostOfDelay({ summary, copy, currency }),
+    costOfDelay: buildCostOfDelay({ model, summary, copy, currency }),
     resilience: copy.resilience_rows ?? [],
-    sources: buildSources({
-      company,
-      workflowInputs,
-      calcOutput,
-      copy,
-      globals,
-      normInput,
-      currency,
-    }),
+    sources: model.sources.map((r) => ({
+      input: r.input,
+      detail: r.detail,
+      sourceLabel: r.sourceLabel,
+      sourceUrl: r.sourceUrl,
+      status: r.status,
+    })),
     risks: copy.risks ?? [],
-    roadmap: buildRoadmap(merged),
+    roadmap: buildRoadmap(model.topWorkflow),
     pilotRecommendation: copy.pilot_recommendation,
     ctaParagraph:
       copy.cta_paragraph ||
@@ -119,9 +109,8 @@ function buildHero({
   merged,
   totalMonthlyHours,
   currency,
-  company,
-  normInput,
-  globals,
+  model,
+  redirectionPct,
 }) {
   const totalAnnualHours = summary.totalAnnualHours
   const ftes = (totalAnnualHours / 2080).toFixed(1)
@@ -136,25 +125,20 @@ function buildHero({
 
   const odSteps = merged
     .map((w) => {
-      const deltaHrs = (
-        (w.minutesPerItemBefore - w.minutesPerItemAfter) /
-        60
-      ).toFixed(2)
-      return `${w.name}: ${fmtNumber(w.monthlyVolume)}/mo × ${deltaHrs} hrs × ${fmtCurrency(w.effectiveRate, currency)}/hr × ${Math.round(
-        w.adoptionRate * 100,
-      )}% adoption ≈ ${fmtCurrency(Math.round(w.monthlyHours * w.effectiveRate), currency)}/mo`
+      const deltaHrs = (w.timeSaved / 60).toFixed(2)
+      return `${w.name}: ${fmtNumber(w.monthlyVolume)}/mo × ${deltaHrs} hrs × ${fmtCurrency(w.effectiveRate, currency)}/hr × ${reconcilingAdoptionFactor(
+        w,
+      ).toFixed(
+        2,
+      )} adoption ramp factor ≈ ${fmtCurrency(Math.round(w.monthlyHours * w.effectiveRate), currency)}/mo`
     })
     .concat([
       `Monthly total ${fmtCurrency(
-        merged.reduce(
-          (a, w) => a + Math.round(w.monthlyHours * w.effectiveRate),
-          0,
-        ),
+        model.totals.monthlyValue,
         currency,
       )} × 12 = ${fmtCurrency(summary.operationalDividend12mo, currency)}/yr`,
     ])
 
-  const redirectionPct = Math.max(0, globals.profitMultiplier - 1)
   const upliftSteps = merged
     .map(
       (w) =>
@@ -166,11 +150,7 @@ function buildHero({
       `Annualized: ${fmtCurrency(summary.profitUplift12mo, currency)}/yr`,
     ])
 
-  const revenueSub = revenueContextStatement({
-    company,
-    normInput,
-    tf12: summary.totalFinancialGain12mo,
-  })
+  const revenueSub = revenueContextStatement(model.revenueContext)
 
   return {
     hours: {
@@ -187,7 +167,7 @@ function buildHero({
       value: fmtCurrencyShort(summary.operationalDividend12mo, currency),
       sub: 'Labor value recaptured',
       def: 'Dollar value of freed hours at your blended labor rate — the most direct, measurable return, available from day one.',
-      formula: 'Σ (Volume × Δhrs × Rate × adoption), × 12',
+      formula: 'Σ (Volume × Δhrs × Rate × adoption ramp factor), × 12',
       steps: odSteps,
       result: `${fmtCurrency(summary.operationalDividend12mo, currency)}/year`,
     },
@@ -217,72 +197,14 @@ function buildHero({
   }
 }
 
-function revenueContextStatement({ company, normInput, tf12 }) {
-  const revenueBase =
-    (company?.revenueEstimateM ?? 0) > 0
-      ? company.revenueEstimateM * 1_000_000
-      : 0
-  const revPct = revenueBase > 0 ? Math.round((tf12 / revenueBase) * 100) : 0
-  const revenueRangeKnown = (normInput?.revenueRange ?? '').trim().length > 0
-  if (revenueBase > 0 && revPct <= 500) {
-    return `~${revPct}% of estimated annual revenue returned without adding headcount.`
+function revenueContextStatement(rc) {
+  if (rc.base > 0 && rc.pct <= 500) {
+    return `~${rc.pct}% of estimated annual revenue returned without adding headcount.`
   }
-  if (!revenueRangeKnown && revenueBase === 0) {
+  if (!rc.known) {
     return 'Annual revenue was not provided — shown as an absolute dollar figure.'
   }
   return 'Operational Dividend + Profit Uplift, full annual value.'
-}
-
-function buildCompanySnapshot({ company, copy, normInput }) {
-  const rows = []
-  const teamSizeFromForm = (normInput?.teamSize ?? '').trim()
-  const revenueRangeFromForm = (normInput?.revenueRange ?? '').trim()
-  const countryFromForm = (normInput?.country ?? '').trim()
-
-  if (company?.employees) {
-    rows.push({
-      text: `${fmtNumber(company.employees)} employees`,
-      status: teamSizeFromForm ? 'Provided' : 'Scraped',
-    })
-  }
-  if (revenueRangeFromForm) {
-    rows.push({
-      text: `Annual revenue ${revenueRangeFromForm}`,
-      status: 'Provided',
-    })
-  } else if (company?.revenueEstimateM) {
-    rows.push({
-      text: `Revenue estimated $${company.revenueEstimateM}M annually`,
-      status: 'Benchmarked',
-    })
-  }
-  if (countryFromForm) {
-    rows.push({ text: `Country: ${countryFromForm}`, status: 'Provided' })
-  } else if (company?.country) {
-    rows.push({ text: `Country: ${company.country}`, status: 'Scraped' })
-  }
-
-  const isRedundant = (text) => {
-    const t = text.toLowerCase()
-    return (
-      (teamSizeFromForm &&
-        /\b\d[\d,]*\s*(employees?|people|staff)\b/.test(t)) ||
-      (revenueRangeFromForm &&
-        /\b(annual\s+)?revenue\b|\bgenerates?\b.*\$|\bannually\b/.test(t))
-    )
-  }
-  ;(copy.company_snapshot ?? []).forEach((item) => {
-    if (isRedundant(item.text ?? '')) return
-    const status =
-      item.sourceType === 'scraped'
-        ? 'Scraped'
-        : item.sourceType === 'benchmarked'
-          ? 'Benchmarked'
-          : 'Assumed'
-    rows.push({ text: item.text, status })
-  })
-
-  return rows
 }
 
 function workflowStatusMeta(sourceType, userValidated) {
@@ -312,7 +234,7 @@ function buildWorkflows(merged, currency) {
       formula: `${fmtNumber(w.monthlyVolume)}/mo × ${(beforeHrs - afterHrs).toFixed(2)} hrs × ${fmtCurrency(
         w.effectiveRate,
         currency,
-      )}/hr × ${Math.round(w.adoptionRate * 100)}% adoption = ${fmtCurrency(monthlyValue, currency)}/mo`,
+      )}/hr × ${reconcilingAdoptionFactor(w).toFixed(2)} adoption ramp factor = ${fmtCurrency(monthlyValue, currency)}/mo`,
     }
   })
 }
@@ -338,46 +260,32 @@ function buildWorkflowTotals({
   }
 }
 
-// Matches a profit lever to the workflow it's derived from (by name, falling
-// back to positional index — mirrors assembleReport.ts's leverArithmetic).
-function matchWorkflowForLever(lever, merged, index) {
-  return (
-    merged.find(
-      (w) => w.name.toLowerCase() === (lever.derived_from ?? '').toLowerCase(),
-    ) ??
-    merged[index] ??
-    null
-  )
-}
-
-function buildLevers({ copy, merged, globals, currency }) {
-  const redirectionPct = Math.max(0, globals.profitMultiplier - 1)
-  return (copy.profit_levers ?? []).map((lever, i) => {
-    const wf = matchWorkflowForLever(lever, merged, i)
+function buildLevers(levers, currency, redirectionPct) {
+  return levers.map((l) => {
+    const wf = l.matchedWorkflow
     const arithmetic = wf
       ? `${fmtNumber(Math.round(wf.monthlyHours))} hrs/mo freed × ${fmtCurrency(wf.effectiveRate, currency)}/hr × ${redirectionPct.toFixed(
           2,
-        )} redirected = ${fmtCurrency(wf.monthlyProfitUplift, currency)}/mo`
-      : (lever.rationale_with_arithmetic ?? lever.rationale ?? '')
+        )} redirected = ${fmtCurrency(l.monthlyProfitUplift, currency)}/mo`
+      : (l.rationale_with_arithmetic ?? l.rationale ?? '')
     return {
-      name: lever.lever_name,
-      derivedFrom: lever.derived_from,
-      baseline: lever.baseline_data,
-      aiAction: lever.ai_agent_action,
+      name: l.lever_name,
+      derivedFrom: l.derived_from,
+      baseline: l.baseline_data,
+      aiAction: l.ai_agent_action,
       arithmetic,
       valueLabel: wf
-        ? `${fmtCurrency(wf.monthlyProfitUplift, currency)}/mo`
+        ? `${fmtCurrency(l.monthlyProfitUplift, currency)}/mo`
         : '',
     }
   })
 }
 
-function buildLeverTotal({ copy, merged, globals, summary, currency }) {
-  const redirectionPct = Math.max(0, globals.profitMultiplier - 1)
-  const monthlyTotal = (copy.profit_levers ?? []).reduce((acc, lever, i) => {
-    const wf = matchWorkflowForLever(lever, merged, i)
-    return acc + (wf?.monthlyProfitUplift ?? 0)
-  }, 0)
+function buildLeverTotal({ model, summary, currency, redirectionPct }) {
+  const monthlyTotal = model.levers.reduce(
+    (acc, l) => acc + (l.monthlyProfitUplift ?? 0),
+    0,
+  )
   return {
     value: fmtCurrency(summary.profitUplift12mo, currency),
     formula: `Σ (hrs freed × rate × ${redirectionPct.toFixed(2)} redirected), × 12`,
@@ -469,8 +377,8 @@ function buildOutlook(summary, currency) {
   return out
 }
 
-function buildCostOfDelay({ summary, copy, currency }) {
-  const monthly = Math.round(summary.totalFinancialGain12mo / 12)
+function buildCostOfDelay({ model, summary, copy, currency }) {
+  const monthly = model.costOfDelayMonthly
   const narrative =
     copy.cost_of_delay?.narrative ??
     `Every month without automation costs your team the equivalent of ${fmtCurrency(monthly, currency)} in recoverable value. Delay is not neutral — it carries a monthly price.`
@@ -485,107 +393,8 @@ function buildCostOfDelay({ summary, copy, currency }) {
   }
 }
 
-function buildSources({
-  company,
-  workflowInputs,
-  calcOutput,
-  copy,
-  globals,
-  normInput,
-  currency,
-}) {
-  const rows = []
-  const revenueRangeFromForm = (normInput?.revenueRange ?? '').trim()
-  const teamSizeFromForm = (normInput?.teamSize ?? '').trim()
-  const countryFromForm = (normInput?.country ?? '').trim()
-
-  if (revenueRangeFromForm) {
-    rows.push({
-      input: 'Annual revenue anchor',
-      detail: revenueRangeFromForm,
-      sourceLabel: 'Provided',
-      status: 'Validated',
-    })
-  } else if (company?.revenueEstimateM) {
-    rows.push({
-      input: 'Annual revenue anchor',
-      detail: `${fmtCurrency(company.revenueEstimateM, currency)}M estimated`,
-      sourceLabel: 'Benchmarked',
-      status: 'Needs validation',
-    })
-  }
-  if (company?.employees) {
-    rows.push({
-      input: 'Headcount',
-      detail: `${fmtNumber(company.employees)} employees`,
-      sourceLabel: teamSizeFromForm ? 'Provided' : 'Scraped',
-      status: 'Validated',
-    })
-  }
-  if (countryFromForm) {
-    rows.push({
-      input: 'Country',
-      detail: countryFromForm,
-      sourceLabel: 'Provided',
-      status: 'Validated',
-    })
-  } else if (company?.country) {
-    rows.push({
-      input: 'Country',
-      detail: company.country,
-      sourceLabel: 'Scraped',
-      status: 'Validated',
-    })
-  }
-
-  ;(workflowInputs ?? []).forEach((wf) => {
-    const calc = calcOutput.workflows.find((c) => c.name === wf.name)
-    const isFallback =
-      !wf.rateSource ||
-      wf.rateSource === 'benchmark_fallback' ||
-      wf.rateSource === 'assumed'
-    rows.push({
-      input: `${wf.name} — blended rate`,
-      detail: `${fmtCurrency(calc?.effectiveRate ?? globals.laborRate, currency)}/hr${wf.seniorityLevel ? ` (${wf.seniorityLevel})` : ''}`,
-      sourceLabel: isFallback ? 'Benchmarked' : (wf.rateSource ?? 'Scraped'),
-      status: isFallback ? 'Needs validation' : 'Validated',
-    })
-    rows.push({
-      input: `${wf.name} — monthly volume`,
-      detail: `${fmtNumber(wf.monthlyVolume)}/mo estimated`,
-      sourceLabel: workflowStatusMeta(wf.sourceType, wf.userValidated),
-      status:
-        wf.userValidated || wf.sourceType === 'user_stated'
-          ? 'Validated'
-          : 'Needs validation',
-    })
-  })
-
-  if (calcOutput.workflows.length > 0) {
-    rows.push({
-      input: 'Automation time reduction %',
-      detail: calcOutput.workflows
-        .map((w) => `${Math.round(w.savingsPct)}% — ${w.name}`)
-        .join('; '),
-      sourceLabel: 'Industry benchmarks',
-      status: 'Industry standard',
-    })
-  }
-
-  ;(copy.profit_levers ?? []).forEach((l) => {
-    rows.push({
-      input: `Profit lever — ${l.lever_name}`,
-      detail: l.baseline_data,
-      sourceLabel: 'Benchmarked',
-      status: 'Needs validation',
-    })
-  })
-
-  return rows
-}
-
-function buildRoadmap(merged) {
-  const pilotName = merged[0]?.name ?? 'the top workflow'
+function buildRoadmap(topWorkflow) {
+  const pilotName = topWorkflow?.name ?? 'the top workflow'
   return [
     {
       weeks: 'Weeks 1–2',

@@ -4,6 +4,7 @@
 // ─────────────────────────────────────────────────────────────────────────────
 
 import { roiLog } from '@/src/lib/roi/debug'
+import { addCommas, fmtCurrency, fmtCurrencyShort } from '@/src/lib/roi/format'
 
 import type {
   WorkflowInput,
@@ -14,16 +15,6 @@ import type {
 } from '@/src/lib/roi/types'
 
 const MAX_MIN = 480
-
-function addCommas(n: number): string {
-  const str = String(Math.round(n || 0))
-  let out = ''
-  for (let i = 0; i < str.length; i++) {
-    if (i > 0 && (str.length - i) % 3 === 0) out += ','
-    out += str[i]
-  }
-  return out
-}
 
 // ── Regional rate floor enforcement (Rule 6A) ────────────────────────────────
 // Bands sourced from `template_instructions.txt:140-148` — fully-loaded billing
@@ -245,30 +236,6 @@ export function roiCalculator(
   // 'generate' run must leave this false.
   applyRevenueGuardrail = false,
 ): RoiCalculatorOutput {
-  // Currencies whose official symbols are non-Latin script — always use the ISO code instead
-  const SCRIPT_SYMBOL_CODES = new Set([
-    'SAR',
-    'AED',
-    'QAR',
-    'KWD',
-    'BHD',
-    'OMR',
-    'EGP',
-    'JOD',
-    'IQD',
-    'LBP',
-    'IRR',
-    'YER',
-  ])
-  // eslint-disable-next-line no-control-regex
-  const hasNonAscii = /[^\x00-\x7F]/.test(globals.currency.symbol)
-  const rawSym =
-    SCRIPT_SYMBOL_CODES.has(globals.currency.code) || hasNonAscii
-      ? globals.currency.code
-      : globals.currency.symbol
-  const sym = rawSym.length > 1 && !rawSym.endsWith(' ') ? rawSym + ' ' : rawSym
-  const workingMonthFactor = globals.workWeeksPerYear / 52
-
   // Rule 6A: silently clamp per-workflow rates into the regional band for the
   // workflow's seniority tier. Catches modeler hallucination of cheap-labor
   // rates (e.g. $12/hr for an Egyptian senior lawyer). n8n-parity: no warnings.
@@ -404,9 +371,11 @@ export function roiCalculator(
   const od24 = Math.round(od12 * 2.15)
   const pu24 = Math.round(pu12 * 2.15)
   const tf24 = od24 + pu24
+  const hrs24 = Math.round(totalAnnualHours * 2.15)
   const od36 = Math.round(od12 * 3.4)
   const pu36 = Math.round(pu12 * 3.4)
   const tf36 = od36 + pu36
+  const hrs36 = Math.round(totalAnnualHours * 3.4)
 
   const monthlyValue = totalAnnualValue / 12
   const adjImplCost = Math.max(
@@ -416,13 +385,8 @@ export function roiCalculator(
   const adjPayback =
     totalAnnualValue > 0 ? Math.ceil(adjImplCost / monthlyValue) : null
 
-  const fmtCur = (n: number) => sym + addCommas(n)
-  const fmtShort = (n: number) => {
-    const v = Math.round(n)
-    if (v >= 1_000_000) return sym + (v / 1_000_000).toFixed(1) + 'M'
-    if (v >= 1_000) return sym + Math.round(v / 1_000) + 'K'
-    return fmtCur(v)
-  }
+  const fmtCur = (n: number) => fmtCurrency(n, globals.currency)
+  const fmtShort = (n: number) => fmtCurrencyShort(n, globals.currency)
 
   // Build calculation-friendly figures (sorted desc by value)
   const sortedCalcs = [...workflowCalcs].sort(
@@ -435,6 +399,8 @@ export function roiCalculator(
     totalAnnualHours: Math.round(totalAnnualHours),
     summary: {
       totalAnnualHours: Math.round(totalAnnualHours),
+      totalAnnualHours24mo: hrs24,
+      totalAnnualHours36mo: hrs36,
       operationalDividend12mo: od12,
       profitUplift12mo: pu12,
       totalFinancialGain12mo: tf12,
