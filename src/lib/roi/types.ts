@@ -390,6 +390,10 @@ export interface AgentCallbacks {
   onTextDelta(delta: string): void
   onToolStart(toolName: string, args?: Record<string, unknown>): void
   onPipelineLog?(message: string): void
+  // Fired when a tool call finishes (success or a returned/thrown error) —
+  // lets the caller know a tool's actual outcome instead of only inferring
+  // it from whether onReportUpdate happened to fire.
+  onToolResult?(toolName: string, output: unknown): void
   onReportUpdate(state: ReportState, changedSections?: string[]): void
   onDone(newMessages: import('ai').ModelMessage[]): void
   onError(err: Error): void

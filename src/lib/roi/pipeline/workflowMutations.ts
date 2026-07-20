@@ -8,12 +8,35 @@
 
 import type { WorkflowInput } from '@/src/lib/roi/types'
 
-// Case-insensitive lookup — matches update_workflow's existing matching rule.
+// Case-insensitive lookup, with a bounded fuzzy fallback for LLM name drift
+// (e.g. "Proposal Drafting" vs "Proposal Drafting and Tailoring"). Exact
+// match wins first; a substring/prefix match is only trusted when it
+// resolves to exactly one workflow, so an ambiguous partial name never
+// silently edits the wrong one.
 export function findWorkflowIndex(
   workflows: WorkflowInput[],
   name: string,
 ): number {
-  return workflows.findIndex((w) => w.name.toLowerCase() === name.toLowerCase())
+  const query = name.toLowerCase().trim()
+
+  const exact = workflows.findIndex((w) => w.name.toLowerCase() === query)
+  if (exact !== -1) return exact
+
+  const contains = workflows.reduce<number[]>((acc, w, i) => {
+    const wname = w.name.toLowerCase()
+    if (wname.includes(query) || query.includes(wname)) acc.push(i)
+    return acc
+  }, [])
+  if (contains.length === 1) return contains[0]
+
+  const startsWith = workflows.reduce<number[]>((acc, w, i) => {
+    const wname = w.name.toLowerCase()
+    if (wname.startsWith(query) || query.startsWith(wname)) acc.push(i)
+    return acc
+  }, [])
+  if (startsWith.length === 1) return startsWith[0]
+
+  return -1
 }
 
 // Case-insensitive existence check — matches add_workflow's existing duplicate

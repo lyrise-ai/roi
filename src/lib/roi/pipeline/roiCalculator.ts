@@ -168,7 +168,16 @@ function enforceRegionalRateFloors(
   )
   return workflows.map((wf) => {
     const seniority: SeniorityTier = wf.seniorityLevel ?? 'mid'
-    const [floor, ceiling] = getRateBand(company.country, seniority, ccy)
+    const [floor, baseCeiling] = getRateBand(company.country, seniority, ccy)
+    // The allowed range is [floor, headroomCeiling] — baseCeiling is only the
+    // top of the "typical" band; headroomCeiling is the actual clamp boundary
+    // for outlier roles. A rate that exceeds it must clamp back down TO that
+    // boundary, not down to baseCeiling — clamping to baseCeiling silently
+    // drops the rate below where it started for any edit landing in the
+    // headroom zone (e.g. 50 → scale by 1.25 → 63, clamped to a bare
+    // baseCeiling of 40 instead of the crossed boundary of 60), which made a
+    // requested rate *increase* show up as a decrease in every derived total.
+    const headroomCeiling = baseCeiling * 1.5
     const current = wf.rateOverride ?? globals.laborRate
     let clamped = current
     let action = 'OK'
@@ -177,17 +186,21 @@ function enforceRegionalRateFloors(
       action = `↑ FLOOR ENFORCED (${current.toFixed(0)} → ${clamped.toFixed(
         0,
       )})`
-    } else if (current > ceiling * 1.5) {
-      clamped = ceiling
+    } else if (current > headroomCeiling) {
+      clamped = headroomCeiling
       action = `↓ CEILING ENFORCED (${current.toFixed(0)} → ${clamped.toFixed(
         0,
       )})`
     }
     roiLog(
       'calc:floor',
-      `  ${wf.name} [${seniority}] band=${floor.toFixed(0)}–${(
-        ceiling * 1.5
-      ).toFixed(0)} ${ccy} | current=${current.toFixed(0)} → ${action}`,
+      `  ${wf.name} [${seniority}] floor=${floor.toFixed(
+        0,
+      )} baseCeiling=${baseCeiling.toFixed(
+        0,
+      )} headroomCeiling=${headroomCeiling.toFixed(
+        0,
+      )} ${ccy} | current=${current.toFixed(0)} → ${action}`,
     )
     if (clamped === current) return wf
     return { ...wf, rateOverride: Math.round(clamped) }
@@ -224,6 +237,13 @@ export function roiCalculator(
   workflows: WorkflowInput[],
   globals: GlobalInputs,
   company: CompanyProfile,
+  // Rule 6B is a generation-time-only sanity check on the modeler's raw
+  // output. It must never re-run on post-generation edits (chat, validation
+  // wizard) — a fixed ceiling/floor target rescales ALL workflows to ~the
+  // same total regardless of the edit, which silently swallows the visible
+  // effect of a user's change (LYR-146). Callers outside the initial
+  // 'generate' run must leave this false.
+  applyRevenueGuardrail = false,
 ): RoiCalculatorOutput {
   // Currencies whose official symbols are non-Latin script — always use the ISO code instead
   const SCRIPT_SYMBOL_CODES = new Set([
@@ -284,9 +304,10 @@ export function roiCalculator(
     }
   })
 
-  // Revenue guardrail — keep TFG within 5–20% of estimated revenue
+  // Revenue guardrail — keep TFG within 5–20% of estimated revenue.
+  // Generation-time only (Rule 6B) — see applyRevenueGuardrail above.
   const revenueM = company.revenueEstimateM
-  if (revenueM != null && revenueM > 0) {
+  if (applyRevenueGuardrail && revenueM != null && revenueM > 0) {
     const rawOD = workflowCalcs.reduce((s, w) => s + w.annualValue, 0)
     const rawTF = rawOD * globals.profitMultiplier
     const revenueU = revenueM * 1e6
@@ -336,7 +357,7 @@ export function roiCalculator(
         roiLog('calc:revcap', `OK — TF within 5–20% band, no scaling applied`)
       }
     }
-  } else {
+  } else if (applyRevenueGuardrail) {
     roiLog(
       'calc:revcap',
       `no revenue anchor available (revenueM=${

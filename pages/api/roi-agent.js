@@ -6,6 +6,7 @@
 // Streams SSE events:
 //   { type: 'text_delta', delta }           — agent is typing
 //   { type: 'tool_start', tool }            — agent called a tool
+//   { type: 'tool_result', tool, output }   — a tool call finished (success or error)
 //   { type: 'pipeline_log', message }       — key pipeline milestone (research, model, assemble)
 //   { type: 'report_update', state }        — report HTML changed
 //   { type: 'done', messages? }             — agent finished
@@ -439,6 +440,8 @@ export default async function handler(req, res) {
           onTextDelta: (delta) => send(res, { type: 'text_delta', delta }),
           onToolStart: (tool, args) =>
             send(res, { type: 'tool_start', tool, args }),
+          onToolResult: (tool, output) =>
+            send(res, { type: 'tool_result', tool, output }),
           onPipelineLog: (message) =>
             send(res, { type: 'pipeline_log', message }),
           onReportUpdate: (s, changedSections) => {
