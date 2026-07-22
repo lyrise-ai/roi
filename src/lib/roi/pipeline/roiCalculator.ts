@@ -4,6 +4,7 @@
 // ─────────────────────────────────────────────────────────────────────────────
 
 import { roiLog } from '@/src/lib/roi/debug'
+import { addCommas, fmtCurrency, fmtCurrencyShort } from '@/src/lib/roi/format'
 
 import type {
   WorkflowInput,
@@ -14,16 +15,6 @@ import type {
 } from '@/src/lib/roi/types'
 
 const MAX_MIN = 480
-
-function addCommas(n: number): string {
-  const str = String(Math.round(n || 0))
-  let out = ''
-  for (let i = 0; i < str.length; i++) {
-    if (i > 0 && (str.length - i) % 3 === 0) out += ','
-    out += str[i]
-  }
-  return out
-}
 
 // ── Regional rate floor enforcement (Rule 6A) ────────────────────────────────
 // Bands sourced from `template_instructions.txt:140-148` — fully-loaded billing
@@ -168,7 +159,16 @@ function enforceRegionalRateFloors(
   )
   return workflows.map((wf) => {
     const seniority: SeniorityTier = wf.seniorityLevel ?? 'mid'
-    const [floor, ceiling] = getRateBand(company.country, seniority, ccy)
+    const [floor, baseCeiling] = getRateBand(company.country, seniority, ccy)
+    // The allowed range is [floor, headroomCeiling] — baseCeiling is only the
+    // top of the "typical" band; headroomCeiling is the actual clamp boundary
+    // for outlier roles. A rate that exceeds it must clamp back down TO that
+    // boundary, not down to baseCeiling — clamping to baseCeiling silently
+    // drops the rate below where it started for any edit landing in the
+    // headroom zone (e.g. 50 → scale by 1.25 → 63, clamped to a bare
+    // baseCeiling of 40 instead of the crossed boundary of 60), which made a
+    // requested rate *increase* show up as a decrease in every derived total.
+    const headroomCeiling = baseCeiling * 1.5
     const current = wf.rateOverride ?? globals.laborRate
     let clamped = current
     let action = 'OK'
@@ -177,17 +177,21 @@ function enforceRegionalRateFloors(
       action = `↑ FLOOR ENFORCED (${current.toFixed(0)} → ${clamped.toFixed(
         0,
       )})`
-    } else if (current > ceiling * 1.5) {
-      clamped = ceiling
+    } else if (current > headroomCeiling) {
+      clamped = headroomCeiling
       action = `↓ CEILING ENFORCED (${current.toFixed(0)} → ${clamped.toFixed(
         0,
       )})`
     }
     roiLog(
       'calc:floor',
-      `  ${wf.name} [${seniority}] band=${floor.toFixed(0)}–${(
-        ceiling * 1.5
-      ).toFixed(0)} ${ccy} | current=${current.toFixed(0)} → ${action}`,
+      `  ${wf.name} [${seniority}] floor=${floor.toFixed(
+        0,
+      )} baseCeiling=${baseCeiling.toFixed(
+        0,
+      )} headroomCeiling=${headroomCeiling.toFixed(
+        0,
+      )} ${ccy} | current=${current.toFixed(0)} → ${action}`,
     )
     if (clamped === current) return wf
     return { ...wf, rateOverride: Math.round(clamped) }
@@ -224,31 +228,14 @@ export function roiCalculator(
   workflows: WorkflowInput[],
   globals: GlobalInputs,
   company: CompanyProfile,
+  // Rule 6B is a generation-time-only sanity check on the modeler's raw
+  // output. It must never re-run on post-generation edits (chat, validation
+  // wizard) — a fixed ceiling/floor target rescales ALL workflows to ~the
+  // same total regardless of the edit, which silently swallows the visible
+  // effect of a user's change (LYR-146). Callers outside the initial
+  // 'generate' run must leave this false.
+  applyRevenueGuardrail = false,
 ): RoiCalculatorOutput {
-  // Currencies whose official symbols are non-Latin script — always use the ISO code instead
-  const SCRIPT_SYMBOL_CODES = new Set([
-    'SAR',
-    'AED',
-    'QAR',
-    'KWD',
-    'BHD',
-    'OMR',
-    'EGP',
-    'JOD',
-    'IQD',
-    'LBP',
-    'IRR',
-    'YER',
-  ])
-  // eslint-disable-next-line no-control-regex
-  const hasNonAscii = /[^\x00-\x7F]/.test(globals.currency.symbol)
-  const rawSym =
-    SCRIPT_SYMBOL_CODES.has(globals.currency.code) || hasNonAscii
-      ? globals.currency.code
-      : globals.currency.symbol
-  const sym = rawSym.length > 1 && !rawSym.endsWith(' ') ? rawSym + ' ' : rawSym
-  const workingMonthFactor = globals.workWeeksPerYear / 52
-
   // Rule 6A: silently clamp per-workflow rates into the regional band for the
   // workflow's seniority tier. Catches modeler hallucination of cheap-labor
   // rates (e.g. $12/hr for an Egyptian senior lawyer). n8n-parity: no warnings.
@@ -284,9 +271,10 @@ export function roiCalculator(
     }
   })
 
-  // Revenue guardrail — keep TFG within 5–20% of estimated revenue
+  // Revenue guardrail — keep TFG within 5–20% of estimated revenue.
+  // Generation-time only (Rule 6B) — see applyRevenueGuardrail above.
   const revenueM = company.revenueEstimateM
-  if (revenueM != null && revenueM > 0) {
+  if (applyRevenueGuardrail && revenueM != null && revenueM > 0) {
     const rawOD = workflowCalcs.reduce((s, w) => s + w.annualValue, 0)
     const rawTF = rawOD * globals.profitMultiplier
     const revenueU = revenueM * 1e6
@@ -336,7 +324,7 @@ export function roiCalculator(
         roiLog('calc:revcap', `OK — TF within 5–20% band, no scaling applied`)
       }
     }
-  } else {
+  } else if (applyRevenueGuardrail) {
     roiLog(
       'calc:revcap',
       `no revenue anchor available (revenueM=${
@@ -383,9 +371,11 @@ export function roiCalculator(
   const od24 = Math.round(od12 * 2.15)
   const pu24 = Math.round(pu12 * 2.15)
   const tf24 = od24 + pu24
+  const hrs24 = Math.round(totalAnnualHours * 2.15)
   const od36 = Math.round(od12 * 3.4)
   const pu36 = Math.round(pu12 * 3.4)
   const tf36 = od36 + pu36
+  const hrs36 = Math.round(totalAnnualHours * 3.4)
 
   const monthlyValue = totalAnnualValue / 12
   const adjImplCost = Math.max(
@@ -395,13 +385,8 @@ export function roiCalculator(
   const adjPayback =
     totalAnnualValue > 0 ? Math.ceil(adjImplCost / monthlyValue) : null
 
-  const fmtCur = (n: number) => sym + addCommas(n)
-  const fmtShort = (n: number) => {
-    const v = Math.round(n)
-    if (v >= 1_000_000) return sym + (v / 1_000_000).toFixed(1) + 'M'
-    if (v >= 1_000) return sym + Math.round(v / 1_000) + 'K'
-    return fmtCur(v)
-  }
+  const fmtCur = (n: number) => fmtCurrency(n, globals.currency)
+  const fmtShort = (n: number) => fmtCurrencyShort(n, globals.currency)
 
   // Build calculation-friendly figures (sorted desc by value)
   const sortedCalcs = [...workflowCalcs].sort(
@@ -414,6 +399,8 @@ export function roiCalculator(
     totalAnnualHours: Math.round(totalAnnualHours),
     summary: {
       totalAnnualHours: Math.round(totalAnnualHours),
+      totalAnnualHours24mo: hrs24,
+      totalAnnualHours36mo: hrs36,
       operationalDividend12mo: od12,
       profitUplift12mo: pu12,
       totalFinancialGain12mo: tf12,

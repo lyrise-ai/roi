@@ -1,42 +1,42 @@
 import { useMemo, useState } from 'react'
 import { fmtCurrency, fmtCurrencyShort, fmtNumber } from '../../Report/format'
 import { statusStyle, statusDef } from '../../Report/shared/statusMeta'
+import {
+  mergeWorkflows,
+  reconcilingAdoptionFactor,
+} from '@/src/lib/roi/pipeline/reportModel'
 import KpiTile from '../KpiTile'
 import NumberScale from '../../NumberScale'
 import { INTER_FONT_FAMILY } from '@/src/utilities/fonts'
 
-// Merges WorkflowInput + WorkflowCalc by name, mirroring
-// reportViewModel.js's `merged` construction — kept local rather than
-// importing that module's private buildWorkflows() so the wizard doesn't
-// take on a dependency on ReportUIContext-coupled report components.
+// Uses the same workflow merge/sort and reconciling adoption-ramp-factor as
+// the PDF and web report (reportModel.ts) — the wizard only has `workflows`
+// + `calcOutput` in scope (no company/copy yet), not a full ReportState, so
+// it can't use buildReportModel() directly.
 function buildOverviewRows(workflowInputs, calcOutput, currency) {
   if (!calcOutput) return []
-  return [...calcOutput.workflows]
-    .sort((a, b) => b.annualValue - a.annualValue)
-    .map((calc) => {
-      const input =
-        workflowInputs.find((w) => w.name === calc.name) ?? workflowInputs[0]
-      const beforeHrs = input.minutesPerItemBefore / 60
-      const afterHrs = input.minutesPerItemAfter / 60
-      const monthlyValue = Math.round(calc.monthlyHours * calc.effectiveRate)
-      return {
-        name: input.name,
-        agent: input.agentName,
-        before: beforeHrs,
-        after: afterHrs,
-        hrsSaved: Math.round(calc.monthlyHours),
-        valueLabel: fmtCurrency(monthlyValue, currency),
-        status: input.userValidated
-          ? 'Validated'
-          : input.sourceType === 'user_stated'
-            ? 'Provided'
-            : input.sourceType === 'research_derived'
-              ? 'Scraped'
-              : 'Benchmarked',
-        targetOutcome: input.expectedOutcome,
-        formula: `${fmtNumber(input.monthlyVolume)}/mo × ${(beforeHrs - afterHrs).toFixed(2)} hrs × ${fmtCurrency(calc.effectiveRate, currency)}/hr = ${fmtCurrency(monthlyValue, currency)}/mo`,
-      }
-    })
+  return mergeWorkflows(workflowInputs, calcOutput.workflows).map((w) => {
+    const beforeHrs = w.minutesPerItemBefore / 60
+    const afterHrs = w.minutesPerItemAfter / 60
+    const monthlyValue = Math.round(w.monthlyHours * w.effectiveRate)
+    return {
+      name: w.name,
+      agent: w.agentName,
+      before: beforeHrs,
+      after: afterHrs,
+      hrsSaved: Math.round(w.monthlyHours),
+      valueLabel: fmtCurrency(monthlyValue, currency),
+      status: w.userValidated
+        ? 'Validated'
+        : w.sourceType === 'user_stated'
+          ? 'Provided'
+          : w.sourceType === 'research_derived'
+            ? 'Scraped'
+            : 'Benchmarked',
+      targetOutcome: w.expectedOutcome,
+      formula: `${fmtNumber(w.monthlyVolume)}/mo × ${(beforeHrs - afterHrs).toFixed(2)} hrs × ${fmtCurrency(w.effectiveRate, currency)}/hr × ${reconcilingAdoptionFactor(w).toFixed(2)} adoption ramp factor = ${fmtCurrency(monthlyValue, currency)}/mo`,
+    }
+  })
 }
 
 function OverviewRow({ row }) {

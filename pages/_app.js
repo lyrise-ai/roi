@@ -1,15 +1,8 @@
 import * as React from 'react'
 import Head from 'next/head'
 import { useRouter } from 'next/router'
-import { ThemeProvider } from '@mui/material/styles'
-import CssBaseline from '@mui/material/CssBaseline'
-import { CacheProvider } from '@emotion/react'
-import theme from '../src/theme'
-import createEmotionCache from '../src/utilities/createEmotionCache'
 import '../styles/global.css'
 import { AuthSessionContext } from '../src/context/AuthSessionContext'
-
-const clientSideEmotionCache = createEmotionCache()
 
 function NavigationProgress() {
   const router = useRouter()
@@ -65,7 +58,7 @@ function NavigationProgress() {
 }
 
 export default function MyApp(props) {
-  const { Component, emotionCache = clientSideEmotionCache, pageProps } = props
+  const { Component, pageProps } = props
 
   React.useEffect(() => {
     if (
@@ -159,7 +152,7 @@ export default function MyApp(props) {
   )
 
   return (
-    <CacheProvider value={emotionCache}>
+    <>
       <Head>
         <meta name="viewport" content="initial-scale=1, width=device-width" />
         <title>LyRise ROI Reports</title>
@@ -178,13 +171,10 @@ export default function MyApp(props) {
         />
         <meta property="og:type" content="website" />
       </Head>
-      <ThemeProvider theme={theme}>
-        <CssBaseline />
-        <NavigationProgress />
-        <AuthSessionContext.Provider value={authSessionValue}>
-          <Component {...pageProps} />
-        </AuthSessionContext.Provider>
-      </ThemeProvider>
-    </CacheProvider>
+      <NavigationProgress />
+      <AuthSessionContext.Provider value={authSessionValue}>
+        <Component {...pageProps} />
+      </AuthSessionContext.Provider>
+    </>
   )
 }

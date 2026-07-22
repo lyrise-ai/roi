@@ -10,7 +10,7 @@ import SpotlightTourOverlay from '@/src/components/shared/SpotlightTourOverlay'
 import ReportContent from './Report/ReportContent'
 import TerminologyGuide from './Report/TerminologyGuide'
 import EmailSendPopover from './Report/EmailSendPopover'
-import { NAV_ITEMS } from './Report/navItems'
+import { NAV_ITEMS, buildChangedToNavKeys } from './Report/navItems'
 
 const TOUR_JOURNEY = [
   'Your Report',
@@ -87,20 +87,9 @@ const TOOL_LABELS = {
 }
 
 // Maps the agent's own section keys (from AgentEvent's `changedSections`) to
-// the report's nav-sidebar keys (see Report/navItems.js) — a single agent
-// edit can touch more than one visible section (e.g. a globals/currency
-// change recomputes both the hero metrics and the 3-year outlook).
-const CHANGED_TO_NAV_KEYS = {
-  financials: ['overview', 'outlook'],
-  thesis: ['overview'],
-  workflows: ['workflows'],
-  profit_levers: ['uplift'],
-  cost_of_delay: ['delay'],
-  resilience_rows: ['resilience'],
-  risks: ['risks'],
-  pilot: ['roadmap'],
-  cta: ['next'],
-}
+// the report's nav-sidebar keys — derived from NAV_ITEMS' changedKeys
+// (Report/navItems.js) so this and the nav sidebar can never drift apart.
+const CHANGED_TO_NAV_KEYS = buildChangedToNavKeys()
 
 const NAV_LABEL_BY_KEY = Object.fromEntries(
   NAV_ITEMS.map(({ key, label }) => [key, label]),
@@ -158,6 +147,16 @@ export default function ReportViewer({
   const [creditsEarned, setCreditsEarned] = useState(0)
   const [toastMsg, setToastMsg] = useState(null)
   const toastTimerRef = useRef(null)
+  // Surfaces tool-level and stream-level failures that would otherwise vanish
+  // silently (the SSE 'error' event and tool_result error outputs used to be
+  // dropped client-side with no visible feedback at all).
+  const [chatErrorMsg, setChatErrorMsg] = useState(null)
+  const chatErrorTimerRef = useRef(null)
+  const showChatError = useCallback((msg) => {
+    setChatErrorMsg(msg)
+    clearTimeout(chatErrorTimerRef.current)
+    chatErrorTimerRef.current = setTimeout(() => setChatErrorMsg(null), 6000)
+  }, [])
 
   useEffect(() => {
     if (!showCallPrompt) return undefined
@@ -365,6 +364,16 @@ export default function ReportViewer({
             setStreamingText(agentReply)
           } else if (event.type === 'tool_start') {
             setActiveTool(TOOL_LABELS[event.tool] ?? event.tool)
+          } else if (event.type === 'pipeline_log') {
+            setActiveTool(event.message)
+          } else if (event.type === 'tool_result') {
+            if (event.output?.error) {
+              showChatError(
+                typeof event.output.error === 'string'
+                  ? event.output.error
+                  : 'That edit ran into a problem — please try rephrasing it.',
+              )
+            }
           } else if (event.type === 'report_update') {
             const navKeys = [
               ...new Set(
@@ -395,12 +404,16 @@ export default function ReportViewer({
             setIsAgentRunning(false)
             setActiveTool(null)
           } else if (event.type === 'error') {
+            showChatError(
+              event.message || 'Something went wrong. Please try again.',
+            )
             setStreamingText('')
             setIsAgentRunning(false)
             setActiveTool(null)
           }
         })
       } catch {
+        showChatError('Connection lost — please try again.')
         setIsAgentRunning(false)
         setActiveTool(null)
       }
@@ -414,6 +427,7 @@ export default function ReportViewer({
       userSentCount,
       isEmployee,
       shareToken,
+      showChatError,
     ],
   )
 
@@ -1310,6 +1324,27 @@ export default function ReportViewer({
           }}
         >
           ⚡ {toastMsg}
+        </div>
+      )}
+
+      {chatErrorMsg && (
+        <div
+          style={{
+            position: 'fixed',
+            bottom: 24,
+            left: 24,
+            background: '#7F1D1D',
+            color: '#fff',
+            padding: '12px 18px',
+            borderRadius: 10,
+            fontSize: 12.5,
+            fontWeight: 600,
+            boxShadow: '0 10px 30px rgba(0,0,0,0.25)',
+            zIndex: 100,
+            maxWidth: 360,
+          }}
+        >
+          ⚠ {chatErrorMsg}
         </div>
       )}
 

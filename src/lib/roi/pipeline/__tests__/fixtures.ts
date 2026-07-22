@@ -103,13 +103,9 @@ function baseCopy(): ReportCopy {
       },
     ],
     unified_pattern_thesis: 'Manual orchestration slows revenue work.',
-    company_snapshot: [
-      { text: 'Acme sells widgets.', sourceType: 'scraped' },
-    ],
+    company_snapshot: [{ text: 'Acme sells widgets.', sourceType: 'scraped' }],
     cost_of_delay: { narrative: 'Delay carries a price.' },
-    resilience_rows: [
-      { dimension: 'Cost', act_now: 'lower', defer: 'higher' },
-    ],
+    resilience_rows: [{ dimension: 'Cost', act_now: 'lower', defer: 'higher' }],
     pilot_recommendation: 'Start with lead qualification.',
     risks: [{ risk: 'Messy data', detail: 'detail', mitigation: 'mitigate' }],
   }
@@ -120,14 +116,15 @@ export interface BuildOptions {
   company?: Partial<CompanyProfile>
 }
 
-// Builds a complete, valid ReportState and returns the assembled output.
-export function buildAssembled(opts: BuildOptions = {}): AssembleReportOutput {
+// Builds a complete, valid ReportState (before assembly) — shared by any test
+// that needs the raw state rather than the PDF's assembled output.
+export function buildState(opts: BuildOptions = {}): ReportState {
   const normInput = baseNormInput(opts.normInput)
   const company = baseCompany(opts.company)
   const globals = baseGlobals()
   const workflows = baseWorkflows()
 
-  const state: ReportState = {
+  return {
     normInput,
     company,
     globals,
@@ -140,6 +137,9 @@ export function buildAssembled(opts: BuildOptions = {}): AssembleReportOutput {
     confidenceLevel: 'high',
     coreThesis: 'thesis',
   }
+}
 
-  return assembleReport(state)
+// Builds a complete, valid ReportState and returns the assembled output.
+export function buildAssembled(opts: BuildOptions = {}): AssembleReportOutput {
+  return assembleReport(buildState(opts))
 }

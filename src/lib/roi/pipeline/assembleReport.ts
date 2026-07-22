@@ -5,6 +5,20 @@
 // ─────────────────────────────────────────────────────────────────────────────
 
 import { roiLog } from '@/src/lib/roi/debug'
+import {
+  addCommas,
+  currencySymbolFor,
+  fmtNumber,
+  fmtCurrency,
+  fmtCurrencyShort,
+} from '@/src/lib/roi/format'
+
+import { buildReportModel } from '@/src/lib/roi/pipeline/reportModel'
+import type {
+  SourceRow,
+  SnapshotRow,
+  WorkedExample,
+} from '@/src/lib/roi/pipeline/reportModel'
 
 import type {
   ReportState,
@@ -15,16 +29,6 @@ import type {
 } from '@/src/lib/roi/types'
 
 // ── Formatters ────────────────────────────────────────────────────────────────
-
-function addCommas(n: number): string {
-  const str = String(Math.round(n || 0))
-  let out = ''
-  for (let i = 0; i < str.length; i++) {
-    if (i > 0 && (str.length - i) % 3 === 0) out += ','
-    out += str[i]
-  }
-  return out
-}
 
 function esc(s: string | null | undefined): string {
   return String(s ?? '')
@@ -104,92 +108,15 @@ function buildCaseStudiesHTML(): string {
 
 // ── HTML builders ─────────────────────────────────────────────────────────────
 
-function buildCompanySnapshotTableBody(
-  state: ReportState,
-  sym: string,
-): string {
-  const { company, copy, normInput } = state
-  const rows: string[] = []
-  // Headcount: if the form supplied a team size, show "Provided" — otherwise
-  // it came from LinkedIn/Apollo research.
-  const teamSizeFromForm = (normInput?.teamSize ?? '').trim()
-  if (company?.employees) {
-    const sourceBadge = teamSizeFromForm
-      ? `<span class="badge-scraped">Provided</span>`
-      : `<span class="badge-scraped">Scraped — LinkedIn</span>`
-    rows.push(
-      `<tr><td>${addCommas(
-        company.employees,
-      )} employees</td><td>${sourceBadge}</td></tr>`,
+function buildCompanySnapshotTableBody(rows: SnapshotRow[]): string {
+  return rows
+    .map(
+      (r) =>
+        `<tr><td>${esc(r.text)}</td><td><span class="badge-${r.tier}">${esc(
+          r.label,
+        )}</span></td></tr>`,
     )
-  }
-  // Revenue: if the form supplied a range, surface that range verbatim with
-  // a "Provided" badge — research-derived $M estimates only show when the
-  // form was empty.
-  const revenueRangeFromForm = (normInput?.revenueRange ?? '').trim()
-  if (revenueRangeFromForm) {
-    rows.push(
-      `<tr><td>Annual revenue ${esc(
-        revenueRangeFromForm,
-      )}</td><td><span class="badge-scraped">Provided</span></td></tr>`,
-    )
-  } else if (company?.revenueEstimateM) {
-    rows.push(
-      `<tr><td>Revenue estimated ${sym}${company.revenueEstimateM}M annually</td><td><span class="badge-benchmarked">Benchmarked</span></td></tr>`,
-    )
-  } else {
-    rows.push(
-      `<tr><td>Annual revenue — not provided</td><td><span class="badge-assumed">Unknown</span></td></tr>`,
-    )
-  }
-  // Country: form-supplied wins; otherwise show research-derived country.
-  const countryFromForm = (normInput?.country ?? '').trim()
-  if (countryFromForm) {
-    rows.push(
-      `<tr><td>Country: ${esc(
-        countryFromForm,
-      )}</td><td><span class="badge-scraped">Provided</span></td></tr>`,
-    )
-  } else if (company?.country) {
-    rows.push(
-      `<tr><td>Country: ${esc(
-        company.country,
-      )}</td><td><span class="badge-scraped">Scraped</span></td></tr>`,
-    )
-  }
-  // Safety net — drop LLM-authored snapshot items that would duplicate the
-  // form-provided rows above. The writer prompt asks the model to skip these
-  // facts, but it doesn't always comply, so we filter at render time too.
-  const isRedundant = (text: string): boolean => {
-    const t = text.toLowerCase()
-    return (
-      (teamSizeFromForm &&
-        /\b\d[\d,]*\s*(employees?|people|staff)\b/.test(t)) ||
-      (revenueRangeFromForm &&
-        /\b(annual\s+)?revenue\b|\bgenerates?\b.*\$|\bannually\b/.test(t))
-    )
-  }
-  ;(copy?.company_snapshot ?? []).forEach((item) => {
-    if (isRedundant(item.text ?? '')) return
-    const cls =
-      item.sourceType === 'scraped'
-        ? 'badge-scraped'
-        : item.sourceType === 'benchmarked'
-          ? 'badge-benchmarked'
-          : 'badge-assumed'
-    const label =
-      item.sourceType === 'scraped'
-        ? 'Scraped'
-        : item.sourceType === 'benchmarked'
-          ? 'Benchmarked'
-          : 'Assumed'
-    rows.push(
-      `<tr><td>${esc(
-        item.text,
-      )}</td><td><span class="${cls}">${label}</span></td></tr>`,
-    )
-  })
-  return rows.join('')
+    .join('')
 }
 
 function buildCostOfDelayHTML(
@@ -286,25 +213,12 @@ function buildOdVsPuPanelHTML(sym: string, od: number, pu: number): string {
 function buildCalculationPanelHTML(
   sym: string,
   wfs: Array<WorkflowInput & WorkflowCalc>,
-  globals: { realizationFactor: number; workWeeksPerYear: number },
+  worked: WorkedExample,
   totalMonthlyHours: number,
   annualOD: number,
 ): string {
-  const topWf = wfs[0]
+  const topWf = worked.workflow!
   const savedHrs = (topWf.timeSaved / 60).toFixed(2)
-  // Damping/alignment factor: bundles adoption rate, realization factor, work-
-  // month factor, and any revenue-band scaling into a single multiplier so the
-  // simple formula on the page reconciles to the displayed monthly value.
-  // Shown to the reader so they can sanity-check the math line by line.
-  const baselineMonthly =
-    topWf.monthlyVolume * (topWf.timeSaved / 60) * topWf.effectiveRate
-  const monthlyValue = Math.round(topWf.monthlyHours * topWf.effectiveRate)
-  const adoptionFactor =
-    baselineMonthly > 0 ? monthlyValue / baselineMonthly : 1
-  const totalMonthlyValue = wfs.reduce(
-    (a, w) => a + Math.round(w.monthlyHours * w.effectiveRate),
-    0,
-  )
   const ftes = ((totalMonthlyHours * 12) / 2080).toFixed(1)
   const sumLine =
     wfs
@@ -312,7 +226,7 @@ function buildCalculationPanelHTML(
         (w) =>
           `${sym}${addCommas(Math.round(w.monthlyHours * w.effectiveRate))}`,
       )
-      .join(' + ') + ` = ${sym}${addCommas(totalMonthlyValue)}/mo`
+      .join(' + ') + ` = ${sym}${addCommas(worked.totalMonthlyValue)}/mo`
 
   return (
     `<div class="insight-panel" style="margin-top:6px">` +
@@ -326,8 +240,8 @@ function buildCalculationPanelHTML(
       topWf.monthlyVolume,
     )} × ${savedHrs} hrs × ${sym}${addCommas(
       topWf.effectiveRate,
-    )}/hr × ${adoptionFactor.toFixed(2)} = ${sym}${addCommas(
-      monthlyValue,
+    )}/hr × ${worked.adoptionFactor.toFixed(2)} = ${sym}${addCommas(
+      worked.monthlyValue,
     )}/mo</span></div>` +
     `<div style="margin-bottom:4px;font-size:8pt;color:#64748b"><em>Adoption ramp factor combines realistic adoption (rarely 100% on day one), realization, and revenue-band alignment into one multiplier.</em></div>` +
     `<div style="margin-bottom:4px"><strong>Monthly total:</strong> <span style="font-family:monospace">${sumLine}</span></div>` +
@@ -337,144 +251,13 @@ function buildCalculationPanelHTML(
       totalMonthlyHours * 12,
     )} hrs (~${ftes} FTEs at 2,080 hrs/yr)</span></div>` +
     `<div><strong>Annual Operational Dividend:</strong> <span style="font-family:monospace">${sym}${addCommas(
-      totalMonthlyValue,
+      worked.totalMonthlyValue,
     )}/mo × 12 = ${sym}${addCommas(annualOD)}</span></div>` +
     `</div></div>`
   )
 }
 
-function buildProvenanceTableBody(
-  state: ReportState,
-  sym: string,
-  profitLevers: ReportState['copy']['profit_levers'],
-): string {
-  const { company, workflows, globals, calcOutput, normInput } = state
-  // `sourceIsHtml: true` means `source` is pre-escaped HTML and should be
-  // injected verbatim (used to embed real <a> hyperlinks for evidence URLs).
-  const rows: {
-    input: string
-    detail: string
-    source: string
-    sourceIsHtml?: boolean
-    status: string
-  }[] = []
-
-  // Form-provided data is the highest-confidence source — short-circuit
-  // research-derived values when the user typed it in themselves.
-  const revenueRangeFromForm = (normInput?.revenueRange ?? '').trim()
-  const teamSizeFromForm = (normInput?.teamSize ?? '').trim()
-  const countryFromForm = (normInput?.country ?? '').trim()
-
-  if (revenueRangeFromForm) {
-    rows.push({
-      input: 'Annual revenue anchor',
-      detail: revenueRangeFromForm,
-      source: 'Provided',
-      status: 'Validated',
-    })
-  } else if (company?.revenueEstimateM) {
-    rows.push({
-      input: 'Annual revenue anchor',
-      detail: `${sym}${company.revenueEstimateM}M estimated`,
-      source: 'Benchmarked',
-      status: 'Needs validation',
-    })
-  } else {
-    rows.push({
-      input: 'Annual revenue anchor',
-      detail: 'Not provided',
-      source: '—',
-      status: 'Unknown',
-    })
-  }
-  if (company?.employees) {
-    rows.push({
-      input: 'Headcount',
-      detail: `${company.employees.toLocaleString()} employees`,
-      source: teamSizeFromForm ? 'Provided' : 'Scraped — LinkedIn / Apollo',
-      status: 'Validated',
-    })
-  }
-  if (countryFromForm) {
-    rows.push({
-      input: 'Country',
-      detail: countryFromForm,
-      source: 'Provided',
-      status: 'Validated',
-    })
-  } else if (company?.country) {
-    rows.push({
-      input: 'Country',
-      detail: company.country,
-      source: 'Scraped',
-      status: 'Validated',
-    })
-  }
-
-  ;(workflows ?? []).forEach((wf) => {
-    const calc = calcOutput?.workflows.find((c) => c.name === wf.name)
-    // Rule 6A — surface rateSource + URL when the modeler grounded the rate in
-    // real salary evidence; fall back to "Benchmarked" only when the modeler
-    // signaled benchmark_fallback or supplied no source.
-    const isFallback =
-      !wf.rateSource ||
-      wf.rateSource === 'benchmark_fallback' ||
-      wf.rateSource === 'assumed'
-    const safeUrl =
-      wf.rateSourceUrl && /^https?:\/\//i.test(wf.rateSourceUrl)
-        ? wf.rateSourceUrl
-        : null
-    const rateSourceLabel = isFallback
-      ? 'Benchmarked'
-      : safeUrl
-        ? `Scraped — <a href="${esc(safeUrl)}" style="color:#003f87">${esc(
-            wf.rateSource ?? '',
-          )}</a>`
-        : `Scraped — ${esc(wf.rateSource ?? '')}`
-    const rateStatus = isFallback ? 'Needs validation' : 'Validated'
-    rows.push({
-      input: `${wf.name} — blended rate`,
-      detail: `${sym}${calc?.effectiveRate ?? globals?.laborRate ?? '—'}/hr${
-        wf.seniorityLevel ? ` (${wf.seniorityLevel})` : ''
-      }`,
-      source: rateSourceLabel,
-      sourceIsHtml: true,
-      status: rateStatus,
-    })
-    rows.push({
-      input: `${wf.name} — monthly volume`,
-      detail: `${wf.monthlyVolume}/mo estimated`,
-      source:
-        wf.sourceType === 'user_stated'
-          ? 'User-stated'
-          : wf.sourceType === 'research_derived'
-            ? 'Scraped'
-            : 'Benchmarked',
-      status:
-        wf.sourceType === 'user_stated' ? 'Validated' : 'Needs validation',
-    })
-  })
-
-  if ((calcOutput?.workflows ?? []).length > 0) {
-    rows.push({
-      input: 'Automation time reduction %',
-      detail: (calcOutput?.workflows ?? [])
-        .map((w) => `${w.savingsPct}% — ${w.name}`)
-        .join('; '),
-      source: 'Benchmarked — LyRise + McKinsey 2023',
-      status: 'Industry standard',
-    })
-  }
-
-  ;(profitLevers ?? []).forEach((l) => {
-    rows.push({
-      input: `Profit lever — ${l.lever_name}`,
-      detail: l.baseline_data,
-      source: 'Benchmarked',
-      status: 'Needs validation',
-    })
-  })
-
+function buildProvenanceTableBody(rows: SourceRow[]): string {
   const statusStyle = (s: string) =>
     s === 'Validated'
       ? 'color:#166534;font-weight:bold'
@@ -483,19 +266,21 @@ function buildProvenanceTableBody(
         : 'color:#92400e'
 
   return rows
-    .map(
-      (r) =>
+    .map((r) => {
+      const sourceHtml = r.sourceUrl
+        ? `<a href="${esc(r.sourceUrl)}" style="color:#003f87">${esc(r.sourceLabel)}</a>`
+        : esc(r.sourceLabel)
+      return (
         `<tr>` +
         `<td><strong>${esc(r.input)}</strong></td>` +
         `<td>${esc(r.detail)}</td>` +
-        `<td style="font-size:8.5pt;color:#64748b">${
-          r.sourceIsHtml ? r.source : esc(r.source)
-        }</td>` +
+        `<td style="font-size:8.5pt;color:#64748b">${sourceHtml}</td>` +
         `<td style="font-size:8pt;${statusStyle(r.status)}">${esc(
           r.status,
         )}</td>` +
-        `</tr>`,
-    )
+        `</tr>`
+      )
+    })
     .join('')
 }
 
@@ -574,67 +359,23 @@ export function assembleReport(state: ReportState): AssembleReportOutput {
     })),
   )
 
-  // Currencies whose official symbols are non-Latin script — always use the ISO code instead
-  const SCRIPT_SYMBOL_CODES = new Set([
-    'SAR',
-    'AED',
-    'QAR',
-    'KWD',
-    'BHD',
-    'OMR',
-    'EGP',
-    'JOD',
-    'IQD',
-    'LBP',
-    'IRR',
-    'YER',
-  ])
-  // eslint-disable-next-line no-control-regex
-  const hasNonAscii = /[^\x00-\x7F]/.test(globals.currency.symbol)
-  const rawSym =
-    SCRIPT_SYMBOL_CODES.has(globals.currency.code) || hasNonAscii
-      ? globals.currency.code
-      : globals.currency.symbol
-  const sym = rawSym.length > 1 && !rawSym.endsWith(' ') ? rawSym + ' ' : rawSym
+  const sym = currencySymbolFor(globals.currency)
   const s = calcOutput.summary
 
-  const fmt = (n: number | null | undefined) =>
-    n != null && !Number.isNaN(+n) ? addCommas(+n) : '—'
-  const cur = (n: number) => sym + fmt(n)
-  const short = (n: number) => {
-    if (n == null || Number.isNaN(+n)) return '—'
-    const v = Math.round(+n)
-    if (v >= 1_000_000) return sym + (v / 1_000_000).toFixed(1) + 'M'
-    if (v >= 1_000) return sym + Math.round(v / 1_000) + 'K'
-    return cur(v)
-  }
+  const fmt = (n: number | null | undefined) => fmtNumber(n)
+  const cur = (n: number) => fmtCurrency(n, globals.currency)
+  const short = (n: number) => fmtCurrencyShort(n, globals.currency)
 
   const tf12 = s.totalFinancialGain12mo
 
-  // Merge WorkflowInput + WorkflowCalc — sorted desc by annual value for display
-  const merged: Array<WorkflowInput & WorkflowCalc> = [...calcOutput.workflows]
-    .sort((a, b) => b.annualValue - a.annualValue)
-    .map((calc) => {
-      const inp = workflows.find((w) => w.name === calc.name) ?? workflows[0]
-      return { ...inp, ...calc }
-    })
+  const model = buildReportModel(state)
+  const merged = model.workflows
 
-  const totalMonthlyHours = merged.reduce((a, w) => a + w.monthlyHours, 0)
-  const totalMonthlyCost = merged.reduce((a, w) => a + w.monthlyCost, 0)
-  const totalHrsBefore = merged.reduce(
-    (acc, w) =>
-      acc + Math.round((w.monthlyVolume * w.minutesPerItemBefore) / 60),
-    0,
-  )
-  const totalHrsAfter = merged.reduce(
-    (acc, w) =>
-      acc + Math.round((w.monthlyVolume * w.minutesPerItemAfter) / 60),
-    0,
-  )
-  const totalValMo = merged.reduce(
-    (acc, w) => acc + Math.round(w.monthlyHours * w.effectiveRate),
-    0,
-  )
+  const totalMonthlyHours = model.totals.monthlyHours
+  const totalMonthlyCost = model.totals.monthlyCost
+  const totalHrsBefore = model.totals.hrsBefore
+  const totalHrsAfter = model.totals.hrsAfter
+  const totalValMo = model.totals.monthlyValue
 
   const MONTHS = [
     'January',
@@ -659,25 +400,20 @@ export function assembleReport(state: ReportState): AssembleReportOutput {
   const caseStudiesHTML = buildCaseStudiesHTML()
   const scopeListHTML = merged.map((w) => `<li>${esc(w.name)}</li>`).join('')
 
-  const levers = copy.profit_levers ?? []
-  // Per-lever arithmetic is computed deterministically from WorkflowCalc so
-  // every rendered "X hrs × $Y × Z redirected = $W/mo" line reconciles with
-  // the calculator's PU total — the modeler is told to omit
-  // rationale_with_arithmetic (it's overwritten below). Join by derived_from
-  // first, then fall back to positional index (the prompt mandates lever
-  // ordering matches workflow ordering); only fall back to the LLM's text
-  // if both lookups fail.
+  const levers = model.levers
+  // Per-lever arithmetic is computed deterministically from the matched
+  // workflow (see reportModel.ts) so every rendered "X hrs × $Y × Z
+  // redirected = $W/mo" line reconciles with the calculator's PU total — the
+  // modeler is told to omit rationale_with_arithmetic (it's overwritten
+  // below); only fall back to the LLM's text if there's truly no match.
   const redirectionPct = Math.max(0, globals.profitMultiplier - 1)
-  const leverArithmetic: string[] = levers.map((l, i) => {
-    const wf =
-      merged.find(
-        (w) => w.name.toLowerCase() === (l.derived_from ?? '').toLowerCase(),
-      ) ?? merged[i]
+  const leverArithmetic: string[] = levers.map((l) => {
+    const wf = l.matchedWorkflow
     if (wf) {
       return `${addCommas(wf.monthlyHours)} hrs/mo freed × ${sym}${addCommas(
         wf.effectiveRate,
       )}/hr × ${redirectionPct.toFixed(2)} redirected = ${sym}${addCommas(
-        wf.monthlyProfitUplift,
+        l.monthlyProfitUplift ?? 0,
       )}/mo`
     }
     return esc(l.rationale_with_arithmetic ?? l.rationale ?? '')
@@ -783,20 +519,14 @@ export function assembleReport(state: ReportState): AssembleReportOutput {
     `<table><thead><tr>` +
     `<th style="width:22%">Input</th><th style="width:36%">Detail</th><th style="width:28%">Source</th><th style="width:14%">Status</th>` +
     `</tr></thead><tbody>` +
-    buildProvenanceTableBody(state, sym, copy.profit_levers) +
+    buildProvenanceTableBody(model.sources) +
     `</tbody></table>`
 
   // Revenue context statement
-  const revenueBase =
-    (company.revenueEstimateM ?? 0) > 0
-      ? company.revenueEstimateM! * 1_000_000
-      : 0
-  const revPct = revenueBase > 0 ? Math.round((tf12 / revenueBase) * 100) : 0
-  const revenueRangeKnown = (normInput?.revenueRange ?? '').trim().length > 0
   const revenueContextStatement =
-    revenueBase > 0 && revPct <= 500
-      ? `This represents approximately ${revPct}% of your estimated annual revenue returned through operational efficiency — without adding headcount.`
-      : !revenueRangeKnown && revenueBase === 0
+    model.revenueContext.base > 0 && model.revenueContext.pct <= 500
+      ? `This represents approximately ${model.revenueContext.pct}% of your estimated annual revenue returned through operational efficiency — without adding headcount.`
+      : !model.revenueContext.known
         ? 'Annual revenue was not provided — financial gain percentages against a revenue base are unavailable.'
         : ''
 
@@ -806,9 +536,11 @@ export function assembleReport(state: ReportState): AssembleReportOutput {
       ? 'Insight-Driven Analysis'
       : 'Hypothesis-Driven Projection'
 
-  const companySnapshotTableBody = buildCompanySnapshotTableBody(state, sym)
+  const companySnapshotTableBody = buildCompanySnapshotTableBody(
+    model.companySnapshot,
+  )
 
-  const monthlyCostOfDelay = Math.round(tf12 / 12)
+  const monthlyCostOfDelay = model.costOfDelayMonthly
   const costOfDelayNarrative =
     copy.cost_of_delay?.narrative ??
     `Every month without automation costs your team the equivalent of ${sym}${addCommas(
@@ -835,18 +567,18 @@ export function assembleReport(state: ReportState): AssembleReportOutput {
     s.operationalDividend12mo,
     s.profitUplift12mo,
   )
-  const calculationPanelHTML =
-    merged.length > 0
-      ? buildCalculationPanelHTML(
-          sym,
-          merged,
-          globals,
-          totalMonthlyHours,
-          s.operationalDividend12mo,
-        )
-      : ''
-  const roadmapTableBody =
-    merged.length > 0 ? buildRoadmapTableBody(merged[0].name) : ''
+  const calculationPanelHTML = model.topWorkflow
+    ? buildCalculationPanelHTML(
+        sym,
+        merged,
+        model.workedExample,
+        totalMonthlyHours,
+        s.operationalDividend12mo,
+      )
+    : ''
+  const roadmapTableBody = model.topWorkflow
+    ? buildRoadmapTableBody(model.topWorkflow.name)
+    : ''
 
   // BLUF paragraph — use coreThesis from research agent when available
   const profileParts: string[] = []
@@ -957,11 +689,11 @@ export function assembleReport(state: ReportState): AssembleReportOutput {
     od12: cur(s.operationalDividend12mo),
     pu12: cur(s.profitUplift12mo),
     tf12: cur(tf12),
-    hrs24: fmt(Math.round(s.totalAnnualHours * 2.15)),
+    hrs24: fmt(s.totalAnnualHours24mo),
     od24: cur(s.operationalDividend24mo),
     pu24: cur(s.profitUplift24mo),
     tf24: cur(s.totalFinancialGain24mo),
-    hrs36: fmt(Math.round(s.totalAnnualHours * 3.4)),
+    hrs36: fmt(s.totalAnnualHours36mo),
     od36: cur(s.operationalDividend36mo),
     pu36: cur(s.profitUplift36mo),
     tf36: cur(s.totalFinancialGain36mo),

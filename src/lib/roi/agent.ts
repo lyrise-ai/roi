@@ -26,6 +26,11 @@ import { roiCalculator } from '@/src/lib/roi/pipeline/roiCalculator'
 import { assembleReport } from '@/src/lib/roi/pipeline/assembleReport'
 import { renderTemplate } from '@/src/lib/roi/pipeline/renderTemplate'
 import {
+  buildReportModel,
+  mergeWorkflows,
+} from '@/src/lib/roi/pipeline/reportModel'
+import { fmtCurrency, fmtNumber, currencySymbolFor } from '@/src/lib/roi/format'
+import {
   patchWorkflow,
   removeWorkflowByName,
   appendWorkflow,
@@ -135,12 +140,16 @@ export function recomputeReportState(
   state: ReportState,
   execTemplateHtml: string,
   fullTemplateHtml: string,
+  // See roiCalculator's applyRevenueGuardrail param — must stay false for
+  // every post-generation caller (chat tools, validate-finalize).
+  applyRevenueGuardrail = false,
 ): ReportState {
   if (!state.workflows || !state.globals || !state.company) return state
   state.calcOutput = roiCalculator(
     state.workflows,
     state.globals,
     state.company,
+    applyRevenueGuardrail,
   )
   if (!state.copy || !state.normInput) return state
   state.assembled = assembleReport(state)
@@ -155,14 +164,56 @@ function reAssemble(
   fullTemplateHtml: string,
   callbacks: AgentCallbacks,
   changedSections?: string[],
+  applyRevenueGuardrail = false,
 ) {
   if (!state.workflows || !state.globals || !state.company) return
   if (state.copy && state.normInput) {
     callbacks.onPipelineLog?.('Rendering financial tables and report layout…')
   }
-  recomputeReportState(state, execTemplateHtml, fullTemplateHtml)
+  recomputeReportState(
+    state,
+    execTemplateHtml,
+    fullTemplateHtml,
+    applyRevenueGuardrail,
+  )
   if (!state.copy || !state.normInput) return
   callbacks.onReportUpdate(state, changedSections)
+}
+
+// Ground truth for the model's own narration — every mutating chat tool
+// reports before/after/delta instead of a bare new number, so "did this
+// edit actually move the total, and by how much" is a fact the model reads
+// off the tool result rather than something it has to infer or remember
+// from a paragraph of system-prompt instructions (LYR-146).
+interface TotalsSnapshot {
+  od12: number
+  pu12: number
+  tf12: number
+  totalAnnualHours: number
+}
+
+function snapshotTotals(state: ReportState): TotalsSnapshot | null {
+  const s = state.calcOutput?.summary
+  if (!s) return null
+  return {
+    od12: s.operationalDividend12mo,
+    pu12: s.profitUplift12mo,
+    tf12: s.totalFinancialGain12mo,
+    totalAnnualHours: state.calcOutput?.totalAnnualHours ?? 0,
+  }
+}
+
+function diffTotals(
+  before: TotalsSnapshot | null,
+  after: TotalsSnapshot | null,
+) {
+  if (!before || !after) return null
+  return {
+    od12: after.od12 - before.od12,
+    pu12: after.pu12 - before.pu12,
+    tf12: after.tf12 - before.tf12,
+    totalAnnualHours: after.totalAnnualHours - before.totalAnnualHours,
+  }
 }
 
 function ensureEvidenceItems(state: ReportState) {
@@ -229,15 +280,158 @@ const SALARY_SEARCH_POOL = [
 const SALARY_SEARCH_RE =
   /salary|hourly rate|compensation|glassdoor|bayt\.com|gulftalent|payscale|naukrigulf|wuzzuf|comparably|talent\.com/i
 
+// Mirrors NAV_ITEMS' keys in src/components/ROIGenerator/Report/navItems.js
+// (kept as a plain literal rather than importing that client-tree module —
+// these 11 ids are stable UI section anchors, not business logic).
+const REPORT_SECTION_KEYS = [
+  'overview',
+  'snapshot',
+  'workflows',
+  'uplift',
+  'outlook',
+  'delay',
+  'resilience',
+  'sources',
+  'risks',
+  'roadmap',
+  'next',
+] as const
+type ReportSectionKey = (typeof REPORT_SECTION_KEYS)[number]
+
+// Formats the shared report model as plain text for a given visible section —
+// lets the chat agent ground itself in the ACTUAL current report content on
+// demand instead of only reasoning from the once-per-turn system-prompt
+// snapshot, which never described several of these sections at all.
+export function formatReportSection(
+  state: ReportState,
+  section: ReportSectionKey,
+): string {
+  const { company, globals, copy, calcOutput, confidenceLevel, coreThesis } =
+    state
+  if (!company || !globals || !copy || !calcOutput) {
+    return 'Report not fully generated yet.'
+  }
+  const model = buildReportModel(state)
+  const cur = (n: number) => fmtCurrency(n, globals.currency)
+  const s = calcOutput.summary
+
+  switch (section) {
+    case 'overview': {
+      const conf =
+        confidenceLevel === 'high'
+          ? 'Insight-Driven Analysis'
+          : 'Hypothesis-Driven Projection'
+      const revLine =
+        model.revenueContext.known && model.revenueContext.base > 0
+          ? `Total Financial Gain is ~${model.revenueContext.pct}% of estimated annual revenue.`
+          : 'Annual revenue was not provided.'
+      return [
+        `Company: ${company.company} (${company.industry}${company.country ? ', ' + company.country : ''})`,
+        coreThesis
+          ? `Core thesis: ${coreThesis}`
+          : copy.unified_pattern_thesis
+            ? `Pattern: ${copy.unified_pattern_thesis}`
+            : '',
+        `Confidence: ${conf}`,
+        `Totals (12mo): ${fmtNumber(s.totalAnnualHours)} hrs/yr | OD ${cur(s.operationalDividend12mo)} | PU ${cur(s.profitUplift12mo)} | TFG ${cur(s.totalFinancialGain12mo)}`,
+        revLine,
+        'Operational Dividend = direct labor value recaptured from freed hours. Profit Uplift = additional profit from redirecting that capacity into higher-value work.',
+      ]
+        .filter(Boolean)
+        .join('\n')
+    }
+    case 'snapshot':
+      return (
+        model.companySnapshot
+          .map((r) => `- ${r.text} [${r.label}]`)
+          .join('\n') || 'No snapshot rows.'
+      )
+    case 'workflows': {
+      const lines = model.workflows.map(
+        (w) =>
+          `- ${w.name}: ${fmtNumber(w.monthlyVolume)}/mo, ${w.minutesPerItemBefore}min → ${w.minutesPerItemAfter}min, rate ${cur(w.effectiveRate)}/hr, ${fmtNumber(w.monthlyHours)} hrs/mo freed, ${cur(w.monthlyValue)}/mo`,
+      )
+      const { workflow, adoptionFactor, monthlyValue } = model.workedExample
+      const worked = workflow
+        ? `\nWorked example (${workflow.name}): ${fmtNumber(workflow.monthlyVolume)} × ${(workflow.timeSaved / 60).toFixed(2)} hrs × ${cur(workflow.effectiveRate)}/hr × ${adoptionFactor.toFixed(2)} adoption ramp factor = ${cur(monthlyValue)}/mo`
+        : ''
+      return lines.join('\n') + worked
+    }
+    case 'uplift': {
+      const lines = model.levers.map(
+        (l) =>
+          `- ${l.lever_name} (from ${l.derived_from}): ${l.rationale}${
+            l.monthlyProfitUplift != null
+              ? ` → ${cur(l.monthlyProfitUplift)}/mo`
+              : ''
+          }`,
+      )
+      return `${lines.join('\n')}\nTotal Profit Uplift (12mo): ${cur(s.profitUplift12mo)}`
+    }
+    case 'outlook':
+      return [
+        `Year 1: OD ${cur(s.operationalDividend12mo)} | PU ${cur(s.profitUplift12mo)} | TFG ${cur(s.totalFinancialGain12mo)} | ${fmtNumber(s.totalAnnualHours)} hrs`,
+        `Year 2 (cumulative): OD ${cur(s.operationalDividend24mo)} | PU ${cur(s.profitUplift24mo)} | TFG ${cur(s.totalFinancialGain24mo)} | ${fmtNumber(s.totalAnnualHours24mo)} hrs`,
+        `Year 3 (cumulative): OD ${cur(s.operationalDividend36mo)} | PU ${cur(s.profitUplift36mo)} | TFG ${cur(s.totalFinancialGain36mo)} | ${fmtNumber(s.totalAnnualHours36mo)} hrs`,
+      ].join('\n')
+    case 'delay':
+      return `Monthly cost of delay: ${cur(model.costOfDelayMonthly)}\n${copy.cost_of_delay?.narrative ?? ''}`
+    case 'resilience':
+      return (
+        (copy.resilience_rows ?? [])
+          .map(
+            (r) =>
+              `- ${r.dimension}: act now = ${r.act_now}; defer = ${r.defer}`,
+          )
+          .join('\n') || 'No resilience rows.'
+      )
+    case 'sources':
+      return model.sources
+        .map(
+          (r) =>
+            `- ${r.input}: ${r.detail} [${r.sourceLabel}${r.sourceUrl ? ' ' + r.sourceUrl : ''}] — ${r.status}`,
+        )
+        .join('\n')
+    case 'risks':
+      return (
+        (copy.risks ?? [])
+          .map((r) => `- ${r.risk}: ${r.detail} (mitigation: ${r.mitigation})`)
+          .join('\n') || 'No risks listed.'
+      )
+    case 'roadmap': {
+      const pilot = model.topWorkflow?.name ?? 'the top workflow'
+      return [
+        copy.pilot_recommendation
+          ? `Recommended starting point: ${copy.pilot_recommendation}`
+          : '',
+        `Weeks 1-2: Rapid discovery & validation for ${pilot}.`,
+        `Weeks 3-6: Pilot build & testing.`,
+        `Weeks 7-8: Controlled go-live.`,
+        `Weeks 9-10: ROI validation & expansion.`,
+      ]
+        .filter(Boolean)
+        .join('\n')
+    }
+    case 'next':
+      return copy.cta_paragraph || 'No CTA copy set.'
+    default:
+      return `Unknown section "${section}".`
+  }
+}
+
 function buildTools(
   state: ReportState,
   execTemplateHtml: string,
   fullTemplateHtml: string,
   callbacks: AgentCallbacks,
   tracker?: UsageTracker,
+  mode: 'generate' | 'chat' = 'chat',
 ) {
   let companySearchCount = 0
   let salarySearchCount = 0
+  // Rule 6B (5–20% revenue guardrail) only ever applies during the initial
+  // generation run — never on post-generation chat edits. See roiCalculator.
+  const applyRevenueGuardrail = mode === 'generate'
 
   return {
     // ── Research tools ──────────────────────────────────────────────────────
@@ -379,6 +573,21 @@ function buildTools(
               : undefined,
         }
       },
+    }),
+
+    read_report_section: tool({
+      description:
+        "Read the CURRENT actual content of a visible report section — use this whenever the user references something you're not fully sure about (a number, a table, a section you don't have verbatim in front of you), instead of guessing. Covers every visible section, including ones not directly editable (outlook, sources, roadmap).",
+      inputSchema: z.object({
+        section: z
+          .enum(REPORT_SECTION_KEYS)
+          .describe(
+            'overview | snapshot | workflows | uplift | outlook | delay | resilience | sources | risks | roadmap | next',
+          ),
+      }),
+      execute: async ({ section }: { section: ReportSectionKey }) => ({
+        content: formatReportSection(state, section),
+      }),
     }),
 
     // ── Generation tools (sequenced during initial generation) ──────────────
@@ -676,22 +885,6 @@ function buildTools(
               }
             : null
 
-        // Currencies whose official symbols are non-Latin script — built once outside the loop
-        const SCRIPT_SYMBOL_CODES = new Set([
-          'SAR',
-          'AED',
-          'QAR',
-          'KWD',
-          'BHD',
-          'OMR',
-          'EGP',
-          'JOD',
-          'IQD',
-          'LBP',
-          'IRR',
-          'YER',
-        ])
-
         const modelerUserContent = JSON.stringify({
           company_profile: state.company,
           // Fix 3: include owner so modeler can differentiate by seniority
@@ -768,13 +961,6 @@ function buildTools(
 
           const modelerOut = result.object as ModelerResult
 
-          const rawCurrencySym = modelerOut.currency.symbol
-          // eslint-disable-next-line no-control-regex
-          const hasNonAscii = /[^\x00-\x7F]/.test(rawCurrencySym)
-          const cleanSym =
-            SCRIPT_SYMBOL_CODES.has(modelerOut.currency.code) || hasNonAscii
-              ? modelerOut.currency.code
-              : rawCurrencySym
           globals = {
             laborRate: modelerOut.labor.fullyLoadedHourlyCost,
             implementationCost: modelerOut.costs.implementationCost,
@@ -787,10 +973,7 @@ function buildTools(
             workWeeksPerYear: modelerOut.labor.workWeeksPerYear,
             currency: {
               ...modelerOut.currency,
-              symbol:
-                cleanSym.length > 1 && !cleanSym.endsWith(' ')
-                  ? cleanSym + ' '
-                  : cleanSym,
+              symbol: currencySymbolFor(modelerOut.currency),
             },
           }
 
@@ -866,6 +1049,7 @@ function buildTools(
             updatedWorkflows,
             globals,
             state.company!,
+            applyRevenueGuardrail,
           )
           const s = calcOut.summary
           const od = s.operationalDividend12mo
@@ -1004,13 +1188,14 @@ function buildTools(
         callbacks.onPipelineLog?.(
           'Writing profit levers and executive summary…',
         )
-        reAssemble(state, execTemplateHtml, fullTemplateHtml, callbacks, [
-          'thesis',
-          'workflows',
-          'profit_levers',
-          'cost_of_delay',
-          'cta',
-        ])
+        reAssemble(
+          state,
+          execTemplateHtml,
+          fullTemplateHtml,
+          callbacks,
+          ['thesis', 'workflows', 'profit_levers', 'cost_of_delay', 'cta'],
+          applyRevenueGuardrail,
+        )
         return { ok: true }
       },
     }),
@@ -1143,6 +1328,7 @@ function buildTools(
           fullTemplateHtml,
           callbacks,
           changedSections,
+          applyRevenueGuardrail,
         )
         return { ok: true, updated_sections: changedSections }
       },
@@ -1191,6 +1377,7 @@ function buildTools(
               .join(', ')}`,
           }
         }
+        const before = snapshotTotals(state)
         state.workflows = patchWorkflow(state.workflows, workflowName, {
           ...(patches.monthlyVolume !== undefined && {
             monthlyVolume: patches.monthlyVolume,
@@ -1208,15 +1395,36 @@ function buildTools(
             adoptionRate: patches.adoptionRate,
           }),
         })
-        reAssemble(state, execTemplateHtml, fullTemplateHtml, callbacks, [
-          'workflows',
-          'financials',
-        ])
-        const s = state.calcOutput?.summary
+        reAssemble(
+          state,
+          execTemplateHtml,
+          fullTemplateHtml,
+          callbacks,
+          ['workflows', 'financials'],
+          applyRevenueGuardrail,
+        )
+        const after = snapshotTotals(state)
+        // Rule 6A regional-rate-floor is the one guardrail still active on
+        // edits — surface it as a fact, not something the model has to
+        // infer, so it can honestly tell the user their requested rate got
+        // lifted instead of silently reporting success.
+        const wc = state.calcOutput?.workflows.find(
+          (w) => w.name.toLowerCase() === workflowName.toLowerCase(),
+        )
+        const rateFloorApplied =
+          patches.rateOverride != null &&
+          wc != null &&
+          wc.effectiveRate !== patches.rateOverride
         return {
           ok: true,
-          new_od12: s?.operationalDividend12mo,
-          new_tf12: s?.totalFinancialGain12mo,
+          before,
+          after,
+          delta: diffTotals(before, after),
+          ...(rateFloorApplied && {
+            rate_floor_applied: true,
+            requested_rate: patches.rateOverride,
+            floored_rate: wc!.effectiveRate,
+          }),
         }
       },
     }),
@@ -1292,12 +1500,24 @@ function buildTools(
           rationale:
             'Added via chat — defaults applied. Use update_workflow to refine.',
         }
+        const before = snapshotTotals(state)
         state.workflows = appendWorkflow(state.workflows, newWorkflow)
-        reAssemble(state, execTemplateHtml, fullTemplateHtml, callbacks, [
-          'workflows',
-          'financials',
-        ])
-        return { ok: true, workflow_count: state.workflows.length }
+        reAssemble(
+          state,
+          execTemplateHtml,
+          fullTemplateHtml,
+          callbacks,
+          ['workflows', 'financials'],
+          applyRevenueGuardrail,
+        )
+        const after = snapshotTotals(state)
+        return {
+          ok: true,
+          workflow_count: state.workflows.length,
+          before,
+          after,
+          delta: diffTotals(before, after),
+        }
       },
     }),
 
@@ -1307,12 +1527,24 @@ function buildTools(
       inputSchema: z.object({ workflowName: z.string() }),
       execute: async ({ workflowName }: { workflowName: string }) => {
         if (!state.workflows) return { error: 'No workflows' }
+        const before = snapshotTotals(state)
         state.workflows = removeWorkflowByName(state.workflows, workflowName)
-        reAssemble(state, execTemplateHtml, fullTemplateHtml, callbacks, [
-          'workflows',
-          'financials',
-        ])
-        return { ok: true, workflow_count: state.workflows.length }
+        reAssemble(
+          state,
+          execTemplateHtml,
+          fullTemplateHtml,
+          callbacks,
+          ['workflows', 'financials'],
+          applyRevenueGuardrail,
+        )
+        const after = snapshotTotals(state)
+        return {
+          ok: true,
+          workflow_count: state.workflows.length,
+          before,
+          after,
+          delta: diffTotals(before, after),
+        }
       },
     }),
 
@@ -1328,6 +1560,7 @@ function buildTools(
       }),
       execute: async ({ multiplier }: { multiplier: number }) => {
         if (!state.globals) return { error: 'No globals to scale' }
+        const before = snapshotTotals(state)
         state.globals = {
           ...state.globals,
           laborRate: Math.round(state.globals.laborRate * multiplier),
@@ -1347,7 +1580,8 @@ function buildTools(
                 : null,
           }))
         }
-        // Scale revenue so the roiCalculator revenue guardrail stays proportional
+        // Keep the revenue estimate in the same currency/units as everything
+        // else that was just scaled, so it still displays correctly.
         if (
           state.company?.revenueEstimateM != null &&
           state.company.revenueEstimateM > 0
@@ -1357,10 +1591,22 @@ function buildTools(
             revenueEstimateM: state.company.revenueEstimateM * multiplier,
           }
         }
-        reAssemble(state, execTemplateHtml, fullTemplateHtml, callbacks, [
-          'financials',
-        ])
-        return { ok: true, multiplier }
+        reAssemble(
+          state,
+          execTemplateHtml,
+          fullTemplateHtml,
+          callbacks,
+          ['financials'],
+          applyRevenueGuardrail,
+        )
+        const after = snapshotTotals(state)
+        return {
+          ok: true,
+          multiplier,
+          before,
+          after,
+          delta: diffTotals(before, after),
+        }
       },
     }),
 
@@ -1406,9 +1652,14 @@ function buildTools(
         if (state.globals) state.globals = { ...state.globals, currency }
         if (state.normInput)
           state.normInput = { ...state.normInput, selectedCurrency: code }
-        reAssemble(state, execTemplateHtml, fullTemplateHtml, callbacks, [
-          'financials',
-        ])
+        reAssemble(
+          state,
+          execTemplateHtml,
+          fullTemplateHtml,
+          callbacks,
+          ['financials'],
+          applyRevenueGuardrail,
+        )
         return { ok: true, currency }
       },
     }),
@@ -1453,6 +1704,7 @@ function buildTools(
         realizationFactor?: number
       }) => {
         if (!state.globals) return { error: 'No globals to update' }
+        const before = snapshotTotals(state)
         const everyWorkflowHasOverride =
           Boolean(state.workflows?.length) &&
           state.workflows!.every((w) => w.rateOverride != null)
@@ -1492,8 +1744,9 @@ function buildTools(
           shouldSyncWorkflowRates
             ? ['workflows', 'financials']
             : ['financials'],
+          applyRevenueGuardrail,
         )
-        const s = state.calcOutput?.summary
+        const after = snapshotTotals(state)
         return {
           ok: true,
           labor_rate_scope: shouldSyncWorkflowRates
@@ -1502,8 +1755,9 @@ function buildTools(
           updated_workflow_rates: shouldSyncWorkflowRates
             ? (state.workflows?.length ?? 0)
             : 0,
-          new_od12: s?.operationalDividend12mo,
-          new_tf12: s?.totalFinancialGain12mo,
+          before,
+          after,
+          delta: diffTotals(before, after),
         }
       },
     }),
@@ -1631,24 +1885,20 @@ WORKFLOWS REQUIREMENT (critical):
 • Infer realistic volumes from team size and industry — do NOT submit 0 or omit these fields`
 }
 
-function buildChatSystemPrompt(state: ReportState): string {
+export function buildChatSystemPrompt(state: ReportState): string {
   const calc = state.calcOutput!
   const copy = state.copy!
   const company = state.company!
   const globals = state.globals!
-  // Fall back to ISO code if symbol contains non-ASCII characters (e.g. Arabic script)
-  // eslint-disable-next-line no-control-regex
-  const sym = /[^\x00-\x7F]/.test(globals.currency.symbol)
-    ? globals.currency.code + ' '
-    : globals.currency.symbol
+  const sym = currencySymbolFor(globals.currency)
   const s = calc.summary
 
-  // Merge WorkflowInput (raw) with WorkflowCalc (derived) by name
-  const merged = calc.workflows.map((wc) => {
-    const inp =
-      state.workflows!.find((w) => w.name === wc.name) ?? state.workflows![0]
-    return { ...inp, ...wc }
-  })
+  // Same canonical join+sort as the PDF/web/wizard (reportModel.ts) — this
+  // used to be its own unsorted copy, so "the top workflow" (used below for
+  // COMPOSITION EXAMPLES and lever positional fallback) could silently mean
+  // a different workflow to the chat agent than what's actually shown on
+  // the page.
+  const merged = mergeWorkflows(state.workflows!, calc.workflows)
 
   const workflowSection = merged
     .map((w) => {
@@ -1787,13 +2037,11 @@ Edit with update_globals. NOTE: globals.laborRate is a FALLBACK only — every w
     globals.realizationFactor
   } (fraction of theoretical hours actually recovered)
 
-═══ AUTOMATIC GUARDRAILS (silent — calculator does these on every edit) ═══
-1) REGIONAL RATE FLOOR — country=${
+═══ AUTOMATIC GUARDRAILS (silent — calculator does this on every edit) ═══
+REGIONAL RATE FLOOR — country=${
     company.country ?? 'unknown'
   }. Each workflow's rate is silently lifted to the regional minimum for its seniority tier (e.g. mid-tier Egypt floor ≈ ${sym}32/hr USD). Setting rateOverride below the floor has no effect — the calculator clamps it. Tell the user this if their requested rate is below the floor.
-2) REVENUE BAND — Total Financial Gain is constrained to 5–20% of estimated annual revenue (${
-    company.revenueEstimateM ? sym + company.revenueEstimateM + 'M' : 'unknown'
-  }). If a rate or volume edit pushes TFG outside the band, ALL workflows are scaled proportionally so the totals reconcile but per-workflow numbers may shift slightly even for workflows you didn't touch. Mention this when relevant.
+Note: the 5–20%-of-revenue band (Rule 6B) is a generation-time sanity check only — it never re-applies to your edits. Every edit you make changes the displayed totals directly; there is no hidden re-clamping to explain or mention.
 
 ═══ SECTION MAP — what the user sees → what to edit ═════
 The rendered report has these visible section headings. Use this to translate user requests:
@@ -1857,6 +2105,7 @@ NUMBERS   update_workflow(name, patches)   — set volume, timeBefore, timeAfter
 CURRENCY  set_currency(code)              — change display symbol/code only; pair with scale_rates when converting values
 COPY      update_copy(patches)            — update any combination of copy sections in one call
 STRUCTURE add_workflow | remove_workflow
+READ      read_report_section(section) — read the CURRENT actual content of any visible section (overview, snapshot, workflows, uplift, outlook, delay, resilience, sources, risks, roadmap, next), including ones not covered above (outlook, sources, roadmap). Call this whenever the user references a number or section you're not certain of, instead of guessing.
 RESEARCH  search_evidence(query)        — look up sources for any figure already found during generation
           web_search | fetch_page       — search/scrape new data not in evidence
   When asked about sources: call search_evidence first. Only call web_search if evidence returns no match.
@@ -1892,12 +2141,14 @@ DO NOT DO:
 
 STRICT RULES:
 - NEVER describe a change without calling the tool that makes it.
+- After ANY tool that returns before/after/delta, your reply MUST state what actually moved using those exact numbers — e.g. "OD moved from $A to $B (+$C)." NEVER just say "done" or "updated!" without citing the real delta. If delta.tf12 (or od12/pu12) is 0 or near-zero despite your edit, say so plainly — do not describe the edit as if it worked when the numbers didn't move.
+- If a tool result includes rate_floor_applied: true, tell the user their requested rate (requested_rate) was lifted to floored_rate by the regional floor — don't silently report the requested number as if it were applied.
 - NEVER do arithmetic on report values — use scale_rates for relative scaling.
 - set_currency only changes the symbol; always also call scale_rates if values need converting.
 - If every workflow above shows a rate override, changing only global laborRate will not change the displayed workflow rates. Use applyToWorkflowOverrides: true for whole-report rate edits.
 - NEVER call add_workflow for a workflow already listed above — the tool will reject it.
-- set_report_copy: only call if the user explicitly asks to regenerate the full report copy.
-- For a single-section edit, use a targeted update_* tool — never set_report_copy.
+- set_report_copy is NOT available in chat — it's a one-time generation step, not a tool you have access to here. Always use the targeted update_copy for copy edits, one or more sections per call.
+- run_financial_model and set_research_output are also generation-only and NOT available in chat. Never tell the user you're "re-running the model" or "re-evaluating from scratch" — you don't have that option here. To fix a wrong number, find the specific input that's off (rate, volume, hours, adoption) and correct that field directly with update_workflow/update_globals/scale_rates.
 - profit_levers.rationale_with_arithmetic is regenerated by the pipeline on every recalculation. Never patch it via update_copy — it gets overwritten. To change a lever's arithmetic, edit the underlying workflow's rate or hours.
 - If a user requests a rate below the regional floor, make the edit but warn them the calculator will auto-lift it back to the floor.
 - If asked about a section that no longer exists (Before/After AI table, global rate, Function Roll-Up), translate to the correct current name using the SECTION MAP above before acting.
@@ -1950,13 +2201,30 @@ export async function runReportAgent(params: {
     )
   }
   const tracker = new UsageTracker({ company, mode })
-  const tools = buildTools(
+  const allTools = buildTools(
     state,
     templateHtml,
     fullTemplateHtml,
     callbacks,
     tracker,
+    mode,
   )
+  // These three are one-time generation lock-in steps (set_research_output →
+  // run_financial_model → set_report_copy). They're never mentioned in the
+  // chat system prompt, but buildTools registers all 13 tools unconditionally,
+  // so nothing stopped the model from calling run_financial_model mid-chat —
+  // which reruns the modeler LLM from scratch and silently overwrites every
+  // workflow's volume/time/rate with fresh AI-invented numbers, discarding
+  // every edit made so far in the conversation. Excluding them from the tool
+  // set actually sent to the model (not just the prompt text) makes this
+  // impossible rather than merely discouraged.
+  const {
+    set_research_output: _setResearchOutput,
+    run_financial_model: _runFinancialModel,
+    set_report_copy: _setReportCopy,
+    ...chatTools
+  } = allTools
+  const tools = mode === 'generate' ? allTools : chatTools
 
   let system: string
   let messages: ModelMessage[]
@@ -2014,6 +2282,16 @@ ${
     tools,
     stopWhen: stepCountIs(mode === 'generate' ? 24 : 8),
     abortSignal,
+    // Chat mode: `system` above is a one-time snapshot of `state` taken
+    // before this call starts. If the model chains multiple tool calls in
+    // one turn (e.g. edit a workflow, then rewrite a copy section to match),
+    // later steps would otherwise keep reasoning from that stale snapshot
+    // even though every tool mutates the live `state` correctly. Rebuild it
+    // fresh before each step so the model always sees current numbers.
+    ...(mode === 'chat' && {
+      prepareStep: async ({ stepNumber }) =>
+        stepNumber === 0 ? {} : { system: buildChatSystemPrompt(state) },
+    }),
   })
 
   try {
@@ -2025,6 +2303,15 @@ ${
           part.toolName,
           part.input as Record<string, unknown>,
         )
+      } else if (part.type === 'tool-result') {
+        callbacks.onToolResult?.(part.toolName, part.output)
+      } else if (part.type === 'tool-error') {
+        callbacks.onToolResult?.(part.toolName, {
+          error:
+            part.error instanceof Error
+              ? part.error.message
+              : String(part.error),
+        })
       } else if (part.type === 'error') {
         // An abort surfaces here as an error part — treat it as a clean stop,
         // not a generation failure, so the caller doesn't persist/email it.
