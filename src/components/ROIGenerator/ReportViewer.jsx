@@ -488,22 +488,27 @@ export default function ReportViewer({
       try {
         const token = localStorage.getItem('alpha_token')
         if (!token) return
-        const { createClient } = await import('@/src/lib/supabase-browser')
-        await createClient()
-          .from('alpha_feedback')
-          .upsert(
-            {
-              alpha_token: token,
-              step_credibility_choice: choice,
-              step_credibility_comment: comment ?? null,
-            },
-            { onConflict: 'alpha_token' },
+        const res = await fetch('/api/alpha/progress', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({
+            session_token: token,
+            report_id: reportId,
+            step_credibility_choice: choice,
+            step_credibility_comment: comment ?? null,
+          }),
+        })
+        if (!res.ok) {
+          console.error(
+            '[alpha] credibility pulse tracking failed:',
+            res.status,
           )
+        }
       } catch (err) {
         console.error('[alpha] credibility pulse tracking failed:', err)
       }
     },
-    [isAlpha],
+    [isAlpha, reportId],
   )
 
   const handleKeyDown = useCallback(

@@ -143,17 +143,26 @@ export default function ReportPage({
     try {
       const token = localStorage.getItem('alpha_token')
       if (!token) return
-      import('../../src/lib/supabase-browser').then(({ createClient }) => {
-        createClient()
-          .from('alpha_feedback')
-          .upsert(
-            { alpha_token: token, step_generation_completed: true },
-            { onConflict: 'alpha_token' },
-          )
-          .then(({ error }) => {
-            if (error) console.error('[alpha] generation page tracking:', error)
-          })
+      fetch('/api/alpha/progress', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          session_token: token,
+          report_id: reportId,
+          reached_report: true,
+        }),
       })
+        .then((res) => {
+          if (!res.ok) {
+            console.error(
+              '[alpha] generation page tracking failed:',
+              res.status,
+            )
+          }
+        })
+        .catch((err) => {
+          console.error('[alpha] generation page tracking failed:', err)
+        })
     } catch (err) {
       console.error('[alpha] generation page tracking failed:', err)
     }
