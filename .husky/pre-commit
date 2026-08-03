@@ -1,1 +1,5 @@
+# ESLint 9 defaults to flat config; this repo still uses .eslintrc.js.
+# lint-staged runs commands without a shell, so the flag has to be set here.
+export ESLINT_USE_FLAT_CONFIG=false
+
 npx lint-staged

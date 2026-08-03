@@ -3,7 +3,6 @@ import { roiCalculator } from '@/src/lib/roi/pipeline/roiCalculator'
 
 // Steps: 0 overview, 1 confirm workflows, 2 volume, 3 duration, 4 context,
 // 5 feedback, 6 complete.
-export const TOTAL_WIZARD_STEPS = 6
 
 function emptyDecision() {
   return {
