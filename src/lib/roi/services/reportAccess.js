@@ -1,12 +1,18 @@
 import { sendReportAccessAlert } from '@/src/lib/roi/services/email'
 
+// Prefer the request's own host over NEXT_PUBLIC_BASE_URL: the header always
+// matches whatever domain actually served this request (production, a Vercel
+// preview deploy, or localhost), whereas the env var is one fixed value per
+// environment and easy to leave stale (e.g. copied from .env.local).
 function buildBaseUrl(req) {
-  const explicit = process.env.NEXT_PUBLIC_BASE_URL
-  const host = req?.headers?.host
-  const proto =
-    req?.headers?.['x-forwarded-proto'] ||
-    (host && host.startsWith('localhost') ? 'http' : 'https')
-  return explicit ?? (host ? `${proto}://${host}` : 'https://lyrise.ai')
+  const host = req?.headers?.['x-forwarded-host'] || req?.headers?.host
+  if (host) {
+    const proto =
+      req?.headers?.['x-forwarded-proto'] ||
+      (host.startsWith('localhost') ? 'http' : 'https')
+    return `${proto}://${host}`
+  }
+  return process.env.NEXT_PUBLIC_BASE_URL ?? 'https://lyrise.ai'
 }
 
 function buildReportUrl({ req, reportId, token, isAlpha }) {
@@ -55,6 +61,8 @@ export async function trackReportAccess({
     console.error('[report-access] event count failed:', countError)
   }
 
+  const visitNumber = (count ?? 0) + 1
+
   const tasks = [
     admin.from('events').insert({
       user_id: viewerUserId,
@@ -63,7 +71,9 @@ export async function trackReportAccess({
     }),
   ]
 
-  const shouldNotifyOps = !isEmployee && (count ?? 0) === 0
+  // Notify ops on every external/tester access, not just the first — only
+  // logged-in employees viewing a report are excluded.
+  const shouldNotifyOps = !isEmployee
   if (shouldNotifyOps) {
     tasks.push(
       sendReportAccessAlert({
@@ -74,6 +84,7 @@ export async function trackReportAccess({
         reportId,
         reportUrl: buildReportUrl({ req, reportId, token, isAlpha }),
         accessType,
+        visitNumber,
       }),
     )
   }

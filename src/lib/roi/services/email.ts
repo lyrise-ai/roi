@@ -116,6 +116,7 @@ type ReportAccessAlertArgs = {
   reportId: string
   reportUrl: string
   accessType: string
+  visitNumber?: number
 }
 
 export async function sendReportAccessAlert({
@@ -126,6 +127,7 @@ export async function sendReportAccessAlert({
   reportId,
   reportUrl,
   accessType,
+  visitNumber,
 }: ReportAccessAlertArgs): Promise<void> {
   const recipients = getOpsAlertRecipients()
   if (recipients.length === 0) return
@@ -134,6 +136,10 @@ export async function sendReportAccessAlert({
   const safeOwnerEmail = ownerEmail?.trim() || 'Unknown'
   const safeViewerEmail = viewerEmail?.trim() || 'Anonymous visitor'
   const safeViewerUserId = viewerUserId?.trim() || 'N/A'
+  const visitLabel =
+    !visitNumber || visitNumber <= 1
+      ? '1st visit'
+      : `Return visit #${visitNumber}`
 
   await sendResendEmail({
     to: recipients,
@@ -143,6 +149,7 @@ export async function sendReportAccessAlert({
       <ul>
         <li><strong>Company:</strong> ${escapeHtmlAttr(safeCompany)}</li>
         <li><strong>Access type:</strong> ${escapeHtmlAttr(accessType)}</li>
+        <li><strong>Visit:</strong> ${escapeHtmlAttr(visitLabel)}</li>
         <li><strong>Report ID:</strong> ${escapeHtmlAttr(reportId)}</li>
         <li><strong>Report owner email:</strong> ${escapeHtmlAttr(safeOwnerEmail)}</li>
         <li><strong>Viewer email:</strong> ${escapeHtmlAttr(safeViewerEmail)}</li>
