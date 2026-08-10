@@ -1,113 +1,64 @@
 // POST /api/linear/triage
-// Creates a Linear issue in the team's Triage state.
-// Used by in-app feedback prompts (not the Sentry widget — that goes through
-// the native Sentry → Linear integration configured in the Sentry dashboard).
+// Creates a Linear issue in the team's Triage state from in-app feedback.
 //
-// Required env vars:
-//   LINEAR_API_KEY            — Linear personal or workspace API key
-//   LINEAR_TEAM_ID            — ID of the team that owns the Triage workflow
-//   LINEAR_TRIAGE_STATE_ID    — ID of the Triage workflow state on that team
-//   LINEAR_FEEDBACK_LABEL_ID  — ID of the "Feedback" label to apply automatically
+// Errors do NOT come through here — PostHog's built-in Linear destination talks
+// to Linear directly, no code in this repo. This route is feedback only.
+//
+// NOTE: this route currently has no callers in the app. It is kept because the
+// feedback-prompt UI that used it is expected back, but it is now behind the
+// same shared secret as the PostHog webhook — it creates issues in our Linear
+// workspace, and it was previously reachable by anyone who knew the URL.
+// If the feedback prompt returns as browser-side code, swap this check for the
+// Supabase session check used in pages/api/analytics/*, since a browser cannot
+// hold a shared secret.
 
-const LINEAR_API = 'https://api.linear.app/graphql'
+import { createLinearIssue } from '@/src/lib/linear'
 
-const CREATE_ISSUE = `
-  mutation IssueCreate($input: IssueCreateInput!) {
-    issueCreate(input: $input) {
-      success
-      issue {
-        id
-        identifier
-        url
-      }
-    }
+function timingSafeEqual(a, b) {
+  if (typeof a !== 'string' || typeof b !== 'string' || a.length !== b.length) {
+    return false
   }
-`
-
-export default async function handler(req, res) {
-  if (req.method !== 'POST') {
-    return res.status(405).end()
-  }
-
-  const apiKey = process.env.LINEAR_API_KEY
-  const teamId = process.env.LINEAR_TEAM_ID
-  const triageStateId = process.env.LINEAR_TRIAGE_STATE_ID
-  const feedbackLabelId = process.env.LINEAR_FEEDBACK_LABEL_ID
-
-  if (!apiKey || !teamId) {
-    console.warn(
-      '[linear/triage] LINEAR_API_KEY or LINEAR_TEAM_ID not set, skipping',
-    )
-    return res.status(200).json({ ok: true, skipped: true })
-  }
-
-  const { title, description, source, priority = 3 } = req.body ?? {}
-
-  if (!title) {
-    return res.status(400).json({ error: 'title is required' })
-  }
-
-  // Linear priority: 0 = none, 1 = urgent, 2 = high, 3 = medium, 4 = low
-  const clampedPriority = Math.min(4, Math.max(0, Number(priority) || 3))
-
-  const input = {
-    teamId,
-    title,
-    description: buildDescription(description, source),
-    priority: clampedPriority,
-    ...(triageStateId ? { stateId: triageStateId } : {}),
-    ...(feedbackLabelId ? { labelIds: [feedbackLabelId] } : {}),
-  }
-
-  try {
-    const response = await fetch(LINEAR_API, {
-      method: 'POST',
-      headers: {
-        'Content-Type': 'application/json',
-        Authorization: apiKey,
-      },
-      body: JSON.stringify({ query: CREATE_ISSUE, variables: { input } }),
-    })
-
-    const json = await response.json()
-
-    if (!response.ok || json.errors) {
-      console.error(
-        '[linear/triage] API error:',
-        json.errors ?? response.status,
-      )
-      return res.status(500).json({ error: 'Failed to create Linear issue' })
-    }
-
-    const issue = json.data?.issueCreate?.issue
-    return res.status(200).json({
-      ok: true,
-      issueId: issue?.id,
-      issueUrl: issue?.url,
-      identifier: issue?.identifier,
-    })
-  } catch (err) {
-    console.error('[linear/triage] request failed:', err)
-    return res.status(500).json({ error: 'Failed to create Linear issue' })
-  }
+  let diff = 0
+  for (let i = 0; i < a.length; i++) diff |= a.charCodeAt(i) ^ b.charCodeAt(i)
+  return diff === 0
 }
 
 function buildDescription(description, source) {
   const lines = []
-
-  if (source) {
-    lines.push(`**Source:** ${source}`, '')
-  }
-
-  if (description) {
-    lines.push(description)
-  }
-
+  if (source) lines.push(`**Source:** ${source}`, '')
+  if (description) lines.push(description)
   lines.push(
     '',
     '---',
     '*Routed automatically from user feedback. Approve to move into backlog.*',
   )
-
   return lines.join('\n')
+}
+
+export default async function handler(req, res) {
+  if (req.method !== 'POST') return res.status(405).end()
+
+  const secret = process.env.POSTHOG_WEBHOOK_SECRET
+  if (!secret) {
+    console.error('[linear/triage] POSTHOG_WEBHOOK_SECRET not set')
+    return res.status(503).json({ error: 'Endpoint not configured' })
+  }
+
+  const provided = (req.headers.authorization ?? '').replace(/^Bearer /i, '')
+  if (!timingSafeEqual(provided, secret)) {
+    return res.status(401).json({ error: 'Unauthorized' })
+  }
+
+  const { title, description, source, priority = 3 } = req.body ?? {}
+  if (!title) return res.status(400).json({ error: 'title is required' })
+
+  const result = await createLinearIssue({
+    title,
+    description: buildDescription(description, source),
+    priority,
+    labelIds: [process.env.LINEAR_FEEDBACK_LABEL_ID].filter(Boolean),
+  })
+
+  if (!result.ok) return res.status(500).json({ error: result.error })
+  return res.status(200).json(result)
 }

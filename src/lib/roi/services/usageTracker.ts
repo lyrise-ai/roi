@@ -12,6 +12,9 @@
 import fs from 'fs'
 import path from 'path'
 
+import { EVENTS } from '@/src/lib/analytics'
+import { captureServer } from '@/src/lib/posthog-server'
+
 // ── Pricing (per 1M tokens, USD) ────────────────────────────────────────────
 const MODEL_PRICING: Record<string, { input: number; output: number }> = {
   'gpt-4o': { input: 2.5, output: 10.0 },
@@ -153,6 +156,29 @@ export class UsageTracker {
     } catch (err) {
       console.warn('[roi-usage] Could not write log file:', err)
     }
+
+    // Same summary to PostHog. The NDJSON file above is per-lambda and dies
+    // with it; this is the copy you can actually query ("what did last week's
+    // reports cost", "which model is burning the budget").
+    captureServer(EVENTS.LLM_USAGE, {
+      company: summary.company,
+      mode: summary.mode,
+      duration_ms: summary.durationMs,
+      cost_usd: Number(totals.costUsd.toFixed(6)),
+      total_tokens: totals.totalTokens,
+      input_tokens: totals.inputTokens,
+      output_tokens: totals.outputTokens,
+      call_count: this.entries.length,
+      models: [...new Set(this.entries.map((e) => e.model))],
+      // Per-call breakdown, so a run that went wrong shows *where* the tokens
+      // went rather than just a total.
+      calls: this.entries.map((e) => ({
+        call: e.call,
+        model: e.model,
+        tokens: e.totalTokens,
+        cost_usd: Number(e.costUsd.toFixed(6)),
+      })),
+    })
 
     return summary
   }

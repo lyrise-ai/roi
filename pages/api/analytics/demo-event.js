@@ -7,6 +7,7 @@ import {
   createClient,
   createAdminClient,
 } from '../../../src/lib/supabase-server'
+import { captureServer, flushPostHog } from '@/src/lib/posthog-server'
 
 const VALID_TYPES = new Set([
   'demo_tour_started',
@@ -87,6 +88,12 @@ export default async function handler(req, res) {
     console.error('[demo-event] insert failed:', error.message)
     return res.status(500).json({ error: 'Failed to record event' })
   }
+
+  // Mirror to PostHog. The Supabase row above stays authoritative — it backs
+  // the alpha dashboard and the usage pages — this is the copy you can slice
+  // into a funnel without writing SQL.
+  captureServer(event_type, meta, userId)
+  await flushPostHog()
 
   return res.status(204).end()
 }

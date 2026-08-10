@@ -2,6 +2,7 @@
 import * as Sentry from '@sentry/nextjs'
 import { APICallError } from 'ai'
 import { notifyDevTeam } from '@/src/lib/notifyError'
+import { captureServerException, flushPostHog } from '@/src/lib/posthog-server'
 
 // OpenAI returns 429 + code "insufficient_quota" when credits run out.
 // "rate_limit_exceeded" is a different 429 — transient, not a billing crisis.
@@ -51,6 +52,16 @@ export async function alertOpenAIQuotaError(
   } catch (sentryErr) {
     console.error('[openai-quota-alert] Sentry capture failed:', sentryErr)
   }
+
+  // PostHog too: this is the failure that stops every report at once, so it
+  // needs to be in the issue list that raises the Linear ticket, not only in
+  // Sentry. captureServerException never throws.
+  captureServerException(err, {
+    kind: 'openai_quota_exhausted',
+    company: context?.company ?? null,
+    mode: context?.mode ?? null,
+  })
+  await flushPostHog()
 
   // Immediate email: fire without waiting on Sentry flush. A failed alert
   // must never propagate — the goal is best-effort, not blocking the caller.
