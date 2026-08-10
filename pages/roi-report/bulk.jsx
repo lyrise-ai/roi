@@ -26,7 +26,7 @@ export async function getServerSideProps({ req, res, resolvedUrl }) {
 
 export default function BulkUploadPage() {
   return (
-    <div className="rebranding-landing-page min-h-screen -mt-[12px]">
+    <div className="min-h-screen -mt-[12px]">
       <Head>
         <title>Bulk Upload | LyRise</title>
       </Head>

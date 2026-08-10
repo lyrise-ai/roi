@@ -1,8 +1,7 @@
-import Image from 'next/legacy/image'
+import Image from 'next/image'
 import Link from 'next/link'
-import Logo from '../../assets/rebranding/logo_black.svg'
 import { useRouter } from 'next/router'
-import styles from './styles.module.css'
+import Logo from '../../assets/logo.svg'
 import { useAuthSession } from '../../context/AuthSessionContext'
 
 export default function MainHeader() {
@@ -26,16 +25,14 @@ export default function MainHeader() {
 
   return (
     <header className="px-2 py-4 mt-3 mb-10 sm:px-10 lg:mb-0">
-      <div
-        className={`px-[1rem] sm:px[2.5rem] flex items-center justify-between gap-4 py-3 ${styles.navbar}`}
-      >
+      <div className="flex items-center justify-between gap-4 rounded-glass bg-glass px-4 py-3 shadow-glass sm:px-10">
         <Link href="/" title="LyRise" className="h-[36px]">
           <Image
             src={Logo}
             alt="LyRise AI"
             width={120}
             height={40}
-            objectFit="contain"
+            style={{ objectFit: 'contain' }}
           />
         </Link>
         <div className="items-center hidden gap-4 lg:flex">

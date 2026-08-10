@@ -1,20 +1,17 @@
 import { useState, useEffect, useCallback } from 'react'
-import Head from 'next/head'
 
 // ── Design tokens ────────────────────────────────────────────────────────
 // Layout/card language and the status palette (green/amber/red/gray) follow
 // the imported Claude Design mockup ("LyRise Readiness Dashboard") as-is.
-// PURPLE below is the one deliberate departure from that mockup: the design
-// used #5b5bd6, but this app's actual brand purple is #5B48F8 (see e.g.
-// src/components/ROIGenerator/Report/sections/RoadmapSection.jsx) — the tint
-// colors alongside it are the same companions already used there, reused
-// here rather than inventing new ones.
-const SANS = "'IBM Plex Sans', system-ui, -apple-system, sans-serif"
-const MONO = "'IBM Plex Mono', ui-monospace, SFMono-Regular, monospace"
+// Type and purple come from styles/tokens instead: this panel used to pull
+// IBM Plex off Google Fonts (a third typeface, loaded per-page) and hardcode
+// the pre-rebrand purple #5B48F8.
+const SANS = 'var(--font-sans)'
+const MONO = 'var(--font-mono)'
 
-const PURPLE = '#5B48F8'
-const PURPLE_TINT = '#F5F3FF'
-const PURPLE_TINT_STRONG = '#EDE9FE'
+const PURPLE = 'var(--lyrise-purple)'
+const PURPLE_TINT = 'var(--purple-50)'
+const PURPLE_TINT_STRONG = 'var(--purple-100)'
 
 const GREEN = '#18936a'
 const GREEN_TEXT = '#137a52'
@@ -498,25 +495,9 @@ export default function AlphaDashboardPanel() {
     fetchData()
   }, [fetchData])
 
-  const FontLinks = (
-    <Head>
-      <link rel="preconnect" href="https://fonts.googleapis.com" />
-      <link
-        rel="preconnect"
-        href="https://fonts.gstatic.com"
-        crossOrigin="anonymous"
-      />
-      <link
-        href="https://fonts.googleapis.com/css2?family=IBM+Plex+Mono:wght@400;500;600&family=IBM+Plex+Sans:wght@400;500;600;700&display=swap"
-        rel="stylesheet"
-      />
-    </Head>
-  )
-
   if (data === null && !error) {
     return (
       <div style={{ fontFamily: SANS }}>
-        {FontLinks}
         <div className="flex items-center justify-center py-24">
           <p className="animate-pulse text-sm" style={{ color: GRAY_TEXT }}>
             Loading dashboard…
@@ -529,7 +510,6 @@ export default function AlphaDashboardPanel() {
   if (error) {
     return (
       <div style={{ fontFamily: SANS }}>
-        {FontLinks}
         <div className="flex flex-col items-center justify-center gap-4 py-24">
           <p className="text-sm" style={{ color: BODY_TEXT }}>
             {error}
@@ -688,8 +668,6 @@ export default function AlphaDashboardPanel() {
         fontFamily: SANS,
       }}
     >
-      {FontLinks}
-
       {/* Control bar — no "Real data / Demo" toggle: that's a prototype
           affordance backed by hand-written mock data, and a real dashboard
           must never have a fake-data mode. */}

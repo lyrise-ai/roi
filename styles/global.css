@@ -64,18 +64,6 @@ li {
   display: none;
 }
 
-/* Pre-design-system page backgrounds. Both override tokens/base.css's
-   `body { background: var(--surface-page) }`, so --surface-page is currently
-   inert; swap these two values for var(--surface-page) to hand the app
-   background to the token layer. */
-/* #__next {
-  background-color: var(--surface-page);
-}
-
-.rebranding-landing-page {
-  background-color: var(--surface-page)
-} */
-
 /* Sentry's feedback widget defaults to the bottom-right corner, which sits
    on top of the ROI report's chat panel (send button/input live there too).
    --actor-inset/--inset are the CSS custom properties Sentry's widget reads
