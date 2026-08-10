@@ -81,14 +81,19 @@ before changing the code they sit above.
     is switched off in its dashboard. Turning it back on doubles every ticket.
   - **Sentry replay stays at 0.** PostHog records sessions; paying two vendors
     for one recording is the thing this split exists to avoid.
-- **Adding telemetry:** event names live only in `EVENTS`
-  (`src/lib/analytics.ts`) — never a string literal at the call site. Server
-  captures go through `src/lib/posthog-server.ts` and **must** be followed by
-  `flushPostHog()` before the handler returns, or Vercel freezes the lambda with
-  the event still buffered. Browser captures go through `track()`. Both no-op
-  without `NEXT_PUBLIC_POSTHOG_PROJECT_TOKEN` — that's how CI stays out of the
-  production project, and `src/lib/__tests__/posthog-server.test.mjs` locks it
-  in. Dashboard-side setup is in `docs/observability-setup.md`.
+- **Adding telemetry:** the ROI pipeline's own event names live in `EVENTS`
+  (`src/lib/analytics.ts`) — never a string literal at the call site. Events
+  mirrored from `pages/api/analytics/*` and `share-event.js` are named by those
+  routes' own `VALID_TYPES` sets instead; don't restate them in `EVENTS`.
+  Everything else (pageviews, clicks, exceptions) is autocaptured by the browser
+  SDK and needs no name. Captures go through `captureServer()` in
+  `src/lib/posthog-server.ts` and **must** be followed by `flushPostHog()`
+  before the handler returns, or Vercel freezes the lambda with the event still
+  buffered. It no-ops without `NEXT_PUBLIC_POSTHOG_PROJECT_TOKEN` — that's how
+  CI stays out of the production project, and
+  `src/lib/__tests__/posthog-server.test.mjs` locks it in. Dashboard-side setup,
+  and why the browser half can't be tested by automation, are in
+  `docs/observability-setup.md`.
 - Components branch on `process.env.NEXT_PUBLIC_ENV` (`production` / `ci` /
   unset) to switch behavior such as links, redirects, and alert suppression.
   Preserve this when editing.
