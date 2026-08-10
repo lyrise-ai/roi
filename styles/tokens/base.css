@@ -10,11 +10,16 @@ body {
   background: var(--surface-page);
   -webkit-font-smoothing: antialiased;
 }
+/* --heading-ink lets a dark surface hand its own text colour to the headings
+   inside it. Custom properties inherit, so a container that sets
+   `--heading-ink: currentColor` (Card tone="inverse", GlassPanel tone="dark")
+   fixes every heading nested under it at any depth. Without it the
+   --text-heading dark blue below wins and headings vanish on dark. */
 h1,
 h2,
 h3,
 h4 {
-  color: var(--text-heading);
+  color: var(--heading-ink, var(--text-heading));
   margin: 0;
   text-wrap: balance;
 }
