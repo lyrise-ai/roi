@@ -17,7 +17,7 @@ export const BULK_FIELD_KEYS = [
   'technologies',
 ] as const
 
-export type BulkFieldKey = typeof BULK_FIELD_KEYS[number]
+export type BulkFieldKey = (typeof BULK_FIELD_KEYS)[number]
 
 export interface RowIssue {
   field: BulkFieldKey | 'row'
@@ -188,13 +188,14 @@ function emptyDetectedColumns(): DetectedColumns {
   }, {} as DetectedColumns)
 }
 
-function getAliasMatches(
-  headers: string[],
-): Record<BulkFieldKey, string[]> {
-  const matches = BULK_FIELD_KEYS.reduce((acc, key) => {
-    acc[key] = []
-    return acc
-  }, {} as Record<BulkFieldKey, string[]>)
+function getAliasMatches(headers: string[]): Record<BulkFieldKey, string[]> {
+  const matches = BULK_FIELD_KEYS.reduce(
+    (acc, key) => {
+      acc[key] = []
+      return acc
+    },
+    {} as Record<BulkFieldKey, string[]>,
+  )
 
   // Map normalizedHeader → the transformed key PapaParse uses as the row key
   // (transformHeader applies normalizeCell, so row keys === normalizeCell(csvHeader))
@@ -309,7 +310,10 @@ function scoreCompanyHeader(header: string): number {
   return score
 }
 
-function pickCompanyName(row: RawCsvRow, detectedHeader: string | null): string {
+function pickCompanyName(
+  row: RawCsvRow,
+  detectedHeader: string | null,
+): string {
   const direct = pick(row, detectedHeader)
   if (direct) return direct
 

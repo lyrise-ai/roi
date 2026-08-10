@@ -83,7 +83,7 @@ export default function EndingSection({
       if (!res.ok) return
       const data = await res.json()
       setShares(data.shares ?? [])
-    } catch (err) {
+    } catch {
       // best-effort — the list is a convenience, not core functionality
     } finally {
       setSharesLoaded(true)
@@ -104,7 +104,7 @@ export default function EndingSection({
         body: JSON.stringify({ reportId, grantId }),
       })
       if (res.ok) setShares((prev) => prev.filter((s) => s.id !== grantId))
-    } catch (err) {
+    } catch {
       // best-effort
     } finally {
       setRevokingId(null)

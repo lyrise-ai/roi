@@ -38,6 +38,12 @@ const nextConfig = {
       '@components': path.resolve(__dirname, 'src/components'),
       '@hooks': path.resolve(__dirname, 'src/hooks'),
       '@': path.resolve(__dirname),
+      // framer-motion probes for this at import time purely for
+      // styled-components interop, which this app doesn't use. Telling webpack
+      // it resolves to nothing is the whole fix — installing @emotion to
+      // silence a warning would ship a package we never call.
+      // Webpack only; turbopack (npm run dev) doesn't emit the warning.
+      '@emotion/is-prop-valid': false,
     }
     return config
   },

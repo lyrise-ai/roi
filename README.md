@@ -60,7 +60,7 @@ npm run dev:test       # dev server on :3777, matching the Playwright config
 npm run build          # production build (note: ignores lint errors)
 npm start              # serve a build
 
-npm run lint           # ESLint (0 errors / ~250 warnings; only errors gate)
+npm run lint           # ESLint — clean; keep it that way
 npm run lint:fix       # auto-fix what's mechanically fixable
 npm run prettier       # format everything
 npm run deadcode       # knip — unused files/exports/deps

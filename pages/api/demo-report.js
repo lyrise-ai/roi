@@ -21,7 +21,11 @@ import {
 let cache = null
 
 function renderVariant(state) {
-  const calcOutput = roiCalculator(state.workflows, state.globals, state.company)
+  const calcOutput = roiCalculator(
+    state.workflows,
+    state.globals,
+    state.company,
+  )
   const assembled = assembleReport({ ...state, calcOutput })
   const execTemplate = loadTemplate('roi-exec-template.html')
   const fullTemplate = loadTemplate('roi-template.html')

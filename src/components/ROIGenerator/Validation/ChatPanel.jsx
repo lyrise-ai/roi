@@ -21,7 +21,8 @@ function ChatPanel(
   ])
   const [draft, setDraft] = useState('')
   const [isSending, setIsSending] = useState(false)
-  const [messagesUsed, setMessagesUsed] = useState(initialMessagesUsed)
+  // Counter is only ever read inside its own updater, to flip limitReached.
+  const [, setMessagesUsed] = useState(initialMessagesUsed)
   const [limitReached, setLimitReached] = useState(
     initialMessagesUsed >= REPORT_CHAT_MESSAGE_LIMIT,
   )

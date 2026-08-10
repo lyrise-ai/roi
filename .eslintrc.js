@@ -33,6 +33,15 @@ module.exports = {
       files: ['**/*.d.ts'],
       rules: { 'no-undef': 'off' },
     },
+    // Tests aren't a trust boundary, and asserting a dynamic URL needs a
+    // built regex. console is how a test reports what it did.
+    {
+      files: ['tests/**', 'evals/**', '**/__tests__/**'],
+      rules: {
+        'security/detect-non-literal-regexp': 'off',
+        'no-console': 'off',
+      },
+    },
   ],
 
   plugins: ['sonarjs'],
@@ -45,59 +54,27 @@ module.exports = {
     'plugin:security/recommended-legacy',
   ],
 
-  // rules: {
-  //   'no-underscore-dangle': ['error', { allow: ['_value'] }],
-  //   'react/prop-types': 'off',
-  //   'prettier/prettier': [
-  //     'error',
-  //     {
-  //       endOfLine: 'auto',
-  //     },
-  //   ],
-  //   'react/react-in-jsx-scope': 'off',
-  //   'react/forbid-prop-types': 'off',
-  //   'react/jsx-filename-extension': [
-  //     1,
-  //     {
-  //       extensions: ['.js', '.jsx'],
-  //     },
-  //   ],
-  //   'react/jsx-props-no-spreading': 'off',
-  //   'import/extensions': [
-  //     'error',
-  //     'ignorePackages',
-  //     {
-  //       js: 'never',
-  //       jsx: 'never',
-  //     },
-  //   ],
-  //   'jsx-a11y/anchor-is-valid': [
-  //     'error',
-  //     {
-  //       components: ['Link'],
-  //       specialLink: ['hrefLeft', 'hrefRight'],
-  //       aspects: ['invalidHref', 'preferButton'],
-  //     },
-  //   ],
-  //   'no-nested-ternary': 'off',
-  //   'import/prefer-default-export': 'off',
-  // },
   rules: {
     'no-underscore-dangle': ['error', { allow: ['_value'] }],
+
+    // Server handlers and the ROI pipeline log deliberately, and Sentry picks
+    // those up. Only a bare console.log is noise.
+    'no-console': ['warn', { allow: ['warn', 'error'] }],
+
+    // ~100 hits, every one of them `obj[key]` on an object we built. The rule
+    // can't tell a prototype-pollution sink from an array index, and at that
+    // volume it buries the security warnings that do matter.
+    'security/detect-object-injection': 'off',
+
     'react/prop-types': 'off',
-    'prettier/prettier': [
-      'warn', // Change from 'error' to 'warn'
-      {
-        endOfLine: 'auto',
-      },
-    ],
+    // Error, not warn: `npm run lint` only gates on errors, and the pre-commit
+    // hook auto-formats, so a violation here means someone bypassed the hook.
+    'prettier/prettier': ['error', { endOfLine: 'auto' }],
     'react/react-in-jsx-scope': 'off',
     'react/forbid-prop-types': 'off',
     'react/jsx-filename-extension': [
-      1,
-      {
-        extensions: ['.js', '.jsx'],
-      },
+      'warn',
+      { extensions: ['.js', '.jsx', '.ts', '.tsx'] },
     ],
     'react/jsx-props-no-spreading': 'off',
     'import/extensions': [
@@ -136,7 +113,13 @@ module.exports = {
         packageDir: [__dirname],
       },
     ],
-    'no-unused-vars': 'off',
+    // Was 'off', which is how ~20 lines of dead state and three unread catch
+    // bindings survived the port. `args: 'none'` keeps positional callback
+    // params (req, res, next) legal.
+    'no-unused-vars': [
+      'warn',
+      { args: 'none', varsIgnorePattern: '^_', ignoreRestSiblings: true },
+    ],
     'no-shadow': 'off',
     'import/no-absolute-path': 'off',
     'react/no-unknown-property': 'off',
