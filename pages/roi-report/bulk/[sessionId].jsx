@@ -41,7 +41,7 @@ function StatusStrip({ rows, cursor }) {
 
   return (
     <div className="flex flex-col items-end gap-2">
-      <div className="flex items-center gap-2 text-[10px] font-outfit font-semibold uppercase tracking-wider text-gray-500">
+      <div className="flex items-center gap-2 text-[10px] font-semibold uppercase tracking-wider text-gray-500">
         <span>{counts.DONE} done</span>
         <span>·</span>
         <span className="text-[#2957FF]">{counts.GENERATING} generating</span>
@@ -140,16 +140,16 @@ export default function BulkReviewPage() {
       <div className="rebranding-landing-page min-h-screen -mt-[12px]">
         <MainHeader />
         <div className="max-w-2xl mx-auto px-4 py-20 text-center">
-          <h1 className="font-outfit text-xl font-bold text-[#2C2C2C] mb-2">
+          <h1 className="text-xl font-bold text-[#2C2C2C] mb-2">
             Bulk session not found
           </h1>
-          <p className="font-outfit text-sm text-gray-500 mb-6">
+          <p className="text-sm text-gray-500 mb-6">
             This bulk session has been cleared or wasn&apos;t started from this
             browser.
           </p>
           <Link
             href="/roi-report/bulk"
-            className="font-outfit text-sm font-semibold text-white bg-[#2C2C2C] hover:bg-black transition-colors rounded-full px-5 py-2.5"
+            className="text-sm font-semibold text-white bg-[#2C2C2C] hover:bg-black transition-colors rounded-full px-5 py-2.5"
           >
             Start a new bulk upload
           </Link>
@@ -163,12 +163,12 @@ export default function BulkReviewPage() {
       <div className="rebranding-landing-page min-h-screen -mt-[12px]">
         <MainHeader />
         <div className="max-w-2xl mx-auto px-4 py-20 text-center">
-          <h1 className="font-outfit text-xl font-bold text-[#2C2C2C] mb-2">
+          <h1 className="text-xl font-bold text-[#2C2C2C] mb-2">
             All reports reviewed
           </h1>
           <Link
             href="/dashboard"
-            className="font-outfit text-sm font-semibold text-white bg-[#2C2C2C] hover:bg-black transition-colors rounded-full px-5 py-2.5"
+            className="text-sm font-semibold text-white bg-[#2C2C2C] hover:bg-black transition-colors rounded-full px-5 py-2.5"
           >
             Back to dashboard
           </Link>
@@ -207,14 +207,14 @@ export default function BulkReviewPage() {
           <div>
             <Link
               href="/dashboard"
-              className="font-outfit text-xs text-gray-500 hover:text-gray-800"
+              className="text-xs text-gray-500 hover:text-gray-800"
             >
               ← Back to dashboard
             </Link>
-            <h1 className="font-outfit text-lg font-bold text-[#2C2C2C] mt-2">
+            <h1 className="text-lg font-bold text-[#2C2C2C] mt-2">
               Bulk Review · Report {cursor + 1} of {total}
             </h1>
-            <p className="font-outfit text-sm text-gray-500 mt-0.5">
+            <p className="text-sm text-gray-500 mt-0.5">
               {row.payload?.companyName ?? 'Unknown company'}
               {row.payload?.recipientName
                 ? ` · ${row.payload.recipientName}`
@@ -228,7 +228,7 @@ export default function BulkReviewPage() {
                 type="button"
                 onClick={handleCancelBatch}
                 title="Stop the bulk batch — already-generated reports stay in your dashboard"
-                className="font-outfit text-xs font-medium text-red-600 hover:bg-red-50 border border-red-200 rounded-full px-3 py-1.5"
+                className="text-xs font-medium text-red-600 hover:bg-red-50 border border-red-200 rounded-full px-3 py-1.5"
               >
                 Cancel batch
               </button>
@@ -239,15 +239,15 @@ export default function BulkReviewPage() {
         <div className="bg-white rounded-2xl border border-gray-100 shadow-sm">
           {isCancelled && (
             <div className="p-10 text-center">
-              <h2 className="font-outfit text-lg font-bold text-[#2C2C2C] mb-2">
+              <h2 className="text-lg font-bold text-[#2C2C2C] mb-2">
                 Bulk batch cancelled
               </h2>
-              <p className="font-outfit text-sm text-gray-600 mb-6 max-w-md mx-auto">
+              <p className="text-sm text-gray-600 mb-6 max-w-md mx-auto">
                 Already-generated reports are still available on your dashboard.
               </p>
               <Link
                 href="/dashboard"
-                className="inline-block font-outfit text-sm font-semibold text-white bg-[#2C2C2C] hover:bg-black transition-colors rounded-full px-5 py-2.5"
+                className="inline-block text-sm font-semibold text-white bg-[#2C2C2C] hover:bg-black transition-colors rounded-full px-5 py-2.5"
               >
                 Back to dashboard
               </Link>
@@ -260,17 +260,17 @@ export default function BulkReviewPage() {
 
           {!isCancelled && isFailed && (
             <div className="p-10 text-center">
-              <h2 className="font-outfit text-lg font-bold text-red-600 mb-2">
+              <h2 className="text-lg font-bold text-red-600 mb-2">
                 Generation failed
               </h2>
-              <p className="font-outfit text-sm text-gray-600 mb-6 max-w-md mx-auto">
+              <p className="text-sm text-gray-600 mb-6 max-w-md mx-auto">
                 {row.error || 'Unknown error during generation.'}
               </p>
               <div className="flex justify-center gap-3">
                 <button
                   type="button"
                   onClick={() => retryRow(cursor)}
-                  className="font-outfit text-sm font-semibold text-white bg-[#2C2C2C] hover:bg-black transition-colors rounded-full px-5 py-2.5"
+                  className="text-sm font-semibold text-white bg-[#2C2C2C] hover:bg-black transition-colors rounded-full px-5 py-2.5"
                 >
                   Retry
                 </button>
@@ -282,7 +282,7 @@ export default function BulkReviewPage() {
                         `/roi-report/bulk/${session.id}?pos=${cursor + 1}`,
                       )
                     }
-                    className="font-outfit text-sm font-medium text-gray-600 hover:text-gray-900 border border-gray-200 rounded-full px-5 py-2.5"
+                    className="text-sm font-medium text-gray-600 hover:text-gray-900 border border-gray-200 rounded-full px-5 py-2.5"
                   >
                     Skip to next
                   </button>

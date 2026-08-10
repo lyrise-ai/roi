@@ -51,13 +51,11 @@ function EditRowModal({ row, onSave, onCancel }) {
         className="w-full max-w-md rounded-2xl bg-white p-6 shadow-xl"
         onClick={(e) => e.stopPropagation()}
       >
-        <h2 className="mb-4 font-outfit text-lg font-bold text-[#2C2C2C]">
-          Edit row
-        </h2>
+        <h2 className="mb-4 text-lg font-bold text-[#2C2C2C]">Edit row</h2>
         <div className="space-y-3">
           {EDITABLE_FIELDS.map((field) => (
             <div key={field.key} className="flex flex-col gap-1">
-              <label className="font-outfit text-[11px] font-semibold uppercase tracking-wider text-gray-500">
+              <label className="text-[11px] font-semibold uppercase tracking-wider text-gray-500">
                 {field.label}
                 {field.required && <span className="text-red-500"> *</span>}
               </label>
@@ -68,7 +66,7 @@ function EditRowModal({ row, onSave, onCancel }) {
                 onChange={(e) =>
                   setDraft((prev) => ({ ...prev, [field.key]: e.target.value }))
                 }
-                className="rounded-lg border border-gray-200 px-3 py-2 font-outfit text-sm outline-none focus:border-gray-500"
+                className="rounded-lg border border-gray-200 px-3 py-2 text-sm outline-none focus:border-gray-500"
               />
             </div>
           ))}
@@ -77,7 +75,7 @@ function EditRowModal({ row, onSave, onCancel }) {
           <button
             type="button"
             onClick={onCancel}
-            className="rounded-full border border-gray-200 px-4 py-2 font-outfit text-sm font-medium text-gray-500 hover:text-gray-800"
+            className="rounded-full border border-gray-200 px-4 py-2 text-sm font-medium text-gray-500 hover:text-gray-800"
           >
             Cancel
           </button>
@@ -100,7 +98,7 @@ function EditRowModal({ row, onSave, onCancel }) {
                 website: draft.website.trim(),
               })
             }
-            className="rounded-full bg-[#2C2C2C] px-5 py-2 font-outfit text-sm font-semibold text-white hover:bg-black disabled:cursor-not-allowed disabled:bg-gray-300"
+            className="rounded-full bg-[#2C2C2C] px-5 py-2 text-sm font-semibold text-white hover:bg-black disabled:cursor-not-allowed disabled:bg-gray-300"
           >
             Save
           </button>
@@ -303,14 +301,14 @@ export default function BulkIntake() {
         <div>
           <Link
             href="/dashboard"
-            className="font-outfit text-xs text-gray-500 hover:text-gray-800"
+            className="text-xs text-gray-500 hover:text-gray-800"
           >
             Back to dashboard
           </Link>
-          <h1 className="mt-2 font-outfit text-2xl font-bold text-[#2C2C2C]">
+          <h1 className="mt-2 text-2xl font-bold text-[#2C2C2C]">
             Bulk Upload
           </h1>
-          <p className="mt-0.5 font-outfit text-sm text-gray-500">
+          <p className="mt-0.5 text-sm text-gray-500">
             Upload a CSV to generate ROI reports for each company.
           </p>
         </div>
@@ -329,17 +327,17 @@ export default function BulkIntake() {
           onChange={onPick}
           className="hidden"
         />
-        <p className="font-outfit text-sm font-semibold text-[#2C2C2C]">
+        <p className="text-sm font-semibold text-[#2C2C2C]">
           {parsing ? 'Parsing CSV...' : 'Drop your CSV here or click to browse'}
         </p>
-        <p className="mt-1 font-outfit text-xs text-gray-400">
+        <p className="mt-1 text-xs text-gray-400">
           We detect common column names automatically. Required data per usable
           row: company name and email.
         </p>
       </div>
 
       {error && (
-        <div className="mt-4 rounded-lg border border-red-100 bg-red-50 px-4 py-3 font-outfit text-sm text-red-700">
+        <div className="mt-4 rounded-lg border border-red-100 bg-red-50 px-4 py-3 text-sm text-red-700">
           {error}
         </div>
       )}
@@ -349,7 +347,7 @@ export default function BulkIntake() {
           {fileErrors.map((message) => (
             <div
               key={message}
-              className="rounded-lg border border-red-100 bg-red-50 px-4 py-3 font-outfit text-sm text-red-700"
+              className="rounded-lg border border-red-100 bg-red-50 px-4 py-3 text-sm text-red-700"
             >
               {message}
             </div>
@@ -357,7 +355,7 @@ export default function BulkIntake() {
           {fileWarnings.map((message) => (
             <div
               key={message}
-              className="rounded-lg border border-amber-100 bg-amber-50 px-4 py-3 font-outfit text-sm text-amber-800"
+              className="rounded-lg border border-amber-100 bg-amber-50 px-4 py-3 text-sm text-amber-800"
             >
               {message}
             </div>
@@ -370,34 +368,34 @@ export default function BulkIntake() {
           <div className="mt-6 rounded-2xl border border-gray-100 bg-white p-3 shadow-sm">
             <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-4">
               <div className="rounded-xl bg-[#F9FAFC] px-4 py-3">
-                <div className="font-outfit text-[11px] font-semibold uppercase tracking-wider text-gray-400">
+                <div className="text-[11px] font-semibold uppercase tracking-wider text-gray-400">
                   Ready
                 </div>
-                <div className="mt-1 font-outfit text-2xl font-bold text-[#2C2C2C]">
+                <div className="mt-1 text-2xl font-bold text-[#2C2C2C]">
                   {summary.ready}
                 </div>
               </div>
               <div className="rounded-xl bg-[#F9FAFC] px-4 py-3">
-                <div className="font-outfit text-[11px] font-semibold uppercase tracking-wider text-gray-400">
+                <div className="text-[11px] font-semibold uppercase tracking-wider text-gray-400">
                   Needs context
                 </div>
-                <div className="mt-1 font-outfit text-2xl font-bold text-amber-600">
+                <div className="mt-1 text-2xl font-bold text-amber-600">
                   {summary.warning}
                 </div>
               </div>
               <div className="rounded-xl bg-[#F9FAFC] px-4 py-3">
-                <div className="font-outfit text-[11px] font-semibold uppercase tracking-wider text-gray-400">
+                <div className="text-[11px] font-semibold uppercase tracking-wider text-gray-400">
                   Blocked
                 </div>
-                <div className="mt-1 font-outfit text-2xl font-bold text-red-600">
+                <div className="mt-1 text-2xl font-bold text-red-600">
                   {summary.blocked}
                 </div>
               </div>
               <div className="rounded-xl bg-[#F9FAFC] px-4 py-3">
-                <div className="font-outfit text-[11px] font-semibold uppercase tracking-wider text-gray-400">
+                <div className="text-[11px] font-semibold uppercase tracking-wider text-gray-400">
                   Skipped
                 </div>
-                <div className="mt-1 font-outfit text-2xl font-bold text-gray-500">
+                <div className="mt-1 text-2xl font-bold text-gray-500">
                   {summary.skipped}
                 </div>
               </div>
@@ -406,7 +404,7 @@ export default function BulkIntake() {
 
           <div className="mt-6 rounded-2xl border border-gray-100 bg-white px-4 py-4 shadow-sm sm:px-5">
             <div className="flex flex-col gap-3 sm:flex-row sm:flex-wrap sm:items-center sm:justify-between">
-              <p className="font-outfit text-sm text-gray-500">
+              <p className="text-sm text-gray-500">
                 Parsed {rawCount} {rawCount === 1 ? 'row' : 'rows'} {'->'}{' '}
                 <span className="font-semibold text-[#2C2C2C]">
                   {rows.length} unique{' '}
@@ -418,7 +416,7 @@ export default function BulkIntake() {
                 <button
                   type="button"
                   onClick={() => setShowDetectedColumns((prev) => !prev)}
-                  className="self-start font-outfit text-xs font-semibold text-[#2957FF] hover:underline"
+                  className="self-start text-xs font-semibold text-[#2957FF] hover:underline"
                 >
                   {showDetectedColumns
                     ? 'Hide detected mapping'
@@ -429,7 +427,7 @@ export default function BulkIntake() {
 
             {showDetectedColumns && Object.keys(detectedColumns).length > 0 && (
               <div className="mt-4 border-t border-gray-100 pt-4">
-                <p className="mb-2 font-outfit text-[11px] font-semibold uppercase tracking-wider text-gray-500">
+                <p className="mb-2 text-[11px] font-semibold uppercase tracking-wider text-gray-500">
                   Detected columns
                 </p>
                 <div className="flex flex-wrap gap-2">
@@ -438,7 +436,7 @@ export default function BulkIntake() {
                     .map(([field, value]) => (
                       <span
                         key={field}
-                        className="inline-flex items-center rounded-full bg-gray-100 px-3 py-1 font-outfit text-xs text-gray-600"
+                        className="inline-flex items-center rounded-full bg-gray-100 px-3 py-1 text-xs text-gray-600"
                       >
                         {field}: {value}
                       </span>
@@ -449,7 +447,7 @@ export default function BulkIntake() {
           </div>
 
           <div className="mt-6 rounded-2xl border border-gray-100 bg-white px-4 py-4 shadow-sm sm:px-5">
-            <p className="mb-3 font-outfit text-[11px] font-semibold uppercase tracking-wider text-gray-500">
+            <p className="mb-3 text-[11px] font-semibold uppercase tracking-wider text-gray-500">
               Email delivery
             </p>
             <div className="space-y-2">
@@ -462,10 +460,10 @@ export default function BulkIntake() {
                   onChange={() => setEmailMode('production')}
                   className="h-4 w-4"
                 />
-                <span className="font-outfit text-sm text-[#2C2C2C]">
+                <span className="text-sm text-[#2C2C2C]">
                   Send to production recipients
                 </span>
-                <span className="pt-0.5 font-outfit text-xs text-gray-400 sm:pt-0">
+                <span className="pt-0.5 text-xs text-gray-400 sm:pt-0">
                   each report goes to its contact email
                 </span>
               </label>
@@ -479,9 +477,9 @@ export default function BulkIntake() {
                   className="mt-1 h-4 w-4"
                 />
                 <div className="flex-1">
-                  <div className="font-outfit text-sm text-[#2C2C2C]">
+                  <div className="text-sm text-[#2C2C2C]">
                     Send to another email
-                    <span className="ml-1 font-outfit text-xs text-gray-400">
+                    <span className="ml-1 text-xs text-gray-400">
                       all reports go to one address
                     </span>
                   </div>
@@ -491,7 +489,7 @@ export default function BulkIntake() {
                       value={overrideEmail}
                       onChange={(e) => setOverrideEmail(e.target.value)}
                       placeholder="elena@lyrise.ai"
-                      className="mt-2 w-full max-w-xs rounded-lg border border-gray-200 px-3 py-2 font-outfit text-sm outline-none focus:border-gray-500"
+                      className="mt-2 w-full max-w-xs rounded-lg border border-gray-200 px-3 py-2 text-sm outline-none focus:border-gray-500"
                     />
                   )}
                 </div>
@@ -519,7 +517,7 @@ export default function BulkIntake() {
                         className="mt-1 h-4 w-4"
                       />
                       <div>
-                        <div className="font-outfit font-medium text-[#2C2C2C]">
+                        <div className="font-medium text-[#2C2C2C]">
                           {payload.companyName || (
                             <span className="text-red-600">
                               missing - click Edit
@@ -527,14 +525,14 @@ export default function BulkIntake() {
                           )}
                         </div>
                         {payload.industry && (
-                          <div className="mt-1 font-outfit text-xs text-gray-400">
+                          <div className="mt-1 text-xs text-gray-400">
                             {payload.industry}
                           </div>
                         )}
                       </div>
                     </div>
                     <span
-                      className={`inline-flex items-center rounded-full px-2.5 py-1 font-outfit text-xs font-semibold ${STATUS_BADGES[status]}`}
+                      className={`inline-flex items-center rounded-full px-2.5 py-1 text-xs font-semibold ${STATUS_BADGES[status]}`}
                     >
                       {STATUS_LABELS[status]}
                     </span>
@@ -542,18 +540,18 @@ export default function BulkIntake() {
 
                   <div className="mt-4 grid gap-3 sm:grid-cols-2">
                     <div>
-                      <div className="font-outfit text-[11px] font-semibold uppercase tracking-wider text-gray-400">
+                      <div className="text-[11px] font-semibold uppercase tracking-wider text-gray-400">
                         Contact
                       </div>
-                      <div className="mt-1 font-outfit text-sm font-medium text-[#2C2C2C]">
+                      <div className="mt-1 text-sm font-medium text-[#2C2C2C]">
                         {payload.recipientName || '-'}
                       </div>
                       {payload.recipientTitle && (
-                        <div className="mt-1 font-outfit text-xs text-gray-500">
+                        <div className="mt-1 text-xs text-gray-500">
                           {payload.recipientTitle}
                         </div>
                       )}
-                      <div className="mt-1 break-all font-outfit text-xs text-gray-400">
+                      <div className="mt-1 break-all text-xs text-gray-400">
                         {payload.email || (
                           <span className="text-red-600">
                             no email - click Edit
@@ -564,19 +562,19 @@ export default function BulkIntake() {
 
                     <div className="grid grid-cols-2 gap-3">
                       <div>
-                        <div className="font-outfit text-[11px] font-semibold uppercase tracking-wider text-gray-400">
+                        <div className="text-[11px] font-semibold uppercase tracking-wider text-gray-400">
                           Country
                         </div>
-                        <div className="mt-1 font-outfit text-sm text-gray-600">
+                        <div className="mt-1 text-sm text-gray-600">
                           {payload.country || '-'}
                         </div>
                       </div>
                       <div>
-                        <div className="font-outfit text-[11px] font-semibold uppercase tracking-wider text-gray-400">
+                        <div className="text-[11px] font-semibold uppercase tracking-wider text-gray-400">
                           Currency
                         </div>
                         <div className="mt-1">
-                          <span className="inline-flex items-center rounded-full bg-blue-50 px-2 py-0.5 font-outfit text-xs font-semibold text-[#2957FF]">
+                          <span className="inline-flex items-center rounded-full bg-blue-50 px-2 py-0.5 text-xs font-semibold text-[#2957FF]">
                             {payload.currency}
                           </span>
                         </div>
@@ -589,7 +587,7 @@ export default function BulkIntake() {
                       {visibleIssues.map((issue) => (
                         <div
                           key={`${issue.field}-${issue.message}-mobile`}
-                          className={`font-outfit text-[11px] ${
+                          className={`text-[11px] ${
                             issue.severity === 'error'
                               ? 'text-red-600'
                               : 'text-amber-700'
@@ -605,7 +603,7 @@ export default function BulkIntake() {
                     <button
                       type="button"
                       onClick={() => setEditingIndex(index)}
-                      className="font-outfit text-xs font-semibold text-[#2957FF] hover:underline"
+                      className="text-xs font-semibold text-[#2957FF] hover:underline"
                     >
                       Edit
                     </button>
@@ -620,19 +618,19 @@ export default function BulkIntake() {
               <thead>
                 <tr className="border-b border-gray-100">
                   <th className="px-4 py-3" />
-                  <th className="px-4 py-3 text-left font-outfit text-[11px] font-semibold uppercase tracking-wider text-gray-400">
+                  <th className="px-4 py-3 text-left text-[11px] font-semibold uppercase tracking-wider text-gray-400">
                     Company
                   </th>
-                  <th className="px-4 py-3 text-left font-outfit text-[11px] font-semibold uppercase tracking-wider text-gray-400">
+                  <th className="px-4 py-3 text-left text-[11px] font-semibold uppercase tracking-wider text-gray-400">
                     Contact
                   </th>
-                  <th className="px-4 py-3 text-left font-outfit text-[11px] font-semibold uppercase tracking-wider text-gray-400">
+                  <th className="px-4 py-3 text-left text-[11px] font-semibold uppercase tracking-wider text-gray-400">
                     Status
                   </th>
-                  <th className="px-4 py-3 text-left font-outfit text-[11px] font-semibold uppercase tracking-wider text-gray-400">
+                  <th className="px-4 py-3 text-left text-[11px] font-semibold uppercase tracking-wider text-gray-400">
                     Country
                   </th>
-                  <th className="px-4 py-3 text-left font-outfit text-[11px] font-semibold uppercase tracking-wider text-gray-400">
+                  <th className="px-4 py-3 text-left text-[11px] font-semibold uppercase tracking-wider text-gray-400">
                     Currency
                   </th>
                   <th className="px-4 py-3" />
@@ -659,7 +657,7 @@ export default function BulkIntake() {
                             className="mt-1 h-4 w-4"
                           />
                         </td>
-                        <td className="px-4 py-4 font-outfit text-[#2C2C2C]">
+                        <td className="px-4 py-4 text-[#2C2C2C]">
                           <div className="font-medium">
                             {payload.companyName || (
                               <span className="text-red-600">
@@ -673,7 +671,7 @@ export default function BulkIntake() {
                             </div>
                           )}
                         </td>
-                        <td className="px-4 py-4 font-outfit text-gray-600">
+                        <td className="px-4 py-4 text-gray-600">
                           <div className="font-medium text-[#2C2C2C]">
                             {payload.recipientName || '-'}
                           </div>
@@ -690,7 +688,7 @@ export default function BulkIntake() {
                             )}
                           </div>
                         </td>
-                        <td className="px-4 py-4 font-outfit text-gray-500">
+                        <td className="px-4 py-4 text-gray-500">
                           <span
                             className={`inline-flex items-center rounded-full px-2.5 py-1 text-xs font-semibold ${STATUS_BADGES[status]}`}
                           >
@@ -701,7 +699,7 @@ export default function BulkIntake() {
                               {visibleIssues.map((issue) => (
                                 <div
                                   key={`${issue.field}-${issue.message}`}
-                                  className={`font-outfit text-[11px] ${
+                                  className={`text-[11px] ${
                                     issue.severity === 'error'
                                       ? 'text-red-600'
                                       : 'text-amber-700'
@@ -713,10 +711,10 @@ export default function BulkIntake() {
                             </div>
                           )}
                         </td>
-                        <td className="px-4 py-4 font-outfit text-gray-500">
+                        <td className="px-4 py-4 text-gray-500">
                           {payload.country || '-'}
                         </td>
-                        <td className="px-4 py-4 font-outfit text-gray-500">
+                        <td className="px-4 py-4 text-gray-500">
                           <span className="inline-flex items-center rounded-full bg-blue-50 px-2 py-0.5 text-xs font-semibold text-[#2957FF]">
                             {payload.currency}
                           </span>
@@ -725,7 +723,7 @@ export default function BulkIntake() {
                           <button
                             type="button"
                             onClick={() => setEditingIndex(index)}
-                            className="font-outfit text-xs font-semibold text-[#2957FF] hover:underline"
+                            className="text-xs font-semibold text-[#2957FF] hover:underline"
                           >
                             Edit
                           </button>
@@ -741,15 +739,15 @@ export default function BulkIntake() {
           <div className="sticky bottom-3 z-10 mt-4 rounded-2xl border border-gray-100 bg-white/95 px-4 py-4 shadow-sm backdrop-blur sm:static sm:px-5">
             <div className="flex flex-col gap-4 sm:flex-row sm:items-center sm:justify-between">
               <div>
-                <p className="font-outfit text-sm font-semibold text-[#2C2C2C]">
+                <p className="text-sm font-semibold text-[#2C2C2C]">
                   {selectionSummary}
                 </p>
-                <p className="mt-1 font-outfit text-xs text-gray-400">
+                <p className="mt-1 text-xs text-gray-400">
                   Review blocked rows before generating, warning rows can still
                   be included.
                 </p>
                 {emailMode === 'override' && !overrideValid && (
-                  <p className="mt-1 font-outfit text-xs text-red-500">
+                  <p className="mt-1 text-xs text-red-500">
                     Enter a valid override email
                   </p>
                 )}
@@ -758,7 +756,7 @@ export default function BulkIntake() {
                 type="button"
                 onClick={onGenerate}
                 disabled={selectedPayloads.length === 0 || !overrideValid}
-                className="w-full rounded-full bg-[#2C2C2C] px-6 py-3 font-outfit text-sm font-semibold text-white transition-colors hover:bg-black disabled:cursor-not-allowed disabled:bg-gray-300 sm:w-auto"
+                className="w-full rounded-full bg-[#2C2C2C] px-6 py-3 text-sm font-semibold text-white transition-colors hover:bg-black disabled:cursor-not-allowed disabled:bg-gray-300 sm:w-auto"
               >
                 Generate {selectedPayloads.length}{' '}
                 {selectedPayloads.length === 1 ? 'Report' : 'Reports'} {'->'}

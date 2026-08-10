@@ -1,5 +1,4 @@
 import clsx from 'clsx'
-import { INTER_FONT_FAMILY } from '@/src/utilities/fonts'
 
 // Shared 1-5 rating control for the alpha tour's inline feedback questions
 // (intake ease, trust before/after, report clarity). One component so all
@@ -37,7 +36,6 @@ export default function NumberScale({
               onClick={() => onChange(n)}
               aria-label={`${n} out of 5`}
               aria-pressed={selected}
-              style={{ fontFamily: INTER_FONT_FAMILY }}
               className={clsx(
                 'flex h-9 w-12 shrink-0 items-center justify-center rounded-[10px] text-[15px] font-semibold transition-colors',
                 selected
@@ -54,16 +52,10 @@ export default function NumberScale({
       </div>
       {(lowLabel || highLabel) && (
         <div className="mt-2 flex justify-between">
-          <span
-            style={{ fontFamily: INTER_FONT_FAMILY }}
-            className={clsx('text-[11px] leading-none', mutedColor)}
-          >
+          <span className={clsx('text-[11px] leading-none', mutedColor)}>
             {lowLabel}
           </span>
-          <span
-            style={{ fontFamily: INTER_FONT_FAMILY }}
-            className={clsx('text-[11px] leading-none', mutedColor)}
-          >
+          <span className={clsx('text-[11px] leading-none', mutedColor)}>
             {highLabel}
           </span>
         </div>

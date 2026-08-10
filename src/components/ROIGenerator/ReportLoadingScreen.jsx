@@ -1,7 +1,6 @@
 import { useEffect, useLayoutEffect, useMemo, useRef, useState } from 'react'
 import { motion, AnimatePresence } from 'framer-motion'
 import NumberScale from './NumberScale'
-import { INTER_FONT_FAMILY } from '@/src/utilities/fonts'
 
 const PHASES = [
   {
@@ -332,14 +331,14 @@ export default function ReportLoadingScreen({
       <header className="border-b border-gray-100 bg-white">
         <div className="mx-auto flex max-w-5xl items-center justify-between px-6 py-3">
           <div className="flex items-center gap-2.5">
-            <div className="font-display grid h-6 w-6 place-items-center rounded-md bg-navy text-white">
+            <div className="grid h-6 w-6 place-items-center rounded-md bg-navy text-white">
               <span className="text-[11px] font-bold leading-none">L</span>
             </div>
-            <span className="font-display text-[13px] font-semibold tracking-tight text-navy">
+            <span className="text-[13px] font-semibold tracking-tight text-navy">
               LyRise
             </span>
             <span className="ml-1 text-gray-300">/</span>
-            <span className="font-poppins text-[12.5px] font-normal text-gray-500">
+            <span className="text-[12.5px] font-normal text-gray-500">
               Profit Map
             </span>
           </div>
@@ -354,7 +353,7 @@ export default function ReportLoadingScreen({
                   <span className="relative inline-flex h-1.5 w-1.5 rounded-full bg-primary" />
                 </span>
               )}
-              <span className="font-poppins text-[11.5px] font-medium text-gray-500">
+              <span className="text-[11.5px] font-medium text-gray-500">
                 {isComplete
                   ? 'Ready'
                   : isFinalising
@@ -396,7 +395,7 @@ export default function ReportLoadingScreen({
                   animate={{ opacity: 1, y: 0 }}
                   exit={{ opacity: 0, y: -4 }}
                   transition={{ duration: 0.28, ease: [0.22, 1, 0.36, 1] }}
-                  className="font-display absolute inset-x-0 text-[17px] font-medium leading-tight tracking-tight text-navy"
+                  className="absolute inset-x-0 text-[17px] font-medium leading-tight tracking-tight text-navy"
                 >
                   {displayHeading}
                 </motion.h1>
@@ -421,7 +420,7 @@ export default function ReportLoadingScreen({
               animate={{ opacity: 1 }}
               exit={{ opacity: 0 }}
               transition={{ duration: 0.25 }}
-              className="font-poppins mt-1 text-[12px] text-gray-400"
+              className="mt-1 text-[12px] text-gray-400"
             >
               {displaySubLabel}
             </motion.p>
@@ -447,7 +446,6 @@ export default function ReportLoadingScreen({
             >
               <p
                 style={{
-                  fontFamily: INTER_FONT_FAMILY,
                   letterSpacing: '-0.2px',
                 }}
                 className="text-[14.5px] font-normal text-navy"
@@ -470,7 +468,6 @@ export default function ReportLoadingScreen({
                   onBlur={() => trackIntakeEase(intakeEase, intakeEaseNote)}
                   placeholder="What was awkward or missing? (optional)"
                   rows={2}
-                  style={{ fontFamily: INTER_FONT_FAMILY }}
                   className="mt-2 w-full resize-none rounded-md border border-gray-200 px-2.5 py-2 text-[11.5px] text-navy outline-none focus:border-[#5B48F8]"
                 />
               )}
@@ -497,7 +494,7 @@ export default function ReportLoadingScreen({
           )}
 
           {/* Footer note */}
-          <p className="font-poppins mt-1.5 text-[10px] text-gray-400 opacity-50">
+          <p className="mt-1.5 text-[10px] text-gray-400 opacity-50">
             Your data is encrypted in transit and at rest.
           </p>
         </div>
@@ -519,7 +516,7 @@ function PhasePipeline({ phaseIndex }) {
                 <PhaseDot state={state} />
                 <span
                   className={
-                    'font-display text-[11.5px] font-medium tracking-tight ' +
+                    'text-[11.5px] font-medium tracking-tight ' +
                     (state === 'done'
                       ? 'text-gray-400'
                       : state === 'active'

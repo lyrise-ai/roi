@@ -98,7 +98,7 @@ class ErrorBoundary extends React.Component {
               <div>
                 <div className="flex items-center gap-2 mb-1">
                   <span className="w-2.5 h-2.5 rounded-full bg-red-500 flex-shrink-0" />
-                  <h2 className="font-outfit text-base font-bold text-red-700">
+                  <h2 className="text-base font-bold text-red-700">
                     Render Error
                   </h2>
                 </div>
@@ -111,7 +111,7 @@ class ErrorBoundary extends React.Component {
                 onClick={() =>
                   navigator.clipboard.writeText(copyText).catch(() => {})
                 }
-                className="ml-4 flex-shrink-0 font-outfit text-xs font-semibold text-gray-500 bg-white border border-gray-200 rounded-lg px-3 py-1.5 hover:border-gray-400 transition-colors"
+                className="ml-4 flex-shrink-0 text-xs font-semibold text-gray-500 bg-white border border-gray-200 rounded-lg px-3 py-1.5 hover:border-gray-400 transition-colors"
               >
                 Copy
               </button>
@@ -120,7 +120,7 @@ class ErrorBoundary extends React.Component {
             {/* Where */}
             {origin && (
               <div className="px-6 py-4 border-b border-red-100">
-                <p className="font-outfit text-[10px] font-semibold text-gray-400 uppercase tracking-wider mb-2">
+                <p className="text-[10px] font-semibold text-gray-400 uppercase tracking-wider mb-2">
                   Where
                 </p>
                 <div className="flex items-center gap-3 flex-wrap">
@@ -139,7 +139,7 @@ class ErrorBoundary extends React.Component {
             {/* URL */}
             {url && (
               <div className="px-6 py-4 border-b border-red-100">
-                <p className="font-outfit text-[10px] font-semibold text-gray-400 uppercase tracking-wider mb-2">
+                <p className="text-[10px] font-semibold text-gray-400 uppercase tracking-wider mb-2">
                   URL
                 </p>
                 <p className="font-mono text-xs text-gray-600 break-all">
@@ -151,13 +151,13 @@ class ErrorBoundary extends React.Component {
             {/* Page context */}
             {pageContext && Object.keys(pageContext).length > 0 && (
               <div className="px-6 py-4 border-b border-red-100">
-                <p className="font-outfit text-[10px] font-semibold text-gray-400 uppercase tracking-wider mb-2">
+                <p className="text-[10px] font-semibold text-gray-400 uppercase tracking-wider mb-2">
                   Context
                 </p>
                 <div className="flex flex-col gap-1">
                   {Object.entries(pageContext).map(([k, v]) => (
                     <div key={k} className="flex items-center gap-2">
-                      <span className="font-outfit text-xs text-gray-400 w-20 flex-shrink-0">
+                      <span className="text-xs text-gray-400 w-20 flex-shrink-0">
                         {k}
                       </span>
                       <span className="font-mono text-xs text-gray-600">
@@ -172,7 +172,7 @@ class ErrorBoundary extends React.Component {
             {/* Component chain */}
             {chain && (
               <div className="px-6 py-4 border-b border-red-100">
-                <p className="font-outfit text-[10px] font-semibold text-gray-400 uppercase tracking-wider mb-2">
+                <p className="text-[10px] font-semibold text-gray-400 uppercase tracking-wider mb-2">
                   Component chain
                 </p>
                 <p className="font-mono text-xs text-gray-600 leading-relaxed break-all">
@@ -183,7 +183,7 @@ class ErrorBoundary extends React.Component {
 
             {/* Timestamp */}
             <div className="px-6 py-3 bg-red-100/40">
-              <p className="font-outfit text-xs text-gray-400">{errorTime}</p>
+              <p className="text-xs text-gray-400">{errorTime}</p>
             </div>
           </div>
         </div>
@@ -198,10 +198,10 @@ class ErrorBoundary extends React.Component {
         >
           <span style={{ fontSize: 24 }}>⚠</span>
         </div>
-        <h2 className="font-outfit text-xl font-bold text-gray-900 mb-2">
+        <h2 className="text-xl font-bold text-gray-900 mb-2">
           Something went wrong
         </h2>
-        <p className="font-outfit text-sm text-gray-500 leading-relaxed">
+        <p className="text-sm text-gray-500 leading-relaxed">
           We&apos;re sorry — something unexpected happened. Our team has been
           notified and will look into it shortly.
         </p>

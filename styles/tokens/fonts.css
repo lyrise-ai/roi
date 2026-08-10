@@ -1,0 +1,5 @@
+/* SUBSTITUTION: the brand typeface is Proxima Nova (licensed, not supplied).
+   Figtree is the nearest free geometric-humanist match on Google Fonts.
+   Replace this @import with @font-face rules pointing at real Proxima Nova
+   binaries when they are available. */
+@import url('https://fonts.googleapis.com/css2?family=Figtree:ital,wght@0,300..900;1,300..900&display=swap');

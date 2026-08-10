@@ -7,7 +7,6 @@ import {
 } from '@/src/lib/roi/pipeline/reportModel'
 import KpiTile from '../KpiTile'
 import NumberScale from '../../NumberScale'
-import { INTER_FONT_FAMILY } from '@/src/utilities/fonts'
 
 // Uses the same workflow merge/sort and reconciling adoption-ramp-factor as
 // the PDF and web report (reportModel.ts) — the wizard only has `workflows`
@@ -224,7 +223,7 @@ export default function OverviewStep({
         {isAlpha && (
           <div className="mx-auto mb-6 max-w-[360px] border-t border-[rgba(124,140,176,0.25)] pt-6">
             <div
-              style={{ fontFamily: INTER_FONT_FAMILY, letterSpacing: '-0.2px' }}
+              style={{ letterSpacing: '-0.2px' }}
               className="mb-2 text-[14.5px] font-normal text-white"
             >
               Before you validate, how much do you trust these numbers?

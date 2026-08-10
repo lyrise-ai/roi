@@ -13,52 +13,21 @@ the model. A **Next.js 15 app using the Pages Router** (not the App Router).
 Numbers in these reports go in front of prospects' CFOs. Treat the generation path
 as a money path.
 
-## Tech stack
+## Stack notes
 
-- **Next.js 15** (Pages Router) + **React 18**
-- Language: **mixed JavaScript and TypeScript** (`.js`, `.jsx`, `.ts`, `.tsx`).
-  TypeScript is configured with `strict: false` — typing is loose; don't introduce
+Read `package.json` for versions. What it won't tell you:
+
+- TypeScript runs with `strict: false` — typing is loose; don't introduce
   strict-mode assumptions.
-- Styling: **Tailwind CSS v3** throughout.
-- Animation: Framer Motion.
-- Backend services: **Supabase** (Postgres/auth/storage — also the auth provider;
-  there is no NextAuth here), **OpenAI** via the Vercel `ai` SDK, **Resend**
-  (transactional email, called over REST — no SDK dependency), **Tavily/Brave**
-  (web search for ROI research), **Puppeteer + @sparticuz/chromium** (PDF
-  rendering), **Sentry** (errors), **Linear** (triage), **PostHog/Amplitude**
-  (analytics).
-- Node **>= 24** required (see `engines` in `package.json`).
+- Supabase is the auth provider. **There is no NextAuth here.**
+- Resend is called over REST — there is deliberately no SDK dependency.
 
-## Project layout
+## The ROI pipeline (`src/lib/roi/`)
 
-```text
-pages/                 Routes (Pages Router). Each file = a URL.
-pages/api/             Backend API endpoints (serverless functions).
-src/components/        UI components: ROIGenerator/ (the report app),
-                       AlphaDashboardPanel.jsx, shared/ (small reusable bits).
-src/layout/            Shared page shell (MainHeader/).
-src/lib/               Core non-UI logic. Supabase clients live here.
-src/lib/roi/           The ROI report pipeline (active area of work).
-src/hooks/             Reusable React hooks.
-src/context/           React context providers (AuthSessionContext).
-src/utilities/         Small helpers (fonts, date formatting).
-src/data/              Static copy (site-content.json).
-src/assets/, public/   Images, fonts, SVGs, video.
-supabase/migrations/   Database schema.
-tests/e2e/             Playwright suite.
-evals/roi/             Evaluation harness for ROI report quality.
-```
-
-### The ROI pipeline (`src/lib/roi/`)
-
-The most actively developed area. Roughly:
-`agent.ts` orchestrates → `tools/` (web search, page fetch) gather research →
-`prompts/` drive the LLM → `pipeline/` normalizes, calculates, and assembles the
-report → `services/` handle PDF rendering, email delivery, and usage tracking.
-Entry points are the API routes `pages/api/roi-agent.js` (generation **and** chat
-editing, SSE, `maxDuration: 300`), `roi-pdf.js`, and `roi-share-email.js`. There is
-a gold-set eval harness under `evals/roi/` (see `evals/roi/README.md`) — run it
-after changing prompts or scoring logic.
+The most actively developed area. `pages/api/roi-agent.js` handles generation
+**and** chat editing over SSE with `maxDuration: 300`. A gold-set eval harness
+lives under `evals/roi/` (see `evals/roi/README.md`) — run it after changing
+prompts or scoring logic.
 
 Two rules specific to this directory:
 
@@ -82,8 +51,8 @@ before changing the code they sit above.
   There is no `@assets` or `@services` alias. Aliases are declared **twice** in
   `next.config.js` — once for webpack, once for turbopack (`npm run dev` uses
   turbopack, `npm run build` uses webpack). Add new aliases to both.
-- **Formatting (Prettier, enforced):** no semicolons, single quotes, trailing
-  commas, 2-space indent, LF line endings. Run `npm run prettier` if unsure.
+- **Formatting** is Prettier's, enforced by the pre-commit hook. Run
+  `npm run prettier` if unsure.
 - A **Husky pre-commit hook** runs `lint-staged`: `eslint --fix` then Prettier on
   staged JS/TS, Prettier on staged JSON/CSS/MD. Don't bypass it. The hook exports
   `ESLINT_USE_FLAT_CONFIG=false` because this repo still uses `.eslintrc.js`.
@@ -91,8 +60,12 @@ before changing the code they sit above.
   `npm test`, ~1 min) and `e2e` (Playwright). ESLint reports 0 errors and ~250
   warnings — only errors gate. Don't add new errors; don't feel obliged to fix
   the warning backlog in an unrelated PR.
-- Static copy lives in `src/data/site-content.json` rather than inline in
-  components — check there before hardcoding text.
+- **Design system:** tokens are CSS custom properties in `styles/tokens/*.css`;
+  `tailwind.config.js` maps them to utilities by `var()` reference and never
+  restates a value. Use the semantic utilities (`bg-surface-card`, `text-ink-muted`,
+  `rounded-card`, `shadow-glass`) over arbitrary values, and change a token in CSS
+  rather than in the config. One typeface — Figtree, via `--font-sans`. See the
+  `lyrise-design` skill in `.claude/skills/` for the full brand system.
 - Components branch on `process.env.NEXT_PUBLIC_ENV` (`production` / `ci` /
   unset) to switch behavior such as links, redirects, and alert suppression.
   Preserve this when editing.
@@ -101,39 +74,27 @@ before changing the code they sit above.
 
 ## Commands
 
+`package.json` has the full list. The non-obvious ones:
+
 ```bash
-npm run dev            # Local dev server (http://localhost:3000, turbopack)
-npm run dev:test       # Dev server on :3777, matching the Playwright config
-npm run build          # Production build (lint errors are ignored during build)
-npm run lint           # ESLint (only errors gate; warnings are a known backlog)
-npm run lint:fix       # auto-fix what's mechanically fixable
-npm run prettier       # Format the whole repo
-npm run deadcode       # knip — unused files, exports, dependencies
-npm test               # Unit tests (node --test on src/**/__tests__/*.test.mjs)
-npm run test:e2e       # Full Playwright suite
-npm run test:e2e:smoke # @smoke subset (~1 min)
+npm run dev:test       # Dev server on :3777 — the port the Playwright config expects
+npm run build          # Lint errors are IGNORED during build; `npm run lint` is the gate
+npm run test:e2e:smoke # @smoke subset (~1 min) vs. the full suite
 npm run eval:roi       # ROI report eval harness
 ```
 
 ## Environment variables
 
-Secrets live in `.env.local` (gitignored) — never commit them. `NEXT_PUBLIC_*`
-vars are exposed to the browser; everything else is server-only. `.env.example`
-is the canonical list and marks what's required vs. optional. Key groups:
+`.env.example` is the canonical list and marks required vs. optional. Secrets live
+in `.env.local` (gitignored) — never commit them. `NEXT_PUBLIC_*` is exposed to the
+browser; everything else is server-only.
 
-- **Supabase (required):** `NEXT_PUBLIC_SUPABASE_URL`,
-  `NEXT_PUBLIC_SUPABASE_ANON_KEY`, `SUPABASE_SERVICE_ROLE_KEY` (server only —
-  full DB access, bypasses RLS, handle with care).
-- **ROI / AI:** `OPENAI_API_KEY`, `TAVILY_API_KEY`, `BRAVE_API_KEY` (fallback).
-- **Email (Resend):** `RESEND_API_KEY`, `EMAIL_FROM`, `DEV_ALERT_EMAILS`,
-  `ROI_USAGE_ALERT_*`, `ROI_REPORT_ACCESS_ALERT_EMAILS`.
-- **Linear:** `LINEAR_API_KEY`, `LINEAR_TEAM_ID`, `LINEAR_TRIAGE_STATE_ID`,
-  `LINEAR_FEEDBACK_LABEL_ID` (API), `LINEAR_NEW_ISSUE_URL` (browser links).
-- **Analytics / env:** `NEXT_PUBLIC_ENV`, `NEXT_PUBLIC_BASE_URL`,
-  `NEXT_PUBLIC_POSTHOG_*`, `NEXT_PUBLIC_AMPLITUDE`, `NEXT_PUBLIC_SENTRY_*`.
+Two things the list won't tell you:
 
-Supabase is a **single shared project** across local, CI, and production. There
-is no staging database — be deliberate with destructive queries.
+- `SUPABASE_SERVICE_ROLE_KEY` is server-only, grants full DB access, and bypasses
+  RLS. Handle with care.
+- Supabase is a **single shared project** across local, CI, and production. There
+  is no staging database — be deliberate with destructive queries.
 
 ## Working norms
 
