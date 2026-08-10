@@ -1,4 +1,5 @@
 import { createAdminClient } from '../../../src/lib/supabase-server'
+import { captureServer, flushPostHog } from '@/src/lib/posthog-server'
 
 // ─────────────────────────────────────────────────────────────────────────────
 // POST /api/track/share-event
@@ -73,6 +74,12 @@ export default async function handler(req, res) {
     console.error('[track/share-event] insert failed', insertError.message)
     return res.status(200).json({ ok: false })
   }
+
+  // Mirror to PostHog. Share recipients have no Supabase session, so these are
+  // attributed to the report rather than a person — which is the useful
+  // grouping anyway: "what did the people I sent this to actually do".
+  captureServer(type, { report_id: reportId, ...(row.meta ?? {}) })
+  await flushPostHog()
 
   return res.status(200).json({ ok: true })
 }

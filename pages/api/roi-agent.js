@@ -39,6 +39,12 @@ import { assessReportSpecificity } from '@/src/lib/roi/specificity'
 import { isEmployeeUser } from '@/src/lib/isEmployee'
 import { REPORT_CHAT_MESSAGE_LIMIT } from '@/src/lib/roi/constants'
 import { hasReportAccess, getGrantForUser } from '@/src/lib/roi/reportGrants'
+import { EVENTS } from '@/src/lib/analytics'
+import {
+  captureServer,
+  captureServerException,
+  flushPostHog,
+} from '@/src/lib/posthog-server'
 
 export const config = {
   maxDuration: 300,
@@ -349,6 +355,27 @@ export default async function handler(req, res) {
   res.setHeader('Cache-Control', 'no-cache, no-transform')
   res.setHeader('Connection', 'keep-alive')
   res.setHeader('X-Accel-Buffering', 'no')
+
+  // ── Telemetry ──────────────────────────────────────────────────────────────
+  // Everything past this point is the long-running work. The started/completed
+  // /failed triple is what makes a stuck run visible: a `started` with no
+  // matching terminal event is a generation that died without even reaching
+  // the catch — a lambda timeout, or the client vanishing mid-stream.
+  const telemetryStartedAt = Date.now()
+  const phDistinctId = user?.id ?? null
+  const phBase = {
+    mode,
+    is_alpha: Boolean(isAlpha),
+    company:
+      formData?.companyName ?? persistedReport?.input_data?.companyName ?? null,
+    report_id: reportId ?? null,
+    is_share_link: isShareLinkChat,
+  }
+  captureServer(
+    mode === 'generate' ? EVENTS.GENERATION_STARTED : EVENTS.CHAT_MESSAGE_SENT,
+    phBase,
+    phDistinctId,
+  )
 
   // ── Client-disconnect handling ─────────────────────────────────────────────
   // If the browser tab closes, navigates away, or the landing page crashes
@@ -736,6 +763,15 @@ export default async function handler(req, res) {
         send(res, { type: 'email_error', message: bgErr.message })
       }
     }
+    captureServer(
+      EVENTS.GENERATION_COMPLETED,
+      {
+        ...phBase,
+        duration_ms: Date.now() - telemetryStartedAt,
+        client_disconnected: clientDisconnected,
+      },
+      phDistinctId,
+    )
   } catch (err) {
     console.error('[roi-agent] Error:', err)
     if (isOpenAIQuotaError(err)) {
@@ -745,8 +781,23 @@ export default async function handler(req, res) {
         mode: req.body?.mode ?? null,
       })
     }
+    // Both: the event so the failure shows up in funnels next to the successful
+    // runs, the exception so it lands in the issue list that raises the ticket.
+    captureServer(
+      EVENTS.GENERATION_FAILED,
+      {
+        ...phBase,
+        duration_ms: Date.now() - telemetryStartedAt,
+        error_message: err?.message ?? String(err),
+      },
+      phDistinctId,
+    )
+    captureServerException(err, phBase, phDistinctId)
     send(res, { type: 'error', message: friendlyErrorMessage(err) })
   }
 
+  // The lambda can be frozen the instant the stream closes, so push telemetry
+  // before ending rather than trusting a batch timer that may never fire.
+  await flushPostHog()
   res.end()
 }
