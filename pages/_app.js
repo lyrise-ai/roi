@@ -62,26 +62,6 @@ function NavigationProgress() {
 export default function MyApp(props) {
   const { Component, pageProps } = props
 
-  React.useEffect(() => {
-    const token = process.env.NEXT_PUBLIC_POSTHOG_PROJECT_TOKEN
-    if (!token || typeof window === 'undefined') return undefined
-
-    let cancelled = false
-    import('posthog-js')
-      .then(({ default: posthog }) => {
-        if (!cancelled) {
-          posthog.init(token, {
-            api_host: process.env.NEXT_PUBLIC_POSTHOG_HOST,
-          })
-        }
-      })
-      .catch(() => {})
-
-    return () => {
-      cancelled = true
-    }
-  }, [])
-
   const [authUser, setAuthUser] = React.useState(null)
   const [authReady, setAuthReady] = React.useState(false)
 
@@ -98,6 +78,19 @@ export default function MyApp(props) {
       Sentry.setUser(user ? { id: user.id, email: user.email } : null)
     }
 
+    // Tie the PostHog person to the Supabase user id — not the email, which
+    // changes and isn't a stable key. Without this, every session is a fresh
+    // anonymous person and "show me everything this user did" is impossible.
+    // reset() on sign-out stops the next person on a shared machine inheriting
+    // the identity, and starts a new session recording.
+    const setPostHogUser = async (user) => {
+      const { getPostHog } = await import('../src/lib/posthog-browser')
+      const posthog = await getPostHog()
+      if (!active || !posthog) return
+      if (user) posthog.identify(user.id, { email: user.email })
+      else posthog.reset()
+    }
+
     import('../src/lib/supabase-browser')
       .then(({ createClient }) => {
         if (!active) return
@@ -108,6 +101,7 @@ export default function MyApp(props) {
           setAuthUser(user)
           setAuthReady(true)
           setSentryUser(user).catch(() => {})
+          setPostHogUser(user).catch(() => {})
         })
         subscription = data.subscription
       })

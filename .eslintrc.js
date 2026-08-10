@@ -55,7 +55,9 @@ module.exports = {
   ],
 
   rules: {
-    'no-underscore-dangle': ['error', { allow: ['_value'] }],
+    // `__loaded` is posthog-js's own public "is init finished" flag — their
+    // name, not ours.
+    'no-underscore-dangle': ['error', { allow: ['_value', '__loaded'] }],
 
     // Server handlers and the ROI pipeline log deliberately, and Sentry picks
     // those up. Only a bare console.log is noise.
