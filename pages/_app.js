@@ -4,6 +4,8 @@ import { useRouter } from 'next/router'
 import '../styles/global.css'
 import { AuthSessionContext } from '../src/context/AuthSessionContext'
 
+const BASE_URL = process.env.NEXT_PUBLIC_BASE_URL ?? 'https://roi.lyrise.ai'
+
 function NavigationProgress() {
   const router = useRouter()
   const [progress, setProgress] = React.useState(0)
@@ -47,11 +49,11 @@ function NavigationProgress() {
         left: 0,
         width: `${progress}%`,
         height: 3,
-        background: '#2957FF',
+        background: 'var(--lyrise-purple)',
         zIndex: 9999,
         transition: 'width 0.3s ease, opacity 0.3s ease',
         opacity: progress === 100 ? 0 : 1,
-        boxShadow: '0 0 8px rgba(41, 87, 255, 0.6)',
+        boxShadow: 'var(--shadow-accent)',
       }}
     />
   )
@@ -59,33 +61,6 @@ function NavigationProgress() {
 
 export default function MyApp(props) {
   const { Component, pageProps } = props
-
-  React.useEffect(() => {
-    if (
-      process.env.NEXT_PUBLIC_ENV === 'production' &&
-      typeof window !== 'undefined' &&
-      process.env.NEXT_PUBLIC_AMPLITUDE
-    ) {
-      let cancelled = false
-      import('amplitude-js')
-        .then((module) => {
-          const amplitude = module.default ?? module
-          if (!cancelled) {
-            amplitude
-              .getInstance()
-              .init(process.env.NEXT_PUBLIC_AMPLITUDE, null, {
-                includeReferrer: true,
-                includeUtm: true,
-              })
-          }
-        })
-        .catch(() => {})
-      return () => {
-        cancelled = true
-      }
-    }
-    return undefined
-  }, [])
 
   React.useEffect(() => {
     const token = process.env.NEXT_PUBLIC_POSTHOG_PROJECT_TOKEN
@@ -165,10 +140,9 @@ export default function MyApp(props) {
           property="og:description"
           content="Unlock hidden ROI in your operations with AI-powered analysis"
         />
-        <meta
-          property="og:image"
-          content="https://i.ibb.co/VYtV50zn/lyrise-logo.jpg"
-        />
+        {/* Absolute — link scrapers won't resolve a relative og:image.
+            Self-hosted since the old value pointed at a free image host. */}
+        <meta property="og:image" content={`${BASE_URL}/og-image.png`} />
         <meta property="og:type" content="website" />
       </Head>
       <NavigationProgress />

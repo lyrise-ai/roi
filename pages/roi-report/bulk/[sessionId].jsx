@@ -129,7 +129,7 @@ export default function BulkReviewPage() {
 
   if (!router.isReady) {
     return (
-      <div className="rebranding-landing-page min-h-screen -mt-[12px]">
+      <div className="min-h-screen -mt-[12px]">
         <MainHeader />
       </div>
     )
@@ -137,7 +137,7 @@ export default function BulkReviewPage() {
 
   if (!session) {
     return (
-      <div className="rebranding-landing-page min-h-screen -mt-[12px]">
+      <div className="min-h-screen -mt-[12px]">
         <MainHeader />
         <div className="max-w-2xl mx-auto px-4 py-20 text-center">
           <h1 className="text-xl font-bold text-[#2C2C2C] mb-2">
@@ -160,7 +160,7 @@ export default function BulkReviewPage() {
 
   if (!row) {
     return (
-      <div className="rebranding-landing-page min-h-screen -mt-[12px]">
+      <div className="min-h-screen -mt-[12px]">
         <MainHeader />
         <div className="max-w-2xl mx-auto px-4 py-20 text-center">
           <h1 className="text-xl font-bold text-[#2C2C2C] mb-2">
@@ -197,7 +197,7 @@ export default function BulkReviewPage() {
   }
 
   return (
-    <div className="rebranding-landing-page min-h-screen -mt-[12px]">
+    <div className="min-h-screen -mt-[12px]">
       <Head>
         <title>Bulk Review · {row.payload?.companyName ?? '…'} | LyRise</title>
       </Head>

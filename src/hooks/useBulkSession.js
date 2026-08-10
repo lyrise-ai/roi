@@ -340,6 +340,9 @@ export default function useBulkSession(sessionId) {
       }),
     )
     return () => unsubs.forEach((fn) => fn())
+    // Keyed on row *count*, not the rows themselves: the array identity changes
+    // on every log tick, and re-subscribing each tick would drop buffered logs.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [sessionId, session?.rows?.length])
 
   const setCursor = useCallback(

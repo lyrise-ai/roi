@@ -27,3 +27,12 @@ yarn-error.log*
 .vscode
 
 .eslintcache
+
+# The report templates are rendered by string-replacing {{$json.…}} placeholders
+# and shipped to prospects — reflowing their markup is a money-path risk for no
+# gain. The alpha guide is a one-off exported page. Both are read, not authored.
+/public/*.html
+
+# Vendored: the brand guideline pages and skill docs come from the design
+# system, not from this repo. Reformatting them makes every update a conflict.
+/.claude

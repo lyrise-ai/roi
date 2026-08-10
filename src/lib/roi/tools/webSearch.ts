@@ -7,6 +7,8 @@
 //   3. Jina      (no key needed)     — free, last resort
 // ─────────────────────────────────────────────────────────────────────────────
 
+import { roiLog } from '@/src/lib/roi/debug'
+
 export interface SearchResult {
   title: string
   url: string
@@ -58,8 +60,10 @@ async function tavilySearch(
     const data = await res.json()
     // Sanity log: dump Tavily's raw response shape so we can distinguish
     // "Tavily returned []" from "downstream filtering dropped results".
-    console.log(
-      `[ROI:webSearch:tavily] query="${query.slice(0, 120)}" → raw_results=${
+    // Via roiLog so it honours ROI_DEBUG instead of shouting in production.
+    roiLog(
+      'tool:web_search',
+      `tavily query="${query.slice(0, 120)}" → raw_results=${
         (data.results ?? []).length
       } answer=${data.answer ? 'yes' : 'no'} firstUrl=${
         data.results?.[0]?.url ?? 'none'

@@ -74,6 +74,9 @@ function isRedundantSnapshotText(
   return Boolean(
     (teamSizeFromForm && /\b\d[\d,]*\s*(employees?|people|staff)\b/.test(t)) ||
     (revenueRangeFromForm &&
+      // Alternation of literals with no nested quantifier — the `.*` has
+      // nothing to backtrack into, so this is linear, not exponential.
+      // eslint-disable-next-line security/detect-unsafe-regex
       /\b(annual\s+)?revenue\b|\bgenerates?\b.*\$|\bannually\b/.test(t)),
   )
 }

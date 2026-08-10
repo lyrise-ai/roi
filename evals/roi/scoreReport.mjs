@@ -188,7 +188,7 @@ export function scoreReport({ text, rubric, testCase }) {
     ...new Set([
       ...(testCase.documentType === 'executive-summary'
         ? []
-        : rubric.requiredSectionHeadings ?? []),
+        : (rubric.requiredSectionHeadings ?? [])),
       ...defaultSections,
       ...(testCase.requiredSections ?? []),
     ]),

@@ -34,7 +34,7 @@ export function useEmailSendControl({ reportId, defaultEmail = '', onSent }) {
       setSent(true)
       setExpanded(false)
       onSent?.(to)
-    } catch (err) {
+    } catch {
       setError(true)
     } finally {
       setSending(false)

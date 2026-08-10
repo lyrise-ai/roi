@@ -114,29 +114,6 @@ const DEV_STEP2_PRESET = {
   currency: 'USD – US Dollar (USD)',
 }
 
-// ── Typewriter hook (alpha splash) ────────────────────────────────────────────
-
-function useTypewriter(text, speed = 35, startDelay = 0) {
-  const [displayed, setDisplayed] = useState('')
-  useEffect(() => {
-    let timeout
-    let interval
-    timeout = setTimeout(() => {
-      let i = 0
-      interval = setInterval(() => {
-        setDisplayed(text.slice(0, i + 1))
-        i++
-        if (i >= text.length) clearInterval(interval)
-      }, speed)
-    }, startDelay)
-    return () => {
-      clearTimeout(timeout)
-      clearInterval(interval)
-    }
-  }, [text, speed, startDelay])
-  return displayed
-}
-
 // ── Tooltip (alpha form fields) ───────────────────────────────────────────────
 
 function Tooltip({ text, openLeft = false }) {
@@ -173,8 +150,6 @@ function Tooltip({ text, openLeft = false }) {
 
 function SplashScreen({ onExitComplete }) {
   const [exiting, setExiting] = useState(false)
-  const line1 = useTypewriter('', 30, 1200)
-  const line2 = useTypewriter('', 30, 4100)
 
   useEffect(() => {
     const t = setTimeout(() => setExiting(true), 8050)
@@ -1001,7 +976,6 @@ export default function ROIReport({ isEmployee, isAlpha }) {
   // Alpha-specific UI state
   const [showSplash, setShowSplash] = useState(isAlpha)
 
-  const [isGenerationComplete, setIsGenerationComplete] = useState(false)
   const generationStartedAt = useRef(Date.now())
   const [generationLog, setGenerationLog] = useState('')
   const [sseEvents, setSseEvents] = useState([])
@@ -1070,7 +1044,6 @@ export default function ROIReport({ isEmployee, isAlpha }) {
   const runGeneration = useCallback(
     async ({ skipLLM = false, estimatesOnly = false } = {}) => {
       generationStartedAt.current = Date.now()
-      setIsGenerationComplete(false)
       setViewState(VIEW_STATES.GENERATING)
       setGenerationLog('')
       setSseEvents([])
@@ -1163,7 +1136,6 @@ export default function ROIReport({ isEmployee, isAlpha }) {
                   )
                   setReportId(data.report_id)
                   setReportState(builtState)
-                  setIsGenerationComplete(true)
                   setViewState(VIEW_STATES.FINALISING)
                   return
                 }
@@ -1208,7 +1180,6 @@ export default function ROIReport({ isEmployee, isAlpha }) {
                 (event.assembled || latestState?.assembled) &&
                 latestState?.renderedHtml
               ) {
-                setIsGenerationComplete(true)
                 setViewState(VIEW_STATES.FINALISING)
               } else {
                 setErrorMessage(
@@ -1228,7 +1199,7 @@ export default function ROIReport({ isEmployee, isAlpha }) {
         setViewState(VIEW_STATES.ERROR)
       }
     },
-    [s1, s2, isAlpha],
+    [s1, s2, isAlpha, router],
   )
 
   // Enforce minimum loader visibility before transitioning to COMPLETE
@@ -1344,7 +1315,7 @@ export default function ROIReport({ isEmployee, isAlpha }) {
 
   if (viewState === VIEW_STATES.LOADING) {
     return (
-      <div className="rebranding-landing-page -mt-[12px]">
+      <div className="-mt-[12px]">
         <MainHeader />
         <div className="flex items-center justify-center min-h-screen">
           <div className="w-8 h-8 border-4 border-gray-200 rounded-full border-t-gray-900 animate-spin" />
@@ -1386,7 +1357,7 @@ export default function ROIReport({ isEmployee, isAlpha }) {
 
   if (viewState === VIEW_STATES.SUCCESS) {
     return (
-      <div className="rebranding-landing-page -mt-[12px]">
+      <div className="-mt-[12px]">
         <MainHeader />
         <div className="flex flex-col items-center justify-center min-h-screen p-4">
           <div className="w-full max-w-xl bg-white border border-gray-100 shadow-xl rounded-2xl">
@@ -1415,7 +1386,7 @@ export default function ROIReport({ isEmployee, isAlpha }) {
   // retiring the demo as it was designed around the old UI.
   /* if (viewState === VIEW_STATES.CHOICE) {
     return (
-      <div className="rebranding-landing-page -mt-[12px]">
+      <div className="-mt-[12px]">
         <MainHeader />
         <div className="flex flex-col items-center justify-center min-h-screen p-4">
           <div className="w-full max-w-lg bg-white border border-gray-100 shadow-xl rounded-2xl overflow-hidden">
@@ -1465,7 +1436,7 @@ export default function ROIReport({ isEmployee, isAlpha }) {
 
   if (viewState === VIEW_STATES.ERROR) {
     return (
-      <div className="rebranding-landing-page -mt-[12px]">
+      <div className="-mt-[12px]">
         <MainHeader />
         <div className="flex items-center justify-center min-h-screen p-4">
           <div className="w-full max-w-xl bg-white border border-gray-100 shadow-xl rounded-2xl">
@@ -1485,7 +1456,7 @@ export default function ROIReport({ isEmployee, isAlpha }) {
   const progress = (step / TOTAL_STEPS) * 100
 
   return (
-    <div className="rebranding-landing-page -mt-[12px]">
+    <div className="-mt-[12px]">
       <MainHeader />
       <Head>
         <title>Get Your AI ROI Report | LyRise</title>

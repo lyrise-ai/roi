@@ -57,9 +57,11 @@ before changing the code they sit above.
   staged JS/TS, Prettier on staged JSON/CSS/MD. Don't bypass it. The hook exports
   `ESLINT_USE_FLAT_CONFIG=false` because this repo still uses `.eslintrc.js`.
 - CI (`.github/workflows/e2e.yml`) has two jobs: `checks` (`npm run lint` +
-  `npm test`, ~1 min) and `e2e` (Playwright). ESLint reports 0 errors and ~250
-  warnings — only errors gate. Don't add new errors; don't feel obliged to fix
-  the warning backlog in an unrelated PR.
+  `npm test`, ~1 min) and `e2e` (Playwright). **ESLint is clean — 0 errors, 0
+  warnings — and `next build` compiles with no warnings.** Both were a ~260-item
+  backlog until LYR-181; leave them at zero. A rule that fires on correct code
+  gets turned off in `.eslintrc.js` with a comment saying why, never suppressed
+  file-by-file. Prettier violations are errors, so they fail CI.
 - **Design system:** tokens are CSS custom properties in `styles/tokens/*.css`;
   `tailwind.config.js` maps them to utilities by `var()` reference and never
   restates a value. Use the semantic utilities (`bg-surface-card`, `text-ink-muted`,
