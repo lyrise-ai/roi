@@ -26,6 +26,15 @@ module.exports = {
     },
   },
 
+  // ESLint has no TypeScript parser here, so declaration files trip `no-undef`
+  // on TS-only globals (`JSX.Element`). tsc is the gate for those files.
+  overrides: [
+    {
+      files: ['**/*.d.ts'],
+      rules: { 'no-undef': 'off' },
+    },
+  ],
+
   plugins: ['sonarjs'],
   extends: [
     'next/core-web-vitals',
