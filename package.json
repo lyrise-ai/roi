@@ -1,5 +1,5 @@
 {
-  "name": "lyrise-website",
+  "name": "lyrise-roi",
   "version": "0.1.0",
   "private": true,
   "scripts": {
@@ -9,7 +9,7 @@
     "lint": "ESLINT_USE_FLAT_CONFIG=false eslint . --ext .js,.jsx,.ts,.tsx --ignore-pattern .next --ignore-pattern node_modules",
     "lint:fix": "ESLINT_USE_FLAT_CONFIG=false eslint . --ext .js,.jsx,.ts,.tsx --ignore-pattern .next --ignore-pattern node_modules --fix",
     "deadcode": "knip",
-    "test": "node --test \"src/**/__tests__/*.test.mjs\"",
+    "test": "node --disable-warning=MODULE_TYPELESS_PACKAGE_JSON --test \"src/**/__tests__/*.test.mjs\"",
     "prettier": "prettier --write .",
     "eval:roi": "node evals/roi/run.mjs",
     "eval:roi:scaffold": "node evals/roi/scaffoldCasesFromPdf.mjs",
@@ -25,9 +25,7 @@
     "@supabase/ssr": "^0.12.0",
     "@supabase/supabase-js": "^2.105.1",
     "ai": "^6.0.138",
-    "amplitude-js": "^8.20.0",
     "clsx": "^2.1.1",
-    "esbuild": "^0.19.2",
     "framer-motion": "^11.18.2",
     "next": "^15.5.19",
     "papaparse": "^5.5.3",
@@ -57,6 +55,7 @@
     "@types/react": "^18.3.12",
     "@types/react-dom": "^18.3.1",
     "autoprefixer": "^10.4.14",
+    "esbuild": "^0.19.2",
     "eslint": "^9.39.4",
     "eslint-config-airbnb": "^18.2.1",
     "eslint-config-next": "^15.5.19",

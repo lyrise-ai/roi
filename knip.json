@@ -17,7 +17,6 @@
   ],
   "ignore": ["src/lib/roi/pipeline/__tests__/fixtures.ts"],
   "ignoreDependencies": [
-    "amplitude-js",
     "posthog-js",
     "eslint-config-airbnb",
     "eslint-config-next",
