@@ -27,7 +27,7 @@ export default function MainHeader() {
   return (
     <header className="px-2 py-4 mt-3 mb-10 sm:px-10 lg:mb-0">
       <div
-        className={`custom-container px-[1rem] sm:px[2.5rem] flex items-center justify-between gap-4 py-3 ${styles.navbar}`}
+        className={`px-[1rem] sm:px[2.5rem] flex items-center justify-between gap-4 py-3 ${styles.navbar}`}
       >
         <Link href="/" title="LyRise" className="h-[36px]">
           <Image
@@ -42,7 +42,7 @@ export default function MainHeader() {
           {isClient && isRoiPage && (
             <Link
               href="/dashboard"
-              className="font-outfit text-[16px] font-[600] text-new-black hover:opacity-70 transition-opacity"
+              className="text-[16px] font-[600] text-new-black hover:opacity-70 transition-opacity"
             >
               My Reports
             </Link>
@@ -50,7 +50,7 @@ export default function MainHeader() {
           {isEmployee && isRoiPage && (
             <Link
               href="/dashboard"
-              className="font-outfit text-[16px] font-[600] text-new-black hover:opacity-70 transition-opacity"
+              className="text-[16px] font-[600] text-new-black hover:opacity-70 transition-opacity"
             >
               ← Dashboard
             </Link>
@@ -60,7 +60,7 @@ export default function MainHeader() {
             <button
               type="button"
               onClick={handleSignOut}
-              className="cursor-pointer text-[18px] font-[500] flex items-center justify-center gap-2 p-2 px-5 leading-[24px] rounded-[30px] text-gray-600 border border-gray-300 hover:bg-gray-50 transition-colors font-outfit"
+              className="cursor-pointer text-[18px] font-[500] flex items-center justify-center gap-2 p-2 px-5 leading-[24px] rounded-[30px] text-gray-600 border border-gray-300 hover:bg-gray-50 transition-colors"
             >
               Sign out
             </button>
@@ -68,7 +68,7 @@ export default function MainHeader() {
             <>
               <Link
                 href="/auth/login"
-                className="cursor-pointer text-[18px] font-[500] flex items-center justify-center gap-2 p-2 px-5 leading-[24px] rounded-[30px] text-gray-600 border border-gray-300 hover:bg-gray-50 transition-colors font-outfit"
+                className="cursor-pointer text-[18px] font-[500] flex items-center justify-center gap-2 p-2 px-5 leading-[24px] rounded-[30px] text-gray-600 border border-gray-300 hover:bg-gray-50 transition-colors"
               >
                 Log in
               </Link>

@@ -1,0 +1,39 @@
+:root {
+  /* Glass Effect — exact settings from the Brand Manual (p.25) */
+  --glass-fill: linear-gradient(
+    135deg,
+    rgba(255, 255, 255, 0.6),
+    rgba(255, 255, 255, 0.25)
+  );
+  --glass-border: 1px solid rgba(255, 255, 255, 0.4); /* @kind other */
+  --glass-blur: blur(15px); /* @kind other */
+  --glass-shadow: var(--shadow-glass);
+
+  /* Dark-surface variant of the same recipe */
+  --glass-fill-dark: linear-gradient(
+    135deg,
+    rgba(255, 255, 255, 0.14),
+    rgba(255, 255, 255, 0.04)
+  );
+  --glass-border-dark: 1px solid rgba(255, 255, 255, 0.18); /* @kind other */
+
+  /* "Shining Reflections" — abstract purple light washes used as backgrounds */
+  --reflection-purple: radial-gradient(
+    60% 60% at 20% 15%,
+    rgba(102, 102, 255, 0.55) 0%,
+    rgba(102, 102, 255, 0) 70%
+  ); /* @kind color */
+  --reflection-teal: radial-gradient(
+    50% 50% at 85% 10%,
+    rgba(0, 184, 176, 0.35) 0%,
+    rgba(0, 184, 176, 0) 70%
+  ); /* @kind color */
+  --reflection-pink: radial-gradient(
+    55% 55% at 75% 85%,
+    rgba(193, 150, 197, 0.45) 0%,
+    rgba(193, 150, 197, 0) 70%
+  ); /* @kind color */
+  --bg-reflections:
+    var(--reflection-purple), var(--reflection-teal), var(--reflection-pink);
+  --bg-deep: radial-gradient(120% 90% at 50% -10%, #2b2bb8 0%, #000022 60%);
+}

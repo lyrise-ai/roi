@@ -1,0 +1,54 @@
+:root {
+  /* One family, three weights, as specified in the Brand Manual (p.22):
+     Regular / Semibold / Extra Bold. */
+  --font-sans: 'Figtree', 'Proxima Nova', 'Helvetica Neue', Arial, sans-serif;
+  --font-display: var(--font-sans);
+  --font-body: var(--font-sans);
+  --font-mono: ui-monospace, 'SFMono-Regular', Menlo, monospace;
+
+  --weight-regular: 400;
+  --weight-semibold: 600;
+  --weight-extrabold: 800;
+
+  --text-2xs: 11px;
+  --text-xs: 12px;
+  --text-sm: 14px;
+  --text-base: 16px;
+  --text-md: 18px;
+  --text-lg: 20px;
+  --text-xl: 24px;
+  --text-2xl: 30px;
+  --text-3xl: 38px;
+  --text-4xl: 48px;
+  --text-5xl: 60px;
+  --text-6xl: 76px;
+
+  --leading-tight: 1.05;
+  --leading-snug: 1.2;
+  --leading-normal: 1.45;
+  --leading-relaxed: 1.65;
+
+  --tracking-tight: -0.02em;
+  --tracking-snug: -0.01em;
+  --tracking-normal: 0;
+  --tracking-wide: 0.06em;
+  --tracking-caps: 0.12em;
+
+  /* Semantic type roles */
+  --type-display: var(--weight-extrabold) var(--text-6xl)/var(--leading-tight)
+    var(--font-display);
+  --type-h1: var(--weight-extrabold) var(--text-4xl)/var(--leading-snug)
+    var(--font-display);
+  --type-h2: var(--weight-extrabold) var(--text-3xl)/var(--leading-snug)
+    var(--font-display);
+  --type-h3: var(--weight-semibold) var(--text-xl)/var(--leading-snug)
+    var(--font-display);
+  --type-body: var(--weight-regular) var(--text-base)/var(--leading-relaxed)
+    var(--font-body);
+  --type-body-lg: var(--weight-regular) var(--text-md)/var(--leading-relaxed)
+    var(--font-body);
+  --type-label: var(--weight-semibold) var(--text-sm)/var(--leading-normal)
+    var(--font-body);
+  --type-eyebrow: var(--weight-semibold) var(--text-xs)/var(--leading-normal)
+    var(--font-body);
+}

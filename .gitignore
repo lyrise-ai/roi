@@ -46,9 +46,14 @@ eslint_error.log
 # Local editor and agent settings
 .vscode/
 .idea/
-.claude/
 .codex/
 .vscodelogs/
+
+# Agent config: skills and shared settings are committed, local overrides are not.
+.claude/*
+!.claude/skills/
+!.claude/settings.json
+.claude/settings.local.json
 
 # OS files
 .DS_Store

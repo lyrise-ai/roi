@@ -1,0 +1,15 @@
+:root {
+  /* The wordmark is built from pill-ended strokes: radii are generous and
+     terminate in true capsules at small sizes. */
+  --radius-xs: 4px;
+  --radius-sm: 8px;
+  --radius-md: 12px;
+  --radius-lg: 16px;
+  --radius-xl: 24px;
+  --radius-2xl: 32px;
+  --radius-pill: 999px;
+  --radius-card: var(--radius-lg);
+  --radius-glass: var(--radius-xl);
+  --radius-control: var(--radius-pill);
+  --radius-field: var(--radius-md);
+}

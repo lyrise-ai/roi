@@ -1,0 +1,46 @@
+*,
+*::before,
+*::after {
+  box-sizing: border-box;
+}
+body {
+  margin: 0;
+  font: var(--type-body);
+  color: var(--text-body);
+  background: var(--surface-page);
+  -webkit-font-smoothing: antialiased;
+}
+h1,
+h2,
+h3,
+h4 {
+  color: var(--text-heading);
+  margin: 0;
+  text-wrap: balance;
+}
+h1 {
+  font: var(--type-h1);
+}
+h2 {
+  font: var(--type-h2);
+}
+h3 {
+  font: var(--type-h3);
+}
+p {
+  margin: 0;
+  text-wrap: pretty;
+}
+a {
+  color: var(--text-link);
+  text-decoration: none;
+  transition: color var(--duration-base) var(--ease-out);
+}
+a:hover {
+  color: var(--text-link-hover);
+  text-decoration: underline;
+}
+:focus-visible {
+  outline: 3px solid var(--focus-ring);
+  outline-offset: 2px;
+}

@@ -3,7 +3,6 @@ import { useRouter } from 'next/router'
 import Head from 'next/head'
 import { createRouteClient } from '../../src/lib/supabaseRouteClient'
 import { createClient as createBrowserClient } from '../../src/lib/supabase-browser'
-import { INTER_FONT_FAMILY } from '../../src/utilities/fonts'
 import LoadingButton from '../../src/components/shared/Button/LoadingButton'
 
 export async function getServerSideProps({ req, res, query }) {
@@ -107,7 +106,6 @@ export default function Login({ next = '/dashboard' }) {
           justifyContent: 'center',
           background: '#E2DED8',
           padding: '24px 16px',
-          fontFamily: INTER_FONT_FAMILY,
         }}
       >
         <div

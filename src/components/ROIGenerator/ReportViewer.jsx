@@ -4,7 +4,6 @@ import { drainSSE } from '@/src/lib/drainSSE'
 import { REPORT_CHAT_MESSAGE_LIMIT } from '@/src/lib/roi/constants'
 import { loadSentryFeedback, setFeedbackSource } from '@/src/lib/sentryFeedback'
 import { trackShareEvent } from '@/src/lib/trackShareEvent'
-import { INTER_FONT_FAMILY } from '@/src/utilities/fonts'
 import { useSpotlightTour } from '@/src/hooks/useSpotlightTour'
 import SpotlightTourOverlay from '@/src/components/shared/SpotlightTourOverlay'
 import ReportContent from './Report/ReportContent'
@@ -569,7 +568,6 @@ export default function ReportViewer({
         display: 'flex',
         flexDirection: 'column',
         height: '100vh',
-        fontFamily: INTER_FONT_FAMILY,
         WebkitFontSmoothing: 'antialiased',
         MozOsxFontSmoothing: 'grayscale',
         textRendering: 'optimizeLegibility',

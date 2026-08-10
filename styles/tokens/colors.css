@@ -1,0 +1,71 @@
+:root {
+  /* --- Main brand colors (Brand Manual p.8) --- */
+  --lyrise-purple: #6666ff; /* PANTONE 7669 CP */
+  --dark-blue: #000022; /* PANTONE 296 CP */
+  --brand-grey: #dfe1df; /* PANTONE Cool Gray CP */
+
+  /* Web theme violet — meta[theme-color] on lyrise.ai, used for saturated CTAs */
+  --lyrise-violet: #4200ff;
+
+  /* --- Secondary brand colors (Brand Manual p.10), named as in the manual --- */
+  --remarkable: #f04b54;
+  --power: #ee3124;
+  --trust: #5eaee0;
+  --sunny: #f7901e;
+  --pinky: #c196c5;
+  --grow: #00b8b0;
+
+  /* --- Purple ramp, interpolated from --lyrise-purple --- */
+  --purple-50: #f0f0ff;
+  --purple-100: #e0e0ff;
+  --purple-200: #c7c7ff;
+  --purple-300: #a3a3ff;
+  --purple-400: #8585ff;
+  --purple-500: #6666ff;
+  --purple-600: #5252e6;
+  --purple-700: #4200ff;
+  --purple-800: #2b2bb8;
+  --purple-900: #1a1a70;
+
+  /* --- Neutral ramp, anchored on --dark-blue and --brand-grey --- */
+  --neutral-0: #ffffff;
+  --neutral-50: #f7f8f7;
+  --neutral-100: #eff0ef;
+  --neutral-200: #dfe1df;
+  --neutral-300: #c4c7c8;
+  --neutral-400: #9a9ea4;
+  --neutral-500: #71757f;
+  --neutral-600: #4e5260;
+  --neutral-700: #2f3342;
+  --neutral-800: #171a2b;
+  --neutral-900: #000022;
+
+  /* --- Semantic aliases --- */
+  --text-body: var(--neutral-700);
+  --text-heading: var(--dark-blue);
+  --text-muted: var(--neutral-500);
+  --text-inverse: var(--neutral-0);
+  --text-accent: var(--lyrise-purple);
+  --text-link: var(--lyrise-purple);
+  --text-link-hover: var(--purple-700);
+
+  --surface-page: var(--neutral-0);
+  --surface-subtle: var(--neutral-50);
+  --surface-card: var(--neutral-0);
+  --surface-inverse: var(--dark-blue);
+  --surface-accent: var(--lyrise-purple);
+  --surface-accent-subtle: var(--purple-50);
+
+  --border-subtle: var(--neutral-200);
+  --border-strong: var(--neutral-300);
+  --border-accent: var(--lyrise-purple);
+  --border-glass: rgba(255, 255, 255, 0.4);
+
+  --success: var(--grow);
+  --danger: var(--power);
+  --warning: var(--sunny);
+  --info: var(--trust);
+  --highlight: var(--remarkable);
+
+  --focus-ring: rgba(102, 102, 255, 0.45);
+}

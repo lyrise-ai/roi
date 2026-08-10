@@ -13,14 +13,11 @@ import {
 import MainHeader from '../src/layout/MainHeader/index'
 import { getRoleForUser } from '../src/lib/authHelpers'
 import ErrorBoundary from '../src/components/shared/ErrorBoundary'
-import { INTER_FONT_FAMILY } from '../src/utilities/fonts'
 
 const AlphaDashboardPanel = dynamic(
   () => import('../src/components/AlphaDashboardPanel'),
   { ssr: false },
 )
-
-const FONT = INTER_FONT_FAMILY
 
 const STATUS_STYLES = {
   SUCCESS: { bg: '#F0FDF4', color: '#15803D', label: 'Done' },
@@ -52,13 +49,11 @@ const thStyle = {
   color: '#9CA3AF',
   textAlign: 'left',
   whiteSpace: 'nowrap',
-  fontFamily: FONT,
 }
 
 const tdStyle = {
   padding: '16px 24px',
   fontSize: 13,
-  fontFamily: FONT,
 }
 
 function StatusBadge({ status }) {
@@ -74,7 +69,6 @@ function StatusBadge({ status }) {
         fontWeight: 600,
         background: s.bg,
         color: s.color,
-        fontFamily: FONT,
       }}
     >
       {s.label}
@@ -96,7 +90,6 @@ function AlphaBadge() {
         letterSpacing: '0.05em',
         background: '#F3E8FF',
         color: '#7C3AED',
-        fontFamily: FONT,
       }}
     >
       Alpha
@@ -117,7 +110,6 @@ function RoleBadge({ role }) {
         fontWeight: 600,
         background: isEmployee ? '#EFF6FF' : '#F9FAFB',
         color: isEmployee ? '#1D4ED8' : '#6B7280',
-        fontFamily: FONT,
       }}
     >
       {isEmployee ? 'Employee' : 'Client'}
@@ -200,7 +192,6 @@ function StatCard({ label, value }) {
         padding: '20px 24px',
         boxShadow: '0 1px 6px rgba(0,0,0,0.07)',
         border: '1px solid #F3F4F6',
-        fontFamily: FONT,
       }}
     >
       <p
@@ -393,9 +384,7 @@ function DashboardInner({
   const TABS = ['Reports', 'My Reports', 'Users', 'Activity', 'Alpha']
 
   return (
-    <div
-      style={{ minHeight: '100vh', background: '#E2DED8', fontFamily: FONT }}
-    >
+    <div style={{ minHeight: '100vh', background: '#E2DED8' }}>
       <style>{`@keyframes spin { to { transform: rotate(360deg); } }`}</style>
       <ToastContainer position="top-right" autoClose={5000} theme="light" />
       <MainHeader />
@@ -455,7 +444,6 @@ function DashboardInner({
                   padding: '9px 18px',
                   textDecoration: 'none',
                   background: '#fff',
-                  fontFamily: FONT,
                 }}
               >
                 Usage
@@ -473,7 +461,6 @@ function DashboardInner({
                   padding: '9px 18px',
                   textDecoration: 'none',
                   background: '#fff',
-                  fontFamily: FONT,
                 }}
               >
                 Alpha Invites
@@ -493,7 +480,6 @@ function DashboardInner({
                   padding: '6px 18px',
                   textDecoration: 'none',
                   background: '#fff',
-                  fontFamily: FONT,
                 }}
               >
                 <span style={{ fontSize: 13, fontWeight: 600 }}>
@@ -514,7 +500,6 @@ function DashboardInner({
                 borderRadius: 999,
                 padding: '10px 20px',
                 textDecoration: 'none',
-                fontFamily: FONT,
                 whiteSpace: 'nowrap',
               }}
             >
@@ -563,7 +548,6 @@ function DashboardInner({
                     borderRadius: 999,
                     border: 'none',
                     cursor: 'pointer',
-                    fontFamily: FONT,
                     background: activeTab === tab ? '#5B48F8' : 'transparent',
                     color: activeTab === tab ? '#fff' : '#6B7280',
                     transition: 'background 0.15s, color 0.15s',
@@ -658,7 +642,6 @@ function DashboardInner({
                   borderRadius: 999,
                   padding: '10px 24px',
                   textDecoration: 'none',
-                  fontFamily: FONT,
                 }}
               >
                 + New Profit Map
@@ -783,7 +766,6 @@ function DashboardInner({
                                     background: 'none',
                                     border: 'none',
                                     cursor: 'pointer',
-                                    fontFamily: FONT,
                                     padding: 0,
                                   }}
                                 >
@@ -809,7 +791,6 @@ function DashboardInner({
                                       background: 'none',
                                       border: 'none',
                                       cursor: 'pointer',
-                                      fontFamily: FONT,
                                       padding: 0,
                                     }}
                                   >
@@ -824,7 +805,6 @@ function DashboardInner({
                                       background: 'none',
                                       border: 'none',
                                       cursor: 'pointer',
-                                      fontFamily: FONT,
                                       padding: 0,
                                     }}
                                   >
@@ -899,7 +879,6 @@ function DashboardInner({
                         padding: '48px 24px',
                         fontSize: 13,
                         color: '#9CA3AF',
-                        fontFamily: FONT,
                       }}
                     >
                       No users found.
@@ -967,7 +946,6 @@ function DashboardInner({
                   textAlign: 'center',
                   fontSize: 13,
                   color: '#9CA3AF',
-                  fontFamily: FONT,
                   margin: 0,
                 }}
               >
@@ -1004,7 +982,6 @@ function DashboardInner({
                         color: '#0F172A',
                         flex: 1,
                         minWidth: 0,
-                        fontFamily: FONT,
                       }}
                     >
                       <span style={{ fontWeight: 500 }}>{e.user_email}</span>{' '}
@@ -1017,7 +994,6 @@ function DashboardInner({
                         flexShrink: 0,
                         fontSize: 12,
                         color: '#9CA3AF',
-                        fontFamily: FONT,
                       }}
                     >
                       {timeAgo(e.created_at)}

@@ -2,7 +2,6 @@ import { useEffect, useState } from 'react'
 import Head from 'next/head'
 import { createClient } from '../../src/lib/supabase-server'
 import { getRoleForUser } from '../../src/lib/authHelpers'
-import { INTER_FONT_FAMILY } from '../../src/utilities/fonts'
 import LoadingButton from '../../src/components/shared/Button/LoadingButton'
 
 export async function getServerSideProps({ req, res }) {
@@ -142,7 +141,6 @@ export default function AlphaInvite() {
         style={{
           minHeight: '100vh',
           padding: '48px 16px',
-          fontFamily: INTER_FONT_FAMILY,
           background: '#E2DED8',
         }}
       >

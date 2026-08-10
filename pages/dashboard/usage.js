@@ -4,7 +4,6 @@ import { FaExternalLinkAlt, FaChevronDown, FaChevronUp } from 'react-icons/fa'
 import { createRouteClient } from '../../src/lib/supabaseRouteClient'
 import { createAdminClient } from '../../src/lib/supabase-server'
 import { fmtDateTime } from '../../src/utilities/formatDateTime'
-import { INTER_FONT_FAMILY } from '../../src/utilities/fonts'
 
 // ── Server-side employee gate ─────────────────────────────────────────────────
 // Non-employees never receive the page (redirected to login). Mirrors the auth
@@ -102,10 +101,7 @@ export default function UsageDashboard() {
       <Head>
         <title>Usage Monitoring | LyRise</title>
       </Head>
-      <div
-        className="min-h-screen bg-[#E2DED8] p-4 md:p-8"
-        style={{ fontFamily: INTER_FONT_FAMILY }}
-      >
+      <div className="min-h-screen bg-[#E2DED8] p-4 md:p-8">
         <div className="mb-6 flex flex-wrap items-center justify-between gap-2">
           <div>
             <h1 className="text-[28px] font-bold tracking-[-0.3px] text-[#0F172A]">

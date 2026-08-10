@@ -1,68 +1,29 @@
+/* LyRise Design System — global entry point. Consumers link this one file.
+These sit after @tailwind base so the token layer wins over preflight. */
+@import url('tokens/fonts.css');
+@import url('tokens/colors.css');
+@import url('tokens/typography.css');
+@import url('tokens/spacing.css');
+@import url('tokens/radius.css');
+@import url('tokens/elevation.css');
+@import url('tokens/effects.css');
+@import url('tokens/motion.css');
+@import url('tokens/base.css');
+
 @tailwind base;
 @tailwind components;
 @tailwind utilities;
 
-@font-face {
-  font-family: Poppins;
-  src: url('../fonts/poppins.ttf') format('opentype');
-  font-weight: 400;
-}
-
-@font-face {
-  font-family: Poppins;
-  src: url('../fonts/Poppins-Medium.ttf') format('truetype');
-  font-weight: 500;
-}
-
-@font-face {
-  font-family: Poppins;
-  src: url('../fonts/Poppins-SemiBold.ttf') format('truetype');
-  font-weight: 600;
-}
-
-@font-face {
-  font-family: Outfit;
-  src: url('../fonts/Outfit-Regular.ttf') format('truetype');
-  font-weight: 400;
-}
-
-@font-face {
-  font-family: Outfit;
-  src: url('../fonts/Outfit-Medium.ttf') format('truetype');
-  font-weight: 500;
-}
-
-@font-face {
-  font-family: Outfit;
-  src: url('../fonts/Outfit-SemiBold.ttf') format('truetype');
-  font-weight: 600;
-}
-
-@font-face {
-  font-family: Outfit;
-  src: url('../fonts/Outfit-Bold.ttf') format('truetype');
-  font-weight: 700;
-}
-
 :root {
-  --section-spacing: 120px;
-  --section-padding: 40px;
   overflow-x: hidden;
-
-  --chat-input-height: 1.2lh;
-  will-change: var(--chat-input-height);
 }
 
+/* box-sizing, margins, and link colour/decoration come from tokens/base.css. */
 *,
 *::before,
 *::after {
   margin: 0;
   padding: 0;
-  box-sizing: border-box;
-}
-
-html {
-  font-size: 16px;
 }
 
 img,
@@ -71,7 +32,6 @@ svg {
 }
 
 a {
-  text-decoration: none;
   cursor: pointer;
 }
 
@@ -80,27 +40,7 @@ li {
   list-style: none;
 }
 
-.section-padding {
-  margin-top: 90px;
-}
-
-.m-top {
-  margin-top: 80px;
-}
-
-@media (max-width: 768px) {
-  .section-padding {
-    margin-top: 40px;
-  }
-}
-
-.container {
-  /* padding-left: 15px;
-  padding-right: 15px; */
-  margin-left: auto;
-  margin-right: auto;
-}
-
+/* ReportLoadingScreen: indeterminate progress bar. */
 @keyframes indeterminate {
   0% {
     transform: translateX(-100%);
@@ -109,494 +49,32 @@ li {
     transform: translateX(400%);
   }
 }
+
 .indeterminate-line {
   animation: indeterminate 1.8s cubic-bezier(0.45, 0, 0.25, 1) infinite;
 }
 
-/* Small */
-
-@media (max-width: 480px) {
-  .container {
-    width: 100%;
-    padding-inline: 10px;
-  }
+/* ReportLoadingScreen: horizontal scroll without a visible scrollbar. */
+.without-h-scrollbar {
+  -ms-overflow-style: none; /* IE and Edge */
+  scrollbar-width: none; /* Firefox */
 }
-
-/* Small */
-
-@media (min-width: 480px) {
-  .container {
-    width: 430px;
-  }
-}
-
-/* Small */
-
-@media (min-width: 600px) {
-  .container {
-    width: 530px;
-  }
-}
-
-/* Small */
-
-@media (min-width: 768px) {
-  .container {
-    width: 750px;
-  }
-}
-
-/* Medium */
-
-@media (min-width: 992px) {
-  .container {
-    width: 970px;
-  }
-}
-
-/* Large */
-
-@media (min-width: 1200px) {
-  .container {
-    width: 1170px;
-  }
-}
-
-/* Very Large */
-
-@media (min-width: 1400px) {
-  .container {
-    width: 1340px;
-  }
-}
-
-.active {
-  text-decoration: underline;
-}
-
-/* .slider-arrow {
-  position: absolute;
-  z-index: 1;
-  height: 100%;
-  width: 100%;
-}
-
-.arrow-btn {
-  top: 45%;
-}
-
-.next {
-  float: right;
-} */
-
-.arrow-btn.prev::before {
-  content: '';
-}
-
-.arrow-btn.next::before {
-  content: '';
-}
-
-.slick-dots {
-  position: relative;
-  top: 0px;
-  width: auto;
-  text-align: left;
-}
-
-.slick-dots li button:before {
-  font-size: 6px;
-  line-height: 20px;
-  position: absolute;
-  top: 0;
-  left: 0;
-  width: 10px;
-  height: 10px;
-  border-radius: 6px;
-  content: '';
-  text-align: center;
-  background-color: #000;
-  opacity: 0.25;
-  color: #000;
-}
-
-/* Custom CSS for product page */
 
 .without-h-scrollbar::-webkit-scrollbar {
   display: none;
 }
 
-/* Hide scrollbar for IE, Edge and Firefox */
-.without-h-scrollbar {
-  -ms-overflow-style: none;
-  /* IE and Edge */
-  scrollbar-width: none;
-  /* Firefox */
-}
-
-.drop-sides-fade {
-  background: linear-gradient(
-    90deg,
-    #f5f7ff 0%,
-    rgba(245, 247, 255, 0.11) 32.29%,
-    rgba(245, 247, 255, 0) 74.48%,
-    #f5f7ff 100%
-  );
-  pointer-events: none;
-}
-
-.drop-sides-fade-new {
-  background: linear-gradient(
-    90deg,
-    #fff 0%,
-    rgba(255, 255, 255, 0.11) 31.6%,
-    rgba(255, 255, 255, 0) 72.89%,
-    #fff 97.87%
-  );
-  pointer-events: none;
-}
-
-.fade-in-out {
-  opacity: 0;
-  animation: fade-in 0.5s ease-in forwards;
-}
-
-@keyframes fade-in {
-  100% {
-    opacity: 1;
-  }
-}
-
-@keyframes fade-out {
-  0% {
-    opacity: 1;
-  }
-
-  100% {
-    opacity: 0;
-  }
-}
-
-.grid-start-2 {
-  grid-column-start: 2;
-}
-
-#__next {
-  background-color: #f5f7ff;
-}
-
-.terms-privacy {
-  padding: 20px;
-  max-width: 1440px;
-  margin: auto;
-}
-
-.terms-privacy > h2 {
-  font-family: Poppins;
-  color: rgba(41, 87, 255, 0.7);
-  padding: 10px 0 10px 0;
-  font-weight: 800;
-}
-
-/* hero section custom animation classes */
-
-/* // transition-all hover:max-w-full duration-1000 width-[400px] hover:flex-row */
-
-.animate-active {
-  transition: all 600ms ease-in-out;
-  width: 25vw;
-  max-width: 100vw !important;
-  z-index: 20;
-  max-height: 17vh !important;
-  /* animation: HeroAnimation 2s ease-in-out forwards; */
-  overflow: visible;
-  cursor: auto !important;
-}
-
-.animate-active-2 {
-  position: fixed !important;
-  z-index: 20;
-  /* transform: translateX(-60%) !important; */
-  transform: translateX(-5vw) translateY(-5vh) !important;
-  max-height: 100vh !important;
-  transition: all 1s ease-in-out !important;
-}
-
-@media (min-width: 1000px) {
-  .animate-active-2 {
-    min-width: fit-content;
-  }
-}
-
-@media (max-width: 768px) {
-  .animate-active {
-    width: 80vw;
-  }
-
-  .animate-active-2 {
-    transform: translateX(0) translateY(-60vh) !important;
-    max-height: 70vh !important;
-  }
-}
-
-.animate-inactive {
-  transition: all 1s ease-in-out;
-  scale: 0.75;
-  opacity: 0.6;
-}
-
-@keyframes HeroAnimation {
-  0% {
-    transform: scale(0.8);
-    background-color: aqua;
-  }
-
-  100% {
-    background-color: red;
-    top: 0;
-    bottom: 0;
-    left: 0;
-    right: 0;
-  }
-}
-
-.overlay-entry-animation {
-  animation: overlay-entry-animation 2s ease-in-out forwards;
-  opacity: 0.22;
-}
-
-@keyframes overlay-entry-animation {
-  0% {
-    opacity: 0;
-  }
-
-  50% {
-    opacity: 0;
-  }
-
-  100% {
-    opacity: 0.44;
-  }
-}
-
-.engineer-card {
-  animation: engineer-card 1s ease-in-out forwards;
-  position: absolute;
-}
-
-@keyframes engineer-card {
-  0% {
-    opacity: 0;
-    transform: translate(0, 0) scale(0);
-  }
-
-  100% {
-    opacity: 1;
-    transform: translate(-25vw, 10vh) scale(1);
-  }
-}
-
-.engineer-card-out {
-  animation: engineer-card-out 1s ease-in-out forwards;
-  position: absolute;
-}
-
-@keyframes engineer-card-out {
-  0% {
-    opacity: 1;
-    transform: translate(-25vw, 10vh) scale(1);
-  }
-
-  100% {
-    opacity: 0;
-    transform: translate(0, -20vh) scale(0);
-  }
-}
-
-@media (max-width: 768px) {
-  .engineer-card {
-    animation: engineer-card-mobile 1s ease-in-out forwards;
-    position: absolute;
-  }
-
-  @keyframes engineer-card-mobile {
-    0% {
-      opacity: 0;
-      transform: translate(0, 0) scale(0);
-    }
-
-    100% {
-      opacity: 1;
-      transform: translate(0, 66vh) scale(1);
-    }
-  }
-
-  .engineer-card-out {
-    animation: engineer-card-out-mobile 1s ease-in-out forwards;
-    position: absolute;
-  }
-
-  @keyframes engineer-card-out-mobile {
-    0% {
-      opacity: 1;
-      transform: translate(0, 66vh) scale(1);
-    }
-
-    100% {
-      opacity: 0;
-      transform: translate(0, -20vh) scale(0);
-    }
-  }
-}
-
-.new-landing-container {
-  background-image: url('../src/assets/hero/background.png') !important;
-  background-size: cover !important;
-}
-
-/* new landing page how it works scroll effect */
-
-.howitworks-container {
-  scroll-snap-type: y mandatory;
-  overflow-y: scroll;
-  overflow-x: hidden !important;
-  height: 90vh !important;
-  /* padding-right: 17px; /* Increase/decrease this value for cross-browser compatibility */
-  /* box-sizing: content-box; */
-  -ms-overflow-style: none;
-  /* Internet Explorer 10+ */
-  scrollbar-width: none;
-  /* Firefox */
-}
-
-.howitworks-container > div {
-  scroll-snap-align: start;
-}
-
-.howitworks-container::-webkit-scrollbar {
-  display: none;
-  /* Safari and Chrome */
-}
-
-@keyframes float {
-  0% {
-    transform: translatey(0px);
-  }
-
-  50% {
-    transform: translatey(-20px);
-  }
-
-  100% {
-    transform: translatey(0px);
-  }
-}
-
-.float-animation {
-  animation: float 2.5s ease-in-out infinite;
-}
-
-/* custom responsive tabs border radius */
-@media (min-width: 1024px) {
-  .responsive-custom-rounded {
-    border-radius: 0.5rem;
-  }
-}
-
-@media (max-width: 1024px) {
-  .responsive-custom-rounded {
-    border-top-left-radius: 1rem;
-    border-top-right-radius: 1rem;
-    padding-left: 40px;
-    padding-right: 40px;
-  }
-}
-
-#expert-network-swiper {
-  overflow: visible !important;
-}
-
-/* react calendar custom styling */
-
-.react-calendar {
-  font-size: 1.1rem !important;
-}
-
-@media (max-width: 768px) {
-  .react-calendar {
-    font-size: 1rem !important;
-  }
-}
-
-.react-calendar__navigation {
-  margin-bottom: 10px;
-  display: flex;
-  justify-content: space-between;
-  align-items: center;
-  padding: 0 40px;
-  font-family: Poppins;
-  font-weight: 500;
-}
-
-abbr {
-  text-decoration: none !important;
-  font-family: Poppins;
-}
-
-/* react-international-phone customization */
-.react-international-phone-input-container > input,
-.react-international-phone-input-container > div > button {
-  padding-top: 1.2rem !important;
-  padding-bottom: 1.2rem !important;
-}
-
-.react-international-phone-input-container {
-  position: relative;
-  display: inline-block;
-}
-
-.react-international-phone-input-container:focus-within {
-  outline: 2px solid rgb(82 139 255);
-  border-radius: 0.375rem;
+/* Pre-design-system page backgrounds. Both override tokens/base.css's
+   `body { background: var(--surface-page) }`, so --surface-page is currently
+   inert; swap these two values for var(--surface-page) to hand the app
+   background to the token layer. */
+/* #__next {
+  background-color: var(--surface-page);
 }
 
 .rebranding-landing-page {
-  background-color: #f8f8f8;
-}
-
-.rebranding-landing-page .custom-container {
-  width: 100%;
-  margin-right: auto;
-  margin-left: auto;
-}
-
-@media (min-width: 1400px) {
-  .rebranding-landing-page .custom-container {
-  }
-}
-
-.custom-landing-pages {
-  background-color: #20273b;
-}
-
-.custom-landing-pages .custom-container {
-  width: 100%;
-  margin-right: auto;
-  margin-left: auto;
-  padding-right: 1.4rem /* 22.4px */;
-  padding-left: 1.4rem /* 22.4px */;
-}
-
-@media (min-width: 1400px) {
-  .custom-landing-pages .custom-container {
-    max-width: 1400px;
-  }
-}
-
-.hire-ai-developer-container {
-  background-image: url('../src/assets/hero/background.png') !important;
-  background-size: cover !important;
-}
+  background-color: var(--surface-page)
+} */
 
 /* Sentry's feedback widget defaults to the bottom-right corner, which sits
    on top of the ROI report's chat panel (send button/input live there too).
