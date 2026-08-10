@@ -44,7 +44,11 @@ export function getPostHog(): Promise<PostHog | null> {
         // capture_pageview 'history_change', which is what makes Pages Router
         // client-side navigations register — the previous init captured only
         // the first pageview per hard load.
-        defaults: '2026-06-25',
+        //
+        // This is the value PostHog's own Next.js guide ships. Newer sets
+        // exist in the SDK's types; don't bump it without checking their
+        // changelog for what the newer set changes.
+        defaults: '2026-05-30',
 
         // Client-side exception autocapture. Sentry sees these too; PostHog is
         // where they get triaged.

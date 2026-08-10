@@ -70,7 +70,8 @@ before changing the code they sit above.
   `lyrise-design` skill in `.claude/skills/` for the full brand system.
 - **Observability: PostHog is the front door, Sentry is the deep dive.**
   PostHog owns product analytics, session replay, the error list you triage, and
-  the Linear tickets (via its alert webhook → `/api/posthog/linear-alert`).
+  the Linear tickets (via PostHog's built-in Linear alert destination — no code
+  in this repo, configured in the PostHog dashboard).
   Sentry owns source-mapped stack traces and tracing, and is linked _from_
   PostHog. Three rules that are easy to break by accident:
   - **Never re-add `captureConsoleIntegration` to a Sentry config.** It promotes

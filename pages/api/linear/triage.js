@@ -1,8 +1,8 @@
 // POST /api/linear/triage
 // Creates a Linear issue in the team's Triage state from in-app feedback.
 //
-// Errors do NOT come through here — those arrive via PostHog's alert webhook
-// at /api/posthog/linear-alert. Both share src/lib/linear.ts.
+// Errors do NOT come through here — PostHog's built-in Linear destination talks
+// to Linear directly, no code in this repo. This route is feedback only.
 //
 // NOTE: this route currently has no callers in the app. It is kept because the
 // feedback-prompt UI that used it is expected back, but it is now behind the

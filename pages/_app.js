@@ -81,27 +81,33 @@ export default function MyApp(props) {
     // Tie the PostHog person to the Supabase user id — not the email, which
     // changes and isn't a stable key. Without this, every session is a fresh
     // anonymous person and "show me everything this user did" is impossible.
-    // reset() on sign-out stops the next person on a shared machine inheriting
-    // the identity, and starts a new session recording.
-    const setPostHogUser = async (user) => {
+    //
+    // reset() is gated on the SIGNED_OUT event specifically, NOT on "no user".
+    // onAuthStateChange fires INITIAL_SESSION with a null session on every
+    // anonymous page load, and resetting there would mint a new anonymous id
+    // and cut the session recording in two on each navigation — while also
+    // breaking the anonymous→signed-up funnel, which is the one thing
+    // identify() exists to preserve. Only an actual sign-out should clear the
+    // identity, so the next person on a shared machine doesn't inherit it.
+    const setPostHogUser = async (event, user) => {
       const { getPostHog } = await import('../src/lib/posthog-browser')
       const posthog = await getPostHog()
       if (!active || !posthog) return
       if (user) posthog.identify(user.id, { email: user.email })
-      else posthog.reset()
+      else if (event === 'SIGNED_OUT') posthog.reset()
     }
 
     import('../src/lib/supabase-browser')
       .then(({ createClient }) => {
         if (!active) return
         const supabase = createClient()
-        const { data } = supabase.auth.onAuthStateChange((_, session) => {
+        const { data } = supabase.auth.onAuthStateChange((event, session) => {
           if (!active) return
           const user = session?.user ?? null
           setAuthUser(user)
           setAuthReady(true)
           setSentryUser(user).catch(() => {})
-          setPostHogUser(user).catch(() => {})
+          setPostHogUser(event, user).catch(() => {})
         })
         subscription = data.subscription
       })

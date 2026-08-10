@@ -30,7 +30,7 @@ Vercel (all environments):
 | `NEXT_PUBLIC_POSTHOG_HOST`          | `https://us.i.posthog.com` (or EU)                                          |
 | `POSTHOG_PROJECT_ID`                | Project settings → Project ID (a number)                                    |
 | `POSTHOG_API_KEY`                   | Settings → Personal API keys → new key, scope **write** on _error tracking_ |
-| `POSTHOG_WEBHOOK_SECRET`            | Invent one: `openssl rand -hex 32`                                          |
+| `POSTHOG_WEBHOOK_SECRET`            | Invent one: `openssl rand -hex 32`. Guards `/api/linear/triage` only        |
 | `NEXT_PUBLIC_SENTRY_ORG`            | Your Sentry org slug — only used for deep links                             |
 
 `POSTHOG_API_KEY` and `POSTHOG_PROJECT_ID` are build-time only (source-map
@@ -47,28 +47,23 @@ The client SDK also sets `capture_exceptions: true` itself, and server/edge
 errors arrive via `onRequestError` in `instrumentation.ts`, so this toggle is
 belt-and-braces — but leave it on.
 
-## 3. PostHog → Linear webhook (this is the 2am pager)
+## 3. PostHog → Linear alert (this is the 2am pager)
 
-Error tracking → Configuration → **Alerting** → New notification:
+Error tracking → Configuration → **Alerting** → New notification, using
+PostHog's built-in **Linear** destination template:
 
 - Trigger: **issue created or reopened** (not "every occurrence" — that would
-  open a ticket per error event)
-- Destination: **HTTP Webhook**
-- URL: `https://roi.lyrise.ai/api/posthog/linear-alert`
-- Header: `Authorization: Bearer <POSTHOG_WEBHOOK_SECRET>`
+  open a ticket per error event rather than per distinct bug)
+- Destination: **Linear**, pointed at the team that owns Triage
 
-Hit **Test function** before saving. Then check the Vercel logs for a line
-starting `[posthog/linear-alert] unrecognised payload shape, keys:` — PostHog
-doesn't publish this webhook's schema, so the handler parses defensively and
-logs the real shape once. If that line appears, paste it to me and I'll tighten
-the field mapping; if it doesn't, the mapping guessed right.
+No code in this repo is involved — PostHog talks to Linear directly.
 
 ## 4. PostHog → connect Linear
 
 Error tracking → Integrations → Linear → **Connect workspace**.
 
-Separate from step 3: this powers the manual "Create issue" button on an error's
-detail page. Step 3 is the automatic one.
+Needed by step 3, and it also powers the manual "Create issue" button on an
+error's detail page.
 
 ## 5. Sentry → turn OFF Linear issue creation
 
@@ -115,6 +110,33 @@ insights. (I can script these via the API instead — say the word and I'll use
   `chat_link_opened` → `chat_message_sent`. This is the prospect journey.
 - Trend: `sentry_feedback_form_opened` → `sentry_feedback_form_submitted`, to
   see how much feedback is being abandoned.
+
+## Verifying it works (and why you can't automate it)
+
+**PostHog drops browser traffic it thinks is a bot, and every headless browser
+qualifies.** Playwright — headless _or_ headed, with a spoofed user agent,
+`navigator.webdriver` hidden, and plugins faked — is still refused: PostHog logs
+`Refusing to render ... the viewer is a likely bot` and silently discards
+`capture()`. The SDK still loads, still fetches its extensions, and still POSTs
+to `/flags/`, so it looks healthy while sending no events. Don't spend an hour
+on this like I did; verify the browser half by hand.
+
+Server-side has no such filter and _is_ covered by automated tests.
+
+To check the browser half:
+
+1. `npm run dev` with the PostHog vars set in `.env.local`.
+2. Open `http://localhost:3000/auth/login` in your normal browser, click around,
+   navigate to another page.
+3. PostHog → **Activity** (live events). A `$pageview` should land within
+   seconds, followed by `$autocapture` for the clicks.
+4. PostHog → **Session replay**. The recording appears a minute or two later.
+   Confirm form inputs render as asterisks and page text is readable.
+
+If Activity stays empty, check the browser console for `PostHog` errors and that
+`NEXT_PUBLIC_POSTHOG_PROJECT_TOKEN` is actually present in the built page —
+`NEXT_PUBLIC_*` vars are inlined at build time, so a dev server started before
+you set them won't have it.
 
 ## Sampling and cost
 
