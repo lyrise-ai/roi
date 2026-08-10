@@ -3,7 +3,7 @@ import Head from 'next/head'
 import { FaExternalLinkAlt, FaChevronDown, FaChevronUp } from 'react-icons/fa'
 import { createRouteClient } from '../../src/lib/supabaseRouteClient'
 import { createAdminClient } from '../../src/lib/supabase-server'
-import { fmtDateTime } from '../../src/utilities/formatDateTime'
+import { fmtDateTimeUTC } from '../../src/lib/formatDate'
 
 // ── Server-side employee gate ─────────────────────────────────────────────────
 // Non-employees never receive the page (redirected to login). Mirrors the auth
@@ -37,10 +37,10 @@ export async function getServerSideProps({ req, res }) {
 // ── Formatting helpers ────────────────────────────────────────────────────────
 const usd = (n) => `$${Number(n || 0).toFixed(n >= 1 ? 2 : 4)}`
 const secs = (ms) => `${(Number(ms || 0) / 1000).toFixed(1)}s`
-// Locale-independent comma-separated integer. toLocaleString() without an
-// explicit locale can differ between Node.js and the browser (ICU data).
-const num = (n) =>
-  String(Math.round(Number(n || 0))).replace(/\B(?=(\d{3})+(?!\d))/g, ',')
+// Comma-separated integer. The locale is pinned: toLocaleString() without one
+// picks up the host's, which differs between Node.js (SSR) and the browser.
+const INT_FMT = new Intl.NumberFormat('en-US', { maximumFractionDigits: 0 })
+const num = (n) => INT_FMT.format(Math.round(Number(n || 0)))
 
 // Human-friendly duration: "—" / "45s" / "3m 20s".
 const dur = (ms) => {
@@ -388,7 +388,7 @@ function EngagementPanel({ data }) {
                   <Td align="right">{dur(r.avgDurationMs)}</Td>
                   <Td align="right">{num(r.chatMessages)}</Td>
                   <Td align="right">{num(r.downloads)}</Td>
-                  <Td align="right">{fmtDateTime(r.lastActivity)}</Td>
+                  <Td align="right">{fmtDateTimeUTC(r.lastActivity)}</Td>
                   <Td align="right">
                     <ViewReportLink reportId={r.reportId} />
                   </Td>
@@ -499,7 +499,7 @@ function ReportRow({ row }) {
             </button>
           )}
         </Td>
-        <Td>{fmtDateTime(row.created_at)}</Td>
+        <Td>{fmtDateTimeUTC(row.created_at)}</Td>
         <Td>
           <span className="inline-flex items-center gap-1.5">
             {row.company || '—'}

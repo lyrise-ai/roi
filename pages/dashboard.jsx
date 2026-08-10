@@ -13,6 +13,7 @@ import {
 import MainHeader from '../src/layout/MainHeader/index'
 import { getRoleForUser } from '../src/lib/authHelpers'
 import ErrorBoundary from '../src/components/shared/ErrorBoundary'
+import { fmtDate, fmtDateTime, timeAgo } from '../src/lib/formatDate'
 
 const AlphaDashboardPanel = dynamic(
   () => import('../src/components/AlphaDashboardPanel'),
@@ -128,59 +129,6 @@ function withRequester(reports, requesterEmailFor) {
         : 'CLIENT',
     }
   })
-}
-
-function parseTimestamp(iso) {
-  if (!iso) return null
-  const hasZone = /[zZ]$|[+-]\d{2}:?\d{2}$/.test(iso)
-  return new Date(hasZone ? iso : `${iso}Z`)
-}
-
-function formatDate(iso) {
-  const d = parseTimestamp(iso)
-  if (!d) return '—'
-  return d.toLocaleDateString('en-GB', {
-    day: 'numeric',
-    month: 'short',
-    year: 'numeric',
-  })
-}
-
-function formatDateTime(iso) {
-  const d = parseTimestamp(iso)
-  if (!d) return '—'
-  // Format date and time separately and join with a literal comma, rather
-  // than letting toLocaleString pick the date/time joiner itself — that
-  // joiner ("," vs " at ") comes from the engine's bundled ICU/CLDR data,
-  // which can differ between Node (SSR) and the browser (hydration),
-  // causing a hydration mismatch even though the actual date/time agree.
-  const datePart = d.toLocaleDateString('en-GB', {
-    day: 'numeric',
-    month: 'short',
-    year: 'numeric',
-  })
-  const timePart = d
-    .toLocaleTimeString('en-GB', {
-      hour: 'numeric',
-      minute: '2-digit',
-      second: '2-digit',
-      hour12: true,
-    })
-    .replace(/\b(am|pm)\b/i, (m) => m.toUpperCase())
-  return `${datePart}, ${timePart}`
-}
-
-function timeAgo(iso) {
-  const d = parseTimestamp(iso)
-  if (!d) return '—'
-  const diff = Date.now() - d.getTime()
-  const mins = Math.floor(diff / 60000)
-  if (mins < 1) return 'just now'
-  if (mins < 60) return `${mins}m ago`
-  const hrs = Math.floor(mins / 60)
-  if (hrs < 24) return `${hrs}h ago`
-  const days = Math.floor(hrs / 24)
-  return `${days}d ago`
 }
 
 function StatCard({ label, value }) {
@@ -724,7 +672,7 @@ function DashboardInner({
                             whiteSpace: 'nowrap',
                           }}
                         >
-                          {formatDateTime(r.created_at)}
+                          {fmtDateTime(r.created_at)}
                         </td>
                         <td
                           style={{
@@ -915,7 +863,7 @@ function DashboardInner({
                         {u.report_count}
                       </td>
                       <td style={{ ...tdStyle, color: '#9CA3AF' }}>
-                        {formatDate(u.created_at)}
+                        {fmtDate(u.created_at)}
                       </td>
                       <td style={{ ...tdStyle, color: '#9CA3AF' }}>
                         {timeAgo(u.last_active)}

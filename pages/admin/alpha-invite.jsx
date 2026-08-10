@@ -2,6 +2,7 @@ import { useEffect, useState } from 'react'
 import Head from 'next/head'
 import { createClient } from '../../src/lib/supabase-server'
 import { getRoleForUser } from '../../src/lib/authHelpers'
+import { fmtDateTime } from '../../src/lib/formatDate'
 import LoadingButton from '../../src/components/shared/Button/LoadingButton'
 
 export async function getServerSideProps({ req, res }) {
@@ -38,16 +39,6 @@ const inputStyle = {
   background: '#FAFAFA',
   boxSizing: 'border-box',
   width: '100%',
-}
-
-function formatDateTime(iso) {
-  if (!iso) return '—'
-  return new Date(iso).toLocaleString('en-GB', {
-    day: 'numeric',
-    month: 'short',
-    hour: 'numeric',
-    minute: '2-digit',
-  })
 }
 
 export default function AlphaInvite() {
@@ -280,8 +271,8 @@ export default function AlphaInvite() {
                             marginTop: 2,
                           }}
                         >
-                          Created {formatDateTime(invite.created_at)} · Last
-                          used {formatDateTime(invite.last_used_at)}
+                          Created {fmtDateTime(invite.created_at)} · Last used{' '}
+                          {fmtDateTime(invite.last_used_at)}
                         </div>
                       </div>
                       <span
