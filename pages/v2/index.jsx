@@ -45,6 +45,21 @@ const LEAD = {
   textWrap: 'pretty',
 }
 
+/* The design's entrance: each screen rises 8px as it mounts. It lives here
+   rather than in styles/global.css so /v2 stays deletable as one directory,
+   and in a class rather than an inline style so the reduced-motion query can
+   actually override it. */
+const RISE_CSS = `
+  .v2-rise { animation: v2-rise var(--duration-slow) var(--ease-out); }
+  @keyframes v2-rise {
+    from { opacity: 0; transform: translateY(var(--space-2)); }
+    to { opacity: 1; transform: none; }
+  }
+  @media (prefers-reduced-motion: reduce) {
+    .v2-rise { animation: none; }
+  }
+`
+
 function Shell({ step, children }) {
   const index = STEPS.indexOf(step)
   return (
@@ -67,13 +82,10 @@ function Shell({ step, children }) {
           padding: 'var(--space-5) var(--space-6)',
         }}
       >
-        <Image
-          src={Logo}
-          alt="LyRise"
-          width={72}
-          height={24}
-          style={{ height: 'var(--space-6)', width: 'auto' }}
-        />
+        {/* 70x24 is the asset's own 138:47 ratio at --space-6 tall. Sized by
+            attribute rather than CSS: next/image warns when a rendered
+            dimension disagrees with the one it was given. */}
+        <Image src={Logo} alt="LyRise" width={70} height={24} priority />
         {/* No progress on the landing screen — there is no flow to be in yet. */}
         {index > 0 && (
           <div
@@ -167,6 +179,7 @@ function Landing({ onStart }) {
   const chips = ['~3 minutes', 'Free, no sales call', 'Your numbers stay yours']
   return (
     <section
+      className="v2-rise"
       style={{
         flex: 1,
         display: 'flex',
@@ -252,6 +265,7 @@ function Company({ value, onChange, onBack, onSubmit }) {
   }
   return (
     <section
+      className="v2-rise"
       style={{
         flex: 1,
         width: '100%',
@@ -334,6 +348,7 @@ function Company({ value, onChange, onBack, onSubmit }) {
 function Interview({ value, onChange, onBack, onNext }) {
   return (
     <section
+      className="v2-rise"
       style={{
         flex: 1,
         width: '100%',
@@ -370,6 +385,7 @@ function Interview({ value, onChange, onBack, onNext }) {
 function Reveal({ flow, onRestart }) {
   return (
     <section
+      className="v2-rise"
       style={{
         flex: 1,
         width: '100%',
@@ -422,6 +438,7 @@ export default function V2() {
       <Head>
         <title>Profit Map</title>
         <meta name="robots" content="noindex" />
+        <style>{RISE_CSS}</style>
       </Head>
       <Shell step={flow.step}>
         {flow.step === 'landing' && <Landing onStart={() => go(1)} />}
