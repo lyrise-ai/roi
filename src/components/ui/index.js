@@ -1,5 +1,6 @@
-/* The 13 design-system primitives (LYR-180). Import from here, not from the
-   group folders — P11: a new component that duplicates one of these is a bug.
+/* The design-system primitives (LYR-180) plus the four ROI-specific ones the
+   design system didn't ship (LYR-181). Import from here, not from the group
+   folders — P11: a new component that duplicates one of these is a bug.
    If a screen needs something that almost fits, extend the primitive. */
 
 export { Badge } from './core/Badge'
@@ -21,3 +22,10 @@ export { Toast } from './feedback/Toast'
 export { Tooltip } from './feedback/Tooltip'
 
 export { Tabs } from './navigation/Tabs'
+
+// ROI-specific. These carry the product's core ideas, not just its look —
+// read the .prompt.md next to each before changing how one behaves.
+export { ProvenanceMark } from './roi/ProvenanceMark'
+export { ScanFactRow } from './roi/ScanFactRow'
+export { SegmentedInput } from './roi/SegmentedInput'
+export { SuggestionBlock } from './roi/SuggestionBlock'
