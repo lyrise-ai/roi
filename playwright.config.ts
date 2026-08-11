@@ -8,8 +8,23 @@ export default defineConfig({
   testDir: './tests/e2e',
   testIgnore: ['**/global-setup.ts'],
   timeout: 45_000,
-  retries: 1,
-  workers: 1,
+  // Retrying locally doubles the wait on a test you are actively fixing, and
+  // the 45s timeout means a hang costs 90s before you see it. CI keeps the
+  // retry because a real flake there costs a whole re-run.
+  retries: process.env.CI ? 1 : 0,
+  // CI runs files in parallel — tests inside a file stay serial
+  // (`fullyParallel` is off), so `beforeAll` fixtures still see their own
+  // file's tests one at a time. That took the CI run from 61s to 25s.
+  // report-access namespaces its fixtures per run, so concurrent files don't
+  // collide in the shared Supabase project.
+  //
+  // Locally it stays serial, because golden-path.spec.ts fails reproducibly
+  // (3/3) under concurrency and passes serially: its freshly generated report
+  // is served straight from /report/<id> instead of redirecting to
+  // /report/<id>/validate, i.e. something set `validated_at` before it got
+  // there. golden-path is CI-skipped, so CI keeps the full win either way.
+  // Raising this locally means finding that writer first.
+  workers: process.env.CI ? 4 : 1,
   reporter: process.env.CI
     ? [['github'], ['html', { open: 'never' }], ['list']]
     : [['list']],

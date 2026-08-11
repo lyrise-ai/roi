@@ -1,3 +1,5 @@
+import { outboundEmailBlockedReason } from '@/src/lib/outboundEmail'
+
 const DEFAULT_DEV_TEAM = [
   'mayar@lyrise.ai',
   'amira@lyrise.ai',
@@ -55,6 +57,12 @@ export async function notifyDevTeam(opts: {
   userEmail?: string
   url?: string
 }): Promise<void> {
+  const blocked = outboundEmailBlockedReason()
+  if (blocked) {
+    console.warn(`[notifyError] suppressed dev-team alert (${blocked})`)
+    return
+  }
+
   const apiKey = process.env.RESEND_API_KEY
   if (!apiKey) return
 

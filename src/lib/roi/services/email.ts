@@ -1,5 +1,7 @@
 // email - sends transactional ROI emails via Resend
 
+import { outboundEmailBlockedReason } from '@/src/lib/outboundEmail'
+
 export const DEFAULT_REPORT_BCC = ['elena@lyrise.ai', 'mbanoub@lyrise.ai']
 const DEFAULT_REPORT_ACCESS_ALERT_EMAILS = DEFAULT_REPORT_BCC
 
@@ -33,6 +35,12 @@ function getOpsAlertRecipients(): string[] {
 async function sendResendEmail(
   payload: Record<string, unknown>,
 ): Promise<void> {
+  const blocked = outboundEmailBlockedReason()
+  if (blocked) {
+    console.warn(`[email] suppressed outbound email (${blocked})`)
+    return
+  }
+
   const apiKey = process.env.RESEND_API_KEY
   const fromEmail = process.env.EMAIL_FROM ?? 'reports@roi.lyrise.ai'
 

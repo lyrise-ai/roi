@@ -1,5 +1,6 @@
 /* eslint-disable no-console */
 import { getSupabaseAdmin } from '@/src/lib/supabaseAdmin'
+import { outboundEmailBlockedReason } from '@/src/lib/outboundEmail'
 
 const ALERT_TYPE = 'roi_usage_cost_threshold'
 const LEASE_SECONDS = 5 * 60
@@ -43,6 +44,12 @@ async function sendUsageAlertEmail(args: {
   latestCompany?: string | null
   latestMode?: string | null
 }): Promise<void> {
+  const blocked = outboundEmailBlockedReason()
+  if (blocked) {
+    console.warn(`[usageAlerts] suppressed usage alert (${blocked})`)
+    return
+  }
+
   const apiKey = process.env.RESEND_API_KEY
   const fromEmail = process.env.EMAIL_FROM ?? 'reports@roi.lyrise.ai'
 

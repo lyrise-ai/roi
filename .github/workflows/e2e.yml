@@ -49,8 +49,26 @@ jobs:
       - name: Install dependencies
         run: npm ci
 
+      # The download is ~25s; the apt step behind --with-deps is not cached and
+      # is the reason the install step still costs a few seconds on a hit.
+      - name: Cache Playwright browsers
+        uses: actions/cache@v4
+        with:
+          path: ~/.cache/ms-playwright
+          key: playwright-${{ runner.os }}-${{ hashFiles('package-lock.json') }}
+
       - name: Install Playwright browsers
         run: npx playwright install chromium --with-deps
+
+      # Next's own build cache. Keyed on the lockfile plus the sources, so a
+      # source-only change restores the previous build and recompiles the diff.
+      - name: Cache Next build
+        uses: actions/cache@v4
+        with:
+          path: .next/cache
+          key: next-${{ runner.os }}-${{ hashFiles('package-lock.json') }}-${{ hashFiles('pages/**', 'src/**', 'styles/**') }}
+          restore-keys: |
+            next-${{ runner.os }}-${{ hashFiles('package-lock.json') }}-
 
       # Build once so `next start` serves pre-compiled pages.
       # Without this, `next dev` compiles each page on first request
