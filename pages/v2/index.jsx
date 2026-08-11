@@ -12,98 +12,336 @@
 
    Flow state is a single object in this component and lives in memory only.
    A refresh starts over; that's the accepted trade for a supervised demo
-   (LYR-182: "state can live in memory"). The screens are stubs — LYR-183+
-   replace their bodies, not the flow around them. */
+   (LYR-182: "state can live in memory"). Landing and company are built
+   (LYR-183); interview and reveal are still stubs.
+
+   Sizes here are tokens or relative units — no raw px (P10). Inline styles
+   can't carry media queries, so everything responsive comes from `clamp()`,
+   `ch` max-widths and wrapping flex rows instead. */
 import * as React from 'react'
 import Head from 'next/head'
-import { Button, Card, Input, SegmentedInput } from '@components/ui'
+import Image from 'next/image'
+import Logo from '@/src/assets/logo.svg'
+import { Button, Icon, Input, SegmentedInput } from '@components/ui'
 
 const STEPS = ['landing', 'company', 'interview', 'reveal']
 
-function Shell({ step, onBack, children }) {
+/* The two headline sizes the design uses sit between the type-scale roles:
+   --type-h1 (48px) is too big on a phone and --type-h2 too big for a question.
+   Both interpolate between existing size tokens rather than naming new ones. */
+const HEADLINE = {
+  font: 'var(--weight-extrabold) clamp(var(--text-2xl), 6vw, var(--text-4xl))/var(--leading-snug) var(--font-display)',
+  letterSpacing: 'var(--tracking-tight)',
+  textWrap: 'pretty',
+}
+const QUESTION = {
+  font: 'var(--weight-extrabold) clamp(var(--text-lg), 4vw, var(--text-2xl))/var(--leading-snug) var(--font-display)',
+  letterSpacing: 'var(--tracking-tight)',
+  textWrap: 'pretty',
+}
+const LEAD = {
+  font: 'var(--type-body)',
+  color: 'var(--neutral-600)',
+  textWrap: 'pretty',
+}
+
+function Shell({ step, children }) {
+  const index = STEPS.indexOf(step)
   return (
     <main
       style={{
         minHeight: '100vh',
-        background: 'var(--surface-page)',
-        padding: 'var(--space-8) var(--space-5)',
+        display: 'flex',
+        flexDirection: 'column',
+        background: 'var(--surface-subtle)',
+        color: 'var(--text-heading)',
       }}
     >
-      <div
+      <header
         style={{
-          maxWidth: 680,
-          margin: '0 auto',
+          flex: 'none',
           display: 'flex',
-          flexDirection: 'column',
-          gap: 'var(--space-6)',
+          alignItems: 'center',
+          justifyContent: 'space-between',
+          gap: 'var(--space-4)',
+          padding: 'var(--space-5) var(--space-6)',
         }}
       >
-        <header
-          style={{
-            display: 'flex',
-            alignItems: 'center',
-            justifyContent: 'space-between',
-            gap: 'var(--space-4)',
-          }}
-        >
-          <span
-            style={{ font: 'var(--type-label)', color: 'var(--text-muted)' }}
+        <Image
+          src={Logo}
+          alt="LyRise"
+          width={72}
+          height={24}
+          style={{ height: 'var(--space-6)', width: 'auto' }}
+        />
+        {/* No progress on the landing screen — there is no flow to be in yet. */}
+        {index > 0 && (
+          <div
+            style={{
+              display: 'flex',
+              alignItems: 'center',
+              gap: 'var(--space-3)',
+            }}
           >
-            {`Step ${STEPS.indexOf(step) + 1} of ${STEPS.length} · ${step}`}
-          </span>
-          {onBack && (
-            <Button variant="ghost" size="sm" onClick={onBack}>
-              Back
-            </Button>
-          )}
-        </header>
-        {children}
-      </div>
+            <div
+              style={{
+                width: 'var(--space-20)',
+                height: 'var(--space-1)',
+                borderRadius: 'var(--radius-pill)',
+                background: 'var(--neutral-100)',
+                overflow: 'hidden',
+              }}
+            >
+              <div
+                style={{
+                  height: '100%',
+                  width: `${((index + 1) / STEPS.length) * 100}%`,
+                  borderRadius: 'var(--radius-pill)',
+                  background: 'var(--dark-blue)',
+                  transition: 'width var(--duration-base) var(--ease-out)',
+                }}
+              />
+            </div>
+            <span
+              style={{
+                font: 'var(--weight-regular) var(--text-xs)/var(--leading-normal) var(--font-body)',
+                color: 'var(--text-muted)',
+              }}
+            >
+              {`Step ${index + 1} of ${STEPS.length}`}
+            </span>
+          </div>
+        )}
+      </header>
+      {children}
     </main>
   )
 }
 
-function Landing({ onNext }) {
+/* The analyst is a presence, not a mascot: a dot, a name, nothing animated. */
+function AnalystMark() {
   return (
-    <Card>
-      <h1 style={{ font: 'var(--type-h1)', color: 'var(--text-heading)' }}>
-        Find the profit hiding in your operations
+    <div
+      style={{
+        display: 'flex',
+        alignItems: 'center',
+        gap: 'var(--space-2)',
+        marginBottom: 'var(--space-5)',
+      }}
+    >
+      <span
+        style={{
+          width: 'var(--space-6)',
+          height: 'var(--space-6)',
+          borderRadius: 'var(--radius-pill)',
+          background: 'var(--surface-accent-subtle)',
+          display: 'inline-flex',
+          alignItems: 'center',
+          justifyContent: 'center',
+        }}
+      >
+        <span
+          style={{
+            width: 'var(--space-2)',
+            height: 'var(--space-2)',
+            borderRadius: 'var(--radius-pill)',
+            background: 'var(--lyrise-purple)',
+          }}
+        />
+      </span>
+      <span
+        style={{
+          font: 'var(--weight-regular) var(--text-sm)/var(--leading-normal) var(--font-body)',
+          color: 'var(--text-muted)',
+        }}
+      >
+        LyRise analyst
+      </span>
+    </div>
+  )
+}
+
+/* One line, one CTA, three chips. No splash, no typewriter, no auto-advance —
+   the restraint is the design (LYR-183). */
+function Landing({ onStart }) {
+  const chips = ['~3 minutes', 'Free, no sales call', 'Your numbers stay yours']
+  return (
+    <section
+      style={{
+        flex: 1,
+        display: 'flex',
+        flexDirection: 'column',
+        alignItems: 'center',
+        justifyContent: 'center',
+        textAlign: 'center',
+        padding: 'var(--space-10) var(--space-6) var(--space-20)',
+      }}
+    >
+      <h1 style={{ ...HEADLINE, maxWidth: '30ch' }}>
+        Tell us how your teams actually work.{' '}
+        <span style={{ color: 'var(--text-muted)' }}>
+          We&rsquo;ll show you where AI can save you real hours and money.
+        </span>
       </h1>
       <p
         style={{
-          font: 'var(--type-body)',
-          color: 'var(--text-muted)',
-          margin: 'var(--space-4) 0 var(--space-6)',
+          ...LEAD,
+          maxWidth: '52ch',
+          margin: 'var(--space-6) 0 var(--space-10)',
         }}
       >
-        Ten minutes, your real numbers, one business case.
+        A short, honest conversation about your business. At the end, a straight
+        answer: here&rsquo;s what this work costs you, and here&rsquo;s
+        what&rsquo;s worth automating.
       </p>
-      <Button onClick={onNext}>Start</Button>
-    </Card>
-  )
-}
-
-function Company({ value, onChange, onNext }) {
-  return (
-    <Card>
-      <Input
-        label="Company website"
-        placeholder="acme.com"
-        value={value}
-        onChange={(e) => onChange(e.target.value)}
-      />
-      <div style={{ marginTop: 'var(--space-6)' }}>
-        <Button onClick={onNext} disabled={!value.trim()}>
-          Scan
-        </Button>
+      <Button
+        size="lg"
+        onClick={onStart}
+        iconRight={<Icon name="arrow-right" size={18} />}
+      >
+        Start with my company
+      </Button>
+      <div
+        style={{
+          display: 'flex',
+          flexWrap: 'wrap',
+          justifyContent: 'center',
+          alignItems: 'center',
+          gap: 'var(--space-3)',
+          marginTop: 'var(--space-8)',
+          font: 'var(--weight-regular) var(--text-sm)/var(--leading-normal) var(--font-body)',
+          color: 'var(--text-muted)',
+        }}
+      >
+        {/* The separator travels with the chip that follows it, so a wrap on a
+            narrow screen never strands a dot at the end of a line. */}
+        {chips.map((chip, i) => (
+          <span
+            key={chip}
+            style={{
+              display: 'inline-flex',
+              alignItems: 'center',
+              gap: 'var(--space-3)',
+            }}
+          >
+            {i > 0 && (
+              <span
+                aria-hidden="true"
+                style={{
+                  width: 'var(--space-1)',
+                  height: 'var(--space-1)',
+                  borderRadius: 'var(--radius-pill)',
+                  background: 'var(--neutral-300)',
+                }}
+              />
+            )}
+            {chip}
+          </span>
+        ))}
       </div>
-    </Card>
+    </section>
   )
 }
 
-function Interview({ value, onChange, onNext }) {
+/* Two fields, then straight into the interview. Submitting starts the scan but
+   never waits for it — see `startScan`. */
+function Company({ value, onChange, onBack, onSubmit }) {
+  const submit = (e) => {
+    e.preventDefault()
+    if (value.name.trim()) onSubmit()
+  }
   return (
-    <Card>
+    <section
+      style={{
+        flex: 1,
+        width: '100%',
+        maxWidth: 'var(--container-narrow)',
+        margin: '0 auto',
+        padding: 'var(--space-8) var(--space-6) var(--space-20)',
+      }}
+    >
+      <AnalystMark />
+      <h2 style={QUESTION}>
+        First — what&rsquo;s your company, and where can I find you online?
+      </h2>
+      <p style={{ ...LEAD, margin: 'var(--space-3) 0 var(--space-8)' }}>
+        I&rsquo;ll read up on you while you answer the questions that matter, so
+        nothing I ask is something I could have looked up myself.
+      </p>
+
+      <form onSubmit={submit}>
+        <div
+          style={{
+            display: 'flex',
+            flexDirection: 'column',
+            gap: 'var(--space-5)',
+          }}
+        >
+          <Input
+            label="Company name"
+            placeholder="e.g. Harbourfield Legal"
+            value={value.name}
+            onChange={(e) => onChange({ name: e.target.value })}
+          />
+          <Input
+            label="Website"
+            placeholder="harbourfield.com"
+            value={value.website}
+            onChange={(e) => onChange({ website: e.target.value })}
+          />
+        </div>
+
+        <p
+          style={{
+            font: 'var(--weight-regular) var(--text-xs)/var(--leading-relaxed) var(--font-body)',
+            color: 'var(--neutral-400)',
+            marginTop: 'var(--space-5)',
+          }}
+        >
+          While we talk, I&rsquo;ll note what I can verify about you — with
+          sources — in a panel beside the questions. It never gets ahead of what
+          you tell me.
+        </p>
+
+        <div
+          style={{
+            display: 'flex',
+            flexWrap: 'wrap',
+            alignItems: 'center',
+            justifyContent: 'space-between',
+            gap: 'var(--space-4)',
+            borderTop: '1px solid var(--border-subtle)',
+            paddingTop: 'var(--space-6)',
+            marginTop: 'var(--space-8)',
+          }}
+        >
+          <Button variant="ghost" size="sm" onClick={onBack}>
+            Back
+          </Button>
+          <Button
+            type="submit"
+            disabled={!value.name.trim()}
+            iconRight={<Icon name="arrow-right" size={18} />}
+          >
+            Next
+          </Button>
+        </div>
+      </form>
+    </section>
+  )
+}
+
+function Interview({ value, onChange, onBack, onNext }) {
+  return (
+    <section
+      style={{
+        flex: 1,
+        width: '100%',
+        maxWidth: 'var(--container-narrow)',
+        margin: '0 auto',
+        padding: 'var(--space-8) var(--space-6) var(--space-20)',
+      }}
+    >
       <SegmentedInput
         label="How many hours a week does your team spend on this?"
         suffix="hours a week"
@@ -111,41 +349,66 @@ function Interview({ value, onChange, onNext }) {
         value={value}
         onChange={onChange}
       />
-      <div style={{ marginTop: 'var(--space-6)' }}>
+      <div
+        style={{
+          display: 'flex',
+          alignItems: 'center',
+          justifyContent: 'space-between',
+          gap: 'var(--space-4)',
+          marginTop: 'var(--space-6)',
+        }}
+      >
+        <Button variant="ghost" size="sm" onClick={onBack}>
+          Back
+        </Button>
         <Button onClick={onNext}>See the number</Button>
       </div>
-    </Card>
+    </section>
   )
 }
 
 function Reveal({ flow, onRestart }) {
   return (
-    <Card>
-      <h2 style={{ font: 'var(--type-h2)', color: 'var(--text-heading)' }}>
-        {flow.company || 'Your company'}
-      </h2>
-      <p
-        style={{
-          font: 'var(--type-body)',
-          color: 'var(--text-muted)',
-          margin: 'var(--space-4) 0 var(--space-6)',
-        }}
-      >
+    <section
+      style={{
+        flex: 1,
+        width: '100%',
+        maxWidth: 'var(--container-narrow)',
+        margin: '0 auto',
+        padding: 'var(--space-8) var(--space-6) var(--space-20)',
+      }}
+    >
+      <h2 style={QUESTION}>{flow.company.name || 'Your company'}</h2>
+      <p style={{ ...LEAD, margin: 'var(--space-4) 0 var(--space-6)' }}>
         {`Hours a week: ${flow.hours.exact || flow.hours.low || '—'}`}
       </p>
       <Button variant="secondary" onClick={onRestart}>
         Start over
       </Button>
-    </Card>
+    </section>
+  )
+}
+
+const emptyFlow = () => ({
+  step: 'landing',
+  company: { name: '', website: '' },
+  scan: { status: 'idle' },
+  hours: {},
+})
+
+/* The scan is canned in the POC (LYR-178) and is fired, never awaited: the
+   company form advances on the same tick and the result lands whenever it
+   lands. Only the status is modelled here — the facts and the panel that
+   renders them belong to the scan-panel card. */
+function startScan(setFlow) {
+  setTimeout(
+    () => setFlow((f) => ({ ...f, scan: { status: 'ready' } })),
+    2000, // stands in for a research call; nothing downstream blocks on it
   )
 }
 
 export default function V2() {
-  const [flow, setFlow] = React.useState({
-    step: 'landing',
-    company: '',
-    hours: {},
-  })
+  const [flow, setFlow] = React.useState(emptyFlow)
 
   const go = (delta) =>
     setFlow((f) => ({
@@ -160,32 +423,31 @@ export default function V2() {
         <title>Profit Map</title>
         <meta name="robots" content="noindex" />
       </Head>
-      <Shell
-        step={flow.step}
-        onBack={flow.step === 'landing' ? null : () => go(-1)}
-      >
-        {flow.step === 'landing' && <Landing onNext={() => go(1)} />}
+      <Shell step={flow.step}>
+        {flow.step === 'landing' && <Landing onStart={() => go(1)} />}
         {flow.step === 'company' && (
           <Company
             value={flow.company}
-            onChange={(company) => patch({ company })}
-            onNext={() => go(1)}
+            onChange={(fields) =>
+              patch({ company: { ...flow.company, ...fields } })
+            }
+            onBack={() => go(-1)}
+            onSubmit={() => {
+              patch({ step: 'interview', scan: { status: 'scanning' } })
+              startScan(setFlow)
+            }}
           />
         )}
         {flow.step === 'interview' && (
           <Interview
             value={flow.hours}
             onChange={(hours) => patch({ hours })}
+            onBack={() => go(-1)}
             onNext={() => go(1)}
           />
         )}
         {flow.step === 'reveal' && (
-          <Reveal
-            flow={flow}
-            onRestart={() =>
-              setFlow({ step: 'landing', company: '', hours: {} })
-            }
-          />
+          <Reveal flow={flow} onRestart={() => setFlow(emptyFlow)} />
         )}
       </Shell>
     </>
