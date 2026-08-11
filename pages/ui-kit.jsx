@@ -1,7 +1,8 @@
-/* Scratch reference page for the design-system primitives (LYR-180).
-   Every primitive in every variant, rendered on the installed token layer —
-   it exists to catch token gaps and to be looked at, not to ship. Delete it
-   (and nothing else) once the v2 screens are built. 404s in production. */
+/* Scratch reference page for the design-system primitives (LYR-180) and the
+   four ROI-specific ones (LYR-181). Every primitive in every variant, rendered
+   on the installed token layer — it exists to catch token gaps and to be
+   looked at, not to ship. Delete it (and nothing else) once the v2 screens are
+   built. 404s in production. */
 import * as React from 'react'
 import {
   Badge,
@@ -13,8 +14,12 @@ import {
   Icon,
   IconButton,
   Input,
+  ProvenanceMark,
   Radio,
+  ScanFactRow,
+  SegmentedInput,
   Select,
+  SuggestionBlock,
   Switch,
   Tabs,
   Tag,
@@ -84,6 +89,11 @@ export default function UiKit() {
   const [radio, setRadio] = React.useState('a')
   const [on, setOn] = React.useState(true)
   const [tab, setTab] = React.useState('one')
+  // Deliberately no mode — the first control proves `exact` is the default
+  // rather than being told to select it.
+  const [pay, setPay] = React.useState({})
+  const [hours, setHours] = React.useState({ mode: 'range' })
+  const [seats, setSeats] = React.useState({ mode: 'estimate' })
   const tabs = [
     { value: 'one', label: 'Workflows' },
     { value: 'two', label: 'Assumptions' },
@@ -511,6 +521,160 @@ export default function UiKit() {
                 </span>
               </Card>
             </Dialog>
+          </Row>
+        </Section>
+
+        <Section title="SegmentedInput">
+          <Row
+            label="Exact is pre-selected — all three segments equal weight"
+            align="stretch"
+          >
+            <div style={{ width: 460 }}>
+              <SegmentedInput
+                label="What one of these people costs you a year"
+                prefix="$"
+                placeholder="74,000"
+                value={pay}
+                onChange={setPay}
+                estimate="$74,000"
+                estimateSource="benchmarked"
+                estimateBasis="Benchmarked against 40 operations teams of your size in your city."
+              />
+            </div>
+          </Row>
+          <Row
+            label="Range mode, and the AI path with its escape hatch"
+            align="stretch"
+          >
+            <div style={{ width: 460 }}>
+              <SegmentedInput
+                label="Hours a week spent on this"
+                suffix="hours a week"
+                value={hours}
+                onChange={setHours}
+                estimate="26 hours"
+                estimateSource="estimated"
+                estimateBasis="Estimated from the workflow you described and typical handling times."
+                hint="Both ends are optional — one is enough to model a range."
+              />
+            </div>
+            <div style={{ width: 460 }}>
+              <SegmentedInput
+                label="How many people do this"
+                value={seats}
+                onChange={setSeats}
+                estimate="38 people"
+                estimateSource="scraped"
+                estimateBasis="Counted from your team page and LinkedIn on 4 August."
+              />
+            </div>
+          </Row>
+          <Row
+            label="Estimate still being worked out — the other modes never wait on it"
+            align="stretch"
+          >
+            <div style={{ width: 460 }}>
+              <SegmentedInput
+                label="Average deal size"
+                prefix="$"
+                value={{ mode: 'estimate' }}
+                onChange={() => {}}
+                estimateLoading
+              />
+            </div>
+          </Row>
+        </Section>
+
+        <Section title="ProvenanceMark">
+          <Row label="Dot, pill, and given (renders nothing)">
+            {[
+              { figure: '$412,000', kind: 'benchmarked', variant: 'dot' },
+              { figure: '38 people', kind: 'scraped', variant: 'pill' },
+              { figure: '26 hours', kind: 'estimated', variant: 'dot' },
+              { figure: '$96,400', kind: 'given', variant: 'dot' },
+            ].map((f) => (
+              <span
+                key={f.figure}
+                style={{
+                  display: 'inline-flex',
+                  alignItems: 'center',
+                  font: 'var(--weight-extrabold) var(--text-xl)/1 var(--font-display)',
+                  letterSpacing: 'var(--tracking-tight)',
+                  color: 'var(--text-heading)',
+                  marginRight: 'var(--space-5)',
+                }}
+              >
+                {f.figure}
+                <ProvenanceMark
+                  kind={f.kind}
+                  variant={f.variant}
+                  onClick={() => {}}
+                />
+              </span>
+            ))}
+          </Row>
+        </Section>
+
+        <Section title="SuggestionBlock">
+          <Row
+            label="Resolved, looking, and nothing found (renders nothing)"
+            align="stretch"
+          >
+            <div style={{ width: 340 }}>
+              <SuggestionBlock
+                label="From your website"
+                suggestion="You run outbound sales for mid-market logistics firms."
+                source="lyrise.ai/about"
+                sourceUrl="https://www.lyrise.ai/about"
+                onUse={() => {}}
+                onDismiss={() => {}}
+              />
+            </div>
+            <div style={{ width: 340 }}>
+              <SuggestionBlock state="loading" label="From your website" />
+            </div>
+            <div style={{ width: 340 }}>
+              <SuggestionBlock state="empty" />
+              <SuggestionBlock state="failed" />
+              <span
+                style={{
+                  font: 'var(--weight-regular) var(--text-xs)/1.4 var(--font-body)',
+                  color: 'var(--text-muted)',
+                }}
+              >
+                empty and failed render nothing — this column is deliberately
+                blank.
+              </span>
+            </div>
+          </Row>
+        </Section>
+
+        <Section title="ScanFactRow">
+          <Row label="Stacked into a scan panel" align="stretch">
+            <Card style={{ width: '100%' }}>
+              <ScanFactRow
+                fact="Team size"
+                value="38 people"
+                source="linkedin.com"
+                sourceUrl="https://www.linkedin.com/"
+              />
+              <ScanFactRow
+                fact="What you sell"
+                value="Freight brokerage software, per seat"
+                source="lyrise.ai/pricing"
+              />
+              <ScanFactRow
+                fact="Founded"
+                value="2019, Cairo"
+                source="crunchbase.com"
+              />
+              <ScanFactRow
+                fact="Support hours"
+                value="Not found"
+                verified={false}
+                last
+              />
+            </Card>
           </Row>
         </Section>
       </div>
