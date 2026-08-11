@@ -11,7 +11,7 @@ test.describe('/v2', () => {
     await page.goto('/v2')
     await expect(page.getByText('Step 1 of 4')).toBeVisible()
 
-    await page.getByRole('button', { name: 'Start' }).click()
+    await page.getByRole('button', { name: 'Start', exact: true }).click()
     await page.getByLabel('Company website').fill('acme.com')
     await page.getByRole('button', { name: 'Scan' }).click()
 
@@ -23,8 +23,10 @@ test.describe('/v2', () => {
     await expect(page.getByText('Hours a week: 12')).toBeVisible()
 
     // Back preserves what was typed rather than resetting the step.
-    await page.getByRole('button', { name: 'Back' }).click()
-    await page.getByRole('button', { name: 'Back' }).click()
+    // `exact` — the Sentry widget's "Share feedback" label contains "back",
+    // and it only mounts in the production build CI runs against.
+    await page.getByRole('button', { name: 'Back', exact: true }).click()
+    await page.getByRole('button', { name: 'Back', exact: true }).click()
     await expect(page.getByLabel('Company website')).toHaveValue('acme.com')
   })
 })
