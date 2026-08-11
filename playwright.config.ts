@@ -8,8 +8,17 @@ export default defineConfig({
   testDir: './tests/e2e',
   testIgnore: ['**/global-setup.ts'],
   timeout: 45_000,
-  retries: 1,
-  workers: 1,
+  // Retrying locally doubles the wait on a test you are actively fixing, and
+  // the 45s timeout means a hang costs 90s before you see it. CI keeps the
+  // retry because a real flake there costs a whole re-run.
+  retries: process.env.CI ? 1 : 0,
+  // Files run in parallel, tests inside a file stay serial (`fullyParallel` is
+  // off) so `beforeAll` fixtures still see their own file's tests one at a
+  // time. Two files own ~70% of the suite — golden-path and report-access —
+  // so serial workers meant everything else queued behind them for nothing.
+  // Fixtures are namespaced per run (report-access's `runId`), so concurrent
+  // files don't collide in the shared Supabase project.
+  workers: process.env.CI ? 4 : undefined,
   reporter: process.env.CI
     ? [['github'], ['html', { open: 'never' }], ['list']]
     : [['list']],
