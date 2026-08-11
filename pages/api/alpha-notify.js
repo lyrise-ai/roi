@@ -2,9 +2,18 @@
 // Sends a one-time notification to the internal team when an alpha tester
 // opens the tour for the first time. Called client-side, fire-and-forget.
 
+import { outboundEmailBlockedReason } from '@/src/lib/outboundEmail'
+
 export default async function handler(req, res) {
   if (req.method !== 'POST') {
     res.status(405).json({ error: 'Method not allowed' })
+    return
+  }
+
+  const blocked = outboundEmailBlockedReason()
+  if (blocked) {
+    console.warn(`[alpha-notify] suppressed tour notification (${blocked})`)
+    res.status(200).json({ ok: true, skipped: true })
     return
   }
 
