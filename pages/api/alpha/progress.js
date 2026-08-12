@@ -34,6 +34,8 @@ const WHITELISTED_FIELDS = new Set([
   'reached_validation',
   'reached_report',
   'reached_survey',
+  'step_credibility_choice',
+  'step_credibility_comment',
 ])
 
 export default async function handler(req, res) {
