@@ -1,6 +1,19 @@
 import React from 'react'
 
-export function Input({ label, hint, error, iconLeft, id, style, ...rest }) {
+/* `multiline` swaps the <input> for a <textarea> inside the same chrome rather
+   than adding a second component: the border, focus ring and label are the
+   field's identity, not the tag's (P11). */
+export function Input({
+  label,
+  hint,
+  error,
+  iconLeft,
+  id,
+  style,
+  multiline,
+  rows = 4,
+  ...rest
+}) {
   const [focus, setFocus] = React.useState(false)
   // useId unconditionally — `id || React.useId()` short-circuits, so passing
   // `id` on one render and not the next changes the hook order.
@@ -31,7 +44,7 @@ export function Input({ label, hint, error, iconLeft, id, style, ...rest }) {
       <div
         style={{
           display: 'flex',
-          alignItems: 'center',
+          alignItems: multiline ? 'stretch' : 'center',
           gap: 'var(--space-2)',
           background: 'var(--surface-card)',
           border: '1px solid ' + borderColor,
@@ -46,11 +59,12 @@ export function Input({ label, hint, error, iconLeft, id, style, ...rest }) {
             {iconLeft}
           </span>
         )}
-        <input
-          id={inputId}
-          onFocus={() => setFocus(true)}
-          onBlur={() => setFocus(false)}
-          style={{
+        {React.createElement(multiline ? 'textarea' : 'input', {
+          id: inputId,
+          rows: multiline ? rows : undefined,
+          onFocus: () => setFocus(true),
+          onBlur: () => setFocus(false),
+          style: {
             flex: 1,
             border: 'none',
             outline: 'none',
@@ -59,9 +73,10 @@ export function Input({ label, hint, error, iconLeft, id, style, ...rest }) {
             font: 'var(--type-body)',
             color: 'var(--text-heading)',
             minWidth: 0,
-          }}
-          {...rest}
-        />
+            resize: multiline ? 'vertical' : undefined,
+          },
+          ...rest,
+        })}
       </div>
       {(error || hint) && (
         <span
