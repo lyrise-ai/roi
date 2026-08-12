@@ -26,6 +26,7 @@
    `ch` max-widths and wrapping flex rows instead. */
 import * as React from 'react'
 import Head from 'next/head'
+import { useRouter } from 'next/router'
 import Image from 'next/image'
 import Logo from '@/src/assets/logo.svg'
 import {
@@ -280,7 +281,7 @@ function Landing({ onStart }) {
 function Company({ value, onChange, onBack, onSubmit }) {
   const submit = (e) => {
     e.preventDefault()
-    if (value.name.trim()) onSubmit()
+    onSubmit()
   }
   return (
     <section
@@ -351,9 +352,10 @@ function Company({ value, onChange, onBack, onSubmit }) {
           <Button variant="ghost" size="sm" onClick={onBack}>
             Back
           </Button>
+          {/* Not gated on a name: an unnamed company falls back to the demo
+              one, and a demo you can't walk without typing isn't a demo. */}
           <Button
             type="submit"
-            disabled={!value.name.trim()}
             iconRight={<Icon name="arrow-right" size={18} />}
           >
             Next
@@ -492,6 +494,7 @@ const DEMOS = {
      support and operations" and "support arrives on all three" — are gone.
      They named departments and workflows their own sources don't show. */
   'drjobpro.com': {
+    name: 'Dr. Job Pro',
     scan: [
       {
         fact: 'What you do',
@@ -606,6 +609,7 @@ const DEMOS = {
   },
 
   'harbourfield.com': {
+    name: 'Harbourfield Legal',
     scan: [
       {
         fact: 'Team size',
@@ -707,6 +711,7 @@ const DEMOS = {
   },
 
   'northaxle.com': {
+    name: 'Northaxle Freight',
     scan: [
       {
         fact: 'Team size',
@@ -805,6 +810,7 @@ const DEMOS = {
   },
 
   'verdantdental.com': {
+    name: 'Verdant Dental',
     scan: [
       {
         fact: 'Team size',
@@ -905,9 +911,14 @@ const DEMOS = {
 }
 
 /* Whatever the user typed in the Website field, down to the key `DEMOS` uses:
-   `https://www.DrJobPro.com/about` and `drjobpro.com` are one company. An
-   unrecognised domain — or an empty field — resolves to nothing, which is the
-   panel's empty state and the interview's no-guesses state. */
+   `https://www.DrJobPro.com/about` and `drjobpro.com` are one company.
+
+   An empty field or an unrecognised domain falls back to the demo company, so
+   the whole flow is walkable on Next, Next, Next without typing anything —
+   which is how it gets shown. The no-scan state is still real and still has to
+   work (a live prospect we find nothing on gets no panel), so it lives behind
+   `/v2?scan=none` rather than behind an unlucky typo. */
+const DEFAULT_DEMO = 'drjobpro.com'
 const demoFor = (website = '') =>
   DEMOS[
     website
@@ -916,7 +927,7 @@ const demoFor = (website = '') =>
       .replace(/^https?:\/\//, '')
       .replace(/^www\./, '')
       .split('/')[0]
-  ]
+  ] || DEMOS[DEFAULT_DEMO]
 
 /* The shared question, with whatever we know about this company merged over it.
    A company we didn't scan keeps the generic placeholder and gets no `guess` at
@@ -1258,10 +1269,10 @@ function quantAnswer(answer = {}, q) {
   return answer.exact || '—'
 }
 
-function Reveal({ flow, onRestart }) {
-  /* The estimate a user left standing is only traceable against the company it
-     was made for, so the reveal resolves the same record the interview used. */
-  const demo = demoFor(flow.company.website)
+/* `demo` is passed in rather than resolved here: an estimate the user left
+   standing is only traceable against the record the interview actually showed
+   them. */
+function Reveal({ flow, demo, onRestart }) {
   return (
     <section
       className="v2-rise"
@@ -1273,7 +1284,9 @@ function Reveal({ flow, onRestart }) {
         padding: 'var(--space-8) var(--space-6) var(--space-20)',
       }}
     >
-      <h2 style={QUESTION}>{flow.company.name || 'Your company'}</h2>
+      <h2 style={QUESTION}>
+        {flow.company.name || (demo && demo.name) || 'Your company'}
+      </h2>
       {/* A stub until the reveal is built (LYR-186). It reads the interview's
           real answers rather than a summary of them, which is the only thing
           this screen has to prove today: everything the calculator needs is
@@ -1334,6 +1347,13 @@ function startScan(setFlow, count) {
 
 export default function V2() {
   const [flow, setFlow] = React.useState(emptyFlow)
+  /* `/v2?scan=none` is the no-scan state: no facts, so no panel and no guesses.
+     It needs a door of its own now that an unrecognised domain falls back to
+     the demo company. */
+  const demo =
+    useRouter().query.scan === 'none'
+      ? undefined
+      : demoFor(flow.company.website)
 
   // Leaving /v2 mid-scan must not leave the interval setting state on nothing.
   React.useEffect(() => () => clearInterval(scanTimer), [])
@@ -1375,7 +1395,7 @@ export default function V2() {
             onBack={() => go(-1)}
             onSubmit={() => {
               patch({ step: 'interview', scan: { step: 0 } })
-              startScan(setFlow, demoFor(flow.company.website)?.scan.length)
+              startScan(setFlow, demo?.scan.length)
             }}
           />
         )}
@@ -1384,11 +1404,11 @@ export default function V2() {
             turn={flow.turn}
             pain={flow.pains[flow.turn]}
             namedCount={flow.pains.filter(isNamed).length}
-            company={flow.company.name}
+            company={flow.company.name || (demo && demo.name)}
             /* Resolved from the website field at render rather than copied into
                `flow` — one source of truth, and editing the website on the way
                back through the company screen re-scans by definition. */
-            demo={demoFor(flow.company.website)}
+            demo={demo}
             scanStep={flow.scan.step}
             onChange={(fields) =>
               setFlow((f) => ({
@@ -1411,7 +1431,11 @@ export default function V2() {
           />
         )}
         {flow.step === 'reveal' && (
-          <Reveal flow={flow} onRestart={() => setFlow(emptyFlow)} />
+          <Reveal
+            flow={flow}
+            demo={demo}
+            onRestart={() => setFlow(emptyFlow)}
+          />
         )}
       </Shell>
     </>

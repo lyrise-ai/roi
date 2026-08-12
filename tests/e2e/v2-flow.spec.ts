@@ -6,8 +6,11 @@
  * all four steps (landing → company → interview → reveal) and going back,
  * submitting the company form does not wait on the canned scan, every
  * interview answer — across more than one pain point — reaches the end, and
- * the scan panel resolves sourced facts for a known company while rendering
- * nothing at all for an unknown one.
+ * the scan panel resolves sourced facts with working sources while rendering
+ * nothing at all when there was no scan.
+ *
+ * The whole flow is also walkable with no keyboard at all, which is how the
+ * demo is given.
  */
 import { test, expect } from '@playwright/test'
 
@@ -132,15 +135,41 @@ test.describe('/v2', () => {
     await expect(page.getByText(/paralegals/i)).toHaveCount(0)
   })
 
-  test('renders no scan panel at all for an unknown company', async ({
+  test('walks the whole flow without typing anything', async ({ page }) => {
+    // How the demo is actually given: Next, Next, Next. An empty company field
+    // falls back to the demo company rather than blocking the button.
+    await page.goto('/v2')
+    await page.getByRole('button', { name: 'Start with my company' }).click()
+    await page.getByRole('button', { name: 'Next', exact: true }).click()
+
+    await expect(page.getByText('Step 3 of 4')).toBeVisible()
+    // The fallback names itself, so the panel isn't addressed to "you".
+    await expect(page.getByRole('complementary')).toContainText(
+      'What we could verify about Dr. Job Pro',
+    )
+
+    // And all the way to the reveal without the keyboard: naming a pain point
+    // is still required (LYR-184's floor of two), but "Use this" on the
+    // researched guess is a click, which is what the guesses are there for.
+    await page.getByRole('button', { name: 'Use this' }).click()
+    await page.getByRole('button', { name: 'I have another one' }).click()
+    await page.getByRole('button', { name: 'Use this' }).click()
+    await page.getByRole('button', { name: 'That’s all for now' }).click()
+
+    await expect(page.getByText('Step 4 of 4')).toBeVisible()
+    await expect(page.getByRole('listitem')).toHaveCount(2)
+  })
+
+  test('renders no scan panel at all when nothing was found', async ({
     page,
   }) => {
-    await page.goto('/v2')
+    // `?scan=none` is the door to the no-scan state: with the fallback in
+    // place, an unrecognised domain no longer reaches it.
+    await page.goto('/v2?scan=none')
     await page.getByRole('button', { name: 'Start with my company' }).click()
     await page
       .getByLabel('Company name')
       .fill('Somewhere We Know Nothing About')
-    await page.getByLabel('Website').fill('nothing-canned-here.example')
     await page.getByRole('button', { name: 'Next', exact: true }).click()
 
     // Not an empty panel — no panel. An empty one reads as broken.
