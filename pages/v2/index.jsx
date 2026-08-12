@@ -501,6 +501,10 @@ const emptyPain = () => ({
   guessOpen: true,
 })
 
+/* A pain point only counts once it has been named. Turns the user opened and
+   left blank are neither counted towards the floor nor handed to the reveal. */
+const isNamed = (pain) => pain.text.trim() !== ''
+
 function Divider({ children }) {
   return (
     <div
@@ -614,6 +618,7 @@ function ScanPanel({ company, step }) {
 function Interview({
   turn,
   pain,
+  namedCount,
   company,
   scan,
   onChange,
@@ -622,8 +627,7 @@ function Interview({
   onFinish,
 }) {
   const t = painAt(turn)
-  const named = turn + 1
-  const canFinish = named >= MIN_PAINS
+  const canFinish = namedCount >= MIN_PAINS
   const set = (fields) => onChange(fields)
   const setQuant = (i, value) =>
     onChange({ quant: pain.quant.map((q, j) => (j === i ? value : q)) })
@@ -671,7 +675,13 @@ function Interview({
               </>
             }
             source={t.guessWhy}
-            onUse={() => set({ text: t.guess, guessOpen: false })}
+            /* No "Use this" once the user has written their own answer —
+               accepting the guess would overwrite it with no way back. */
+            onUse={
+              isNamed(pain)
+                ? undefined
+                : () => set({ text: t.guess, guessOpen: false })
+            }
             onDismiss={() => set({ guessOpen: false })}
           />
         )}
@@ -858,6 +868,9 @@ function startScan(setFlow) {
 export default function V2() {
   const [flow, setFlow] = React.useState(emptyFlow)
 
+  // Leaving /v2 mid-scan must not leave the interval setting state on nothing.
+  React.useEffect(() => () => clearInterval(scanTimer), [])
+
   const go = (delta) =>
     setFlow((f) => ({
       ...f,
@@ -903,6 +916,7 @@ export default function V2() {
           <Interview
             turn={flow.turn}
             pain={flow.pains[flow.turn]}
+            namedCount={flow.pains.filter(isNamed).length}
             company={flow.company.name}
             scan={flow.scan}
             onChange={(fields) =>
@@ -917,7 +931,12 @@ export default function V2() {
                in `pains`, so returning to one shows what was typed. */
             onBack={() => (flow.turn > 0 ? goTurn(flow.turn - 1) : go(-1))}
             onAdd={() => goTurn(flow.turn + 1)}
-            onFinish={() => go(1)}
+            /* Turns opened and left blank are dropped here rather than on the
+               way in, so backing up to one still shows it. */
+            onFinish={() => {
+              setFlow((f) => ({ ...f, pains: f.pains.filter(isNamed) }))
+              go(1)
+            }}
           />
         )}
         {flow.step === 'reveal' && (

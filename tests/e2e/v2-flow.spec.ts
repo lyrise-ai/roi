@@ -70,6 +70,12 @@ test.describe('/v2', () => {
     // Going back to the first pain point shows what was typed there.
     await page.getByRole('button', { name: 'Back', exact: true }).click()
     await expect(open).toHaveValue('Re-keying intake forms')
+    // Two are named, so finishing stays on offer even from the first one.
+    await expect(
+      page.getByRole('button', { name: 'That’s all for now' }),
+    ).toBeVisible()
+    await page.getByRole('button', { name: 'I have another one' }).click()
+    // A third turn opened and left blank is not a pain point.
     await page.getByRole('button', { name: 'I have another one' }).click()
 
     await page.getByRole('button', { name: 'That’s all for now' }).click()
@@ -82,6 +88,7 @@ test.describe('/v2', () => {
     )
     await expect(page.getByText(/Re-keying intake forms/)).toContainText('6')
     await expect(page.getByText(/Rebuilding the Friday report/)).toBeVisible()
+    await expect(page.getByRole('listitem')).toHaveCount(2)
   })
 
   test('pushes back once a fourth pain point is being named', async ({
