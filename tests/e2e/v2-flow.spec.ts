@@ -58,11 +58,12 @@ test.describe('/v2', () => {
 
     await page.getByPlaceholder('4', { exact: true }).fill('6')
 
-    // One pain point is not enough to finish; the analyst says so.
-    await expect(page.getByText(/I need at least two/)).toBeVisible()
+    // One pain point is fewer than the analyst wants, and it says so — but
+    // leaving is never blocked on it.
+    await expect(page.getByText(/Two makes the report hold up/)).toBeVisible()
     await expect(
       page.getByRole('button', { name: 'That’s all for now' }),
-    ).toHaveCount(0)
+    ).toBeVisible()
 
     await page.getByRole('button', { name: 'I have another one' }).click()
     await expect(
@@ -75,12 +76,9 @@ test.describe('/v2', () => {
     // Going back to the first pain point shows what was typed there.
     await page.getByRole('button', { name: 'Back', exact: true }).click()
     await expect(open).toHaveValue('Re-keying intake forms')
-    // Two are named, so finishing stays on offer even from the first one.
-    await expect(
-      page.getByRole('button', { name: 'That’s all for now' }),
-    ).toBeVisible()
     await page.getByRole('button', { name: 'I have another one' }).click()
-    // A third turn opened and left blank is not a pain point.
+    // A third turn left blank falls back to the guess we showed for it; a
+    // fourth has no guess behind it, so it drops.
     await page.getByRole('button', { name: 'I have another one' }).click()
 
     await page.getByRole('button', { name: 'That’s all for now' }).click()
@@ -93,7 +91,15 @@ test.describe('/v2', () => {
     )
     await expect(page.getByText(/Re-keying intake forms/)).toContainText('6')
     await expect(page.getByText(/Rebuilding the Friday report/)).toBeVisible()
-    await expect(page.getByRole('listitem')).toHaveCount(2)
+    await expect(page.getByRole('listitem')).toHaveCount(3)
+    // The filled-in one says whose words they are.
+    await expect(page.getByText(/Chasing missing documents/)).toContainText(
+      'our guess, not yours',
+    )
+    // And an untouched number resolves to the estimate, carrying its tag.
+    await expect(page.getByText(/Chasing missing documents/)).toContainText(
+      'about 12 hours (benchmarked)',
+    )
   })
 
   test('fills the scan panel while the interview is being answered', async ({
@@ -148,16 +154,16 @@ test.describe('/v2', () => {
       'What we could verify about Dr. Job Pro',
     )
 
-    // And all the way to the reveal without the keyboard: naming a pain point
-    // is still required (LYR-184's floor of two), but "Use this" on the
-    // researched guess is a click, which is what the guesses are there for.
-    await page.getByRole('button', { name: 'Use this' }).click()
-    await page.getByRole('button', { name: 'I have another one' }).click()
-    await page.getByRole('button', { name: 'Use this' }).click()
+    // Straight to the reveal on the next click. Nothing was typed, so every
+    // pain point is the guess we showed and every number is the estimate —
+    // each one labelled as ours.
     await page.getByRole('button', { name: 'That’s all for now' }).click()
 
     await expect(page.getByText('Step 4 of 4')).toBeVisible()
-    await expect(page.getByRole('listitem')).toHaveCount(2)
+    await expect(page.getByRole('listitem')).toHaveCount(1)
+    const only = page.getByRole('listitem').first()
+    await expect(only).toContainText('our guess, not yours')
+    await expect(only).toContainText('about 2,600 a month (benchmarked)')
   })
 
   test('renders no scan panel at all when nothing was found', async ({

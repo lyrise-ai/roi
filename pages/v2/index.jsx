@@ -1098,7 +1098,7 @@ function Interview({
 }) {
   const t = painFor(demo, turn)
   const quant = QUANT.map((_, i) => quantFor(demo, i))
-  const canFinish = namedCount >= MIN_PAINS
+  const sharper = namedCount >= MIN_PAINS
   const set = (fields) => onChange(fields)
   const setQuant = (i, value) =>
     onChange({ quant: pain.quant.map((q, j) => (j === i ? value : q)) })
@@ -1214,9 +1214,9 @@ function Interview({
               textWrap: 'pretty',
             }}
           >
-            {canFinish
+            {sharper
               ? 'Every one you add is another part of the business I can actually see. Keep going while they’re front of mind — you can stop whenever.'
-              : 'I need at least two to write something that holds up. Three or more and I can rank them properly and tell you which one to fix first.'}
+              : 'Two makes the report hold up, and three lets me rank them and tell you which to fix first. Stop whenever you like — anything you leave blank, I fall back to my own guess and label it as mine.'}
           </p>
           <div
             style={{
@@ -1244,11 +1244,11 @@ function Interview({
               >
                 I have another one
               </Button>
-              {canFinish && (
-                <Button variant="secondary" onClick={onFinish}>
-                  That&rsquo;s all for now
-                </Button>
-              )}
+              {/* Never gated. Leaving now is always allowed; what a blank
+                  answer costs is said above, not enforced here. */}
+              <Button variant="secondary" onClick={onFinish}>
+                That&rsquo;s all for now
+              </Button>
             </div>
           </div>
         </div>
@@ -1260,13 +1260,16 @@ function Interview({
 }
 
 /* What the calculator will read: the number the user gave, the range they gave,
-   or the estimate they chose to leave standing — the mode is what makes an
-   answer traceable, so it is never flattened away. */
+   or — for anything they left blank — the estimate, carrying the tag that says
+   whose number it is. A blank must never become a dash: the demo is walkable
+   without typing, so most answers in a demo run are blank, and a report full of
+   dashes is no report. The tag is what keeps that honest, so it is never
+   flattened away. */
 function quantAnswer(answer = {}, q) {
-  if (answer.mode === 'estimate') return `${q.estimate} (${q.kind})`
-  if (answer.mode === 'range')
+  if (answer.mode === 'exact' && answer.exact) return answer.exact
+  if (answer.mode === 'range' && (answer.low || answer.high))
     return `${answer.low || '—'} to ${answer.high || '—'}`
-  return answer.exact || '—'
+  return `${q.estimate} (${q.kind})`
 }
 
 /* `demo` is passed in rather than resolved here: an estimate the user left
@@ -1301,7 +1304,9 @@ function Reveal({ flow, demo, onRestart }) {
         {flow.pains.map((pain, i) => (
           <li key={i} style={{ marginBottom: 'var(--space-3)' }}>
             {[
-              pain.text || 'Unnamed',
+              pain.fromGuess
+                ? `${pain.text} (our guess, not yours)`
+                : pain.text,
               pain.team || 'team not named',
               ...pain.quant.map((a, j) => {
                 const q = quantFor(demo, j)
@@ -1422,10 +1427,26 @@ export default function V2() {
                in `pains`, so returning to one shows what was typed. */
             onBack={() => (flow.turn > 0 ? goTurn(flow.turn - 1) : go(-1))}
             onAdd={() => goTurn(flow.turn + 1)}
-            /* Turns opened and left blank are dropped here rather than on the
-               way in, so backing up to one still shows it. */
+            /* Blank turns fall back to the guess we showed for them, flagged
+               so the reveal can say whose words they are. A turn with no guess
+               to fall back on is dropped — that, not the finish button, is
+               where an empty pain point stops. Done here rather than on the way
+               in so backing up to a blank turn still shows it blank. */
             onFinish={() => {
-              setFlow((f) => ({ ...f, pains: f.pains.filter(isNamed) }))
+              setFlow((f) => ({
+                ...f,
+                pains: f.pains
+                  .map((p, i) =>
+                    isNamed(p)
+                      ? p
+                      : {
+                          ...p,
+                          text: painFor(demo, i).guess || '',
+                          fromGuess: true,
+                        },
+                  )
+                  .filter(isNamed),
+              }))
               go(1)
             }}
           />
