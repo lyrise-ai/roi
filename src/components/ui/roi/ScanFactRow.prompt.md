@@ -8,6 +8,6 @@ One verified fact from the company scan, with its source always visible. Stack t
 
 Hairline between rows, no card per fact, so eight facts read as a list rather than eight boxes. `verified={false}` swaps the tick for a hollow ring and mutes the value: found the field, not the answer.
 
-Set `last` on the final row to drop its hairline.
+Set `last` on the final row to drop its hairline. Set `stacked` in a column too narrow for three across — the interview's scan panel — and fact, value and source read top to bottom instead.
 
 The tick is the `Icon` primitive (`name="check"`), not the literal ✓ the design system's preview harness uses.

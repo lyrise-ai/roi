@@ -12,5 +12,7 @@ export interface ScanFactRowProps extends React.HTMLAttributes<HTMLDivElement> {
   verified?: boolean
   /** Drops the hairline on the last row of a panel. */
   last?: boolean
+  /** Stacks fact, value and source for panels too narrow to share a line. */
+  stacked?: boolean
 }
 export function ScanFactRow(props: ScanFactRowProps): JSX.Element

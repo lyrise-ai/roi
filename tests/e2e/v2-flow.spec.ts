@@ -1,9 +1,11 @@
 /**
- * /v2 POC route (LYR-182, screens: LYR-183) — runs in the `anon` project.
+ * /v2 POC route (LYR-182, screens: LYR-183, interview: LYR-184) — runs in the
+ * `anon` project.
  *
- * Three guarantees: the route is reachable without auth, flow state survives
- * all four steps (landing → company → interview → reveal) and going back, and
- * submitting the company form does not wait on the canned scan.
+ * Four guarantees: the route is reachable without auth, flow state survives
+ * all four steps (landing → company → interview → reveal) and going back,
+ * submitting the company form does not wait on the canned scan, and every
+ * interview answer — across more than one pain point — reaches the end.
  */
 import { test, expect } from '@playwright/test'
 
@@ -23,7 +25,7 @@ test.describe('/v2', () => {
     await page.getByLabel('Website').fill('harbourfield.com')
     await page.getByRole('button', { name: 'Next', exact: true }).click()
 
-    // The canned scan takes ~2s; the interview must already be here.
+    // The canned scan takes ~1.5s per fact; the interview must already be here.
     await expect(page.getByText('Step 3 of 4')).toBeVisible({ timeout: 1000 })
 
     // Back preserves what was typed rather than resetting the step.
@@ -34,11 +36,77 @@ test.describe('/v2', () => {
     await expect(page.getByLabel('Website')).toHaveValue('harbourfield.com')
     await page.getByRole('button', { name: 'Next', exact: true }).click()
 
-    await page.getByRole('textbox').first().fill('12')
-    await page.getByRole('button', { name: 'See the number' }).click()
+    // First pain point. The open question is the hero: it is the first field
+    // on the screen, above the segmented number questions.
+    const open = page.getByRole('textbox', { name: /Where do your teams lose/ })
+    await open.fill('Re-keying intake forms')
+    await page
+      .getByRole('textbox', { name: /Which team or department/ })
+      .fill('Paralegals')
+
+    // Exact is pre-selected on every number question, and the AI suggestion
+    // sits below the hero rather than inside it.
+    await expect(
+      page.getByRole('radio', { name: 'Exact' }).first(),
+    ).toHaveAttribute('aria-checked', 'true')
+    await expect(open).not.toHaveValue(/Contract review/)
+
+    await page.getByPlaceholder('4', { exact: true }).fill('6')
+
+    // One pain point is not enough to finish; the analyst says so.
+    await expect(page.getByText(/I need at least two/)).toBeVisible()
+    await expect(
+      page.getByRole('button', { name: 'That’s all for now' }),
+    ).toHaveCount(0)
+
+    await page.getByRole('button', { name: 'I have another one' }).click()
+    await expect(
+      page.getByRole('heading', { name: /What’s the second one/ }),
+    ).toBeVisible()
+    await page
+      .getByRole('textbox', { name: /What’s the second one/ })
+      .fill('Rebuilding the Friday report')
+
+    // Going back to the first pain point shows what was typed there.
+    await page.getByRole('button', { name: 'Back', exact: true }).click()
+    await expect(open).toHaveValue('Re-keying intake forms')
+    // Two are named, so finishing stays on offer even from the first one.
+    await expect(
+      page.getByRole('button', { name: 'That’s all for now' }),
+    ).toBeVisible()
+    await page.getByRole('button', { name: 'I have another one' }).click()
+    // A third turn opened and left blank is not a pain point.
+    await page.getByRole('button', { name: 'I have another one' }).click()
+
+    await page.getByRole('button', { name: 'That’s all for now' }).click()
 
     await expect(page.getByText('Step 4 of 4')).toBeVisible()
     await expect(page.getByText('Harbourfield Legal')).toBeVisible()
-    await expect(page.getByText('Hours a week: 12')).toBeVisible()
+    // Both pain points, and the numbers typed against the first one, survive.
+    await expect(page.getByText(/Re-keying intake forms/)).toContainText(
+      'Paralegals',
+    )
+    await expect(page.getByText(/Re-keying intake forms/)).toContainText('6')
+    await expect(page.getByText(/Rebuilding the Friday report/)).toBeVisible()
+    await expect(page.getByRole('listitem')).toHaveCount(2)
+  })
+
+  test('pushes back once a fourth pain point is being named', async ({
+    page,
+  }) => {
+    await page.goto('/v2')
+    await page.getByRole('button', { name: 'Start with my company' }).click()
+    await page.getByLabel('Company name').fill('Harbourfield Legal')
+    await page.getByRole('button', { name: 'Next', exact: true }).click()
+
+    for (let i = 0; i < 3; i++) {
+      await page.getByRole('button', { name: 'I have another one' }).click()
+    }
+    await expect(
+      page.getByRole('heading', { name: 'Another one, then.' }),
+    ).toBeVisible()
+    await expect(
+      page.getByText(/rather model three well than six loosely/),
+    ).toBeVisible()
   })
 })
