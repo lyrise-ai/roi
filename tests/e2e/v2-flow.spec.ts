@@ -113,15 +113,23 @@ test.describe('/v2', () => {
     await open.fill('Screening CVs by hand')
     await expect(open).toHaveValue('Screening CVs by hand')
 
-    // Resolved: facts arrive one at a time, each with its source beside it.
-    await expect(panel).toContainText('About 2,800 open vacancies')
-    await expect(panel).toContainText('drjobpro.com/jobs')
-    await expect(panel).toContainText('Roughly 60–80 staff')
+    // Resolved: facts arrive one at a time, each with a source you can open.
+    await expect(panel).toContainText('10M+ users since 2015')
+    await expect(
+      panel.getByRole('link', { name: 'drjobpro.com/about-us' }).first(),
+    ).toHaveAttribute('href', 'https://www.drjobpro.com/about-us')
+    await expect(panel).toContainText('Abu Dhabi, Giza, and Vellore')
 
     // Nothing inferred: no workflow, no department, no operating model.
     await expect(panel).not.toContainText(
       /workflow|department|operating model/i,
     )
+
+    // The guess is this company's, and it cites this company's scan.
+    await expect(page.getByText(/Reading applications against/)).toBeVisible()
+    await expect(page.getByText(/8,000 live vacancies/)).toBeVisible()
+    // Nothing from the law firm's fact set leaks in.
+    await expect(page.getByText(/paralegals/i)).toHaveCount(0)
   })
 
   test('renders no scan panel at all for an unknown company', async ({
@@ -142,6 +150,13 @@ test.describe('/v2', () => {
     await expect(
       page.getByRole('textbox', { name: /Where do your teams lose/ }),
     ).toBeVisible()
+
+    // Scanned nothing, so it guesses nothing — no "from your website" block…
+    await expect(page.getByText('A guess from your website')).toHaveCount(0)
+    // …and the estimate says why it hasn't got one rather than inventing a
+    // number the prospect would have to argue with.
+    await page.getByRole('radio', { name: 'Let AI estimate' }).first().click()
+    await expect(page.getByText('Nothing to base one on').first()).toBeVisible()
   })
 
   test('pushes back once a fourth pain point is being named', async ({

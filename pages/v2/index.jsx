@@ -312,13 +312,13 @@ function Company({ value, onChange, onBack, onSubmit }) {
         >
           <Input
             label="Company name"
-            placeholder="e.g. Harbourfield Legal"
+            placeholder="e.g. Dr. Job Pro"
             value={value.name}
             onChange={(e) => onChange({ name: e.target.value })}
           />
           <Input
             label="Website"
-            placeholder="harbourfield.com"
+            placeholder="drjobpro.com"
             value={value.website}
             onChange={(e) => onChange({ website: e.target.value })}
           />
@@ -364,9 +364,13 @@ function Company({ value, onChange, onBack, onSubmit }) {
   )
 }
 
-/* Everything below is canned demo copy for one prospect (LYR-178: the scan is
-   not live in the POC). It is data, not logic — swapping the client means
-   swapping these arrays and nothing else.
+/* The interview's own wording, which is the same for every prospect: the
+   questions, what they're for, and a placeholder generic enough to stand when
+   we know nothing about the company. Everything that cites a specific business
+   — the placeholder's example, the researched guess, the number estimates —
+   lives per company in `DEMOS` and is merged over the top by `painFor` and
+   `quantFor`. Nothing company-specific may be hardcoded here: it would follow
+   the wrong prospect into the demo.
 
    Read the question strings aloud before editing one. The rule the whole
    screen is built on is that none of them may contain "percent",
@@ -376,36 +380,20 @@ const PAINS = [
     question:
       'Where do your teams lose the most time each week — the stuff that’s repetitive but somehow still eats hours?',
     sub: 'Tell me in your own words. The more specific, the sharper your numbers get.',
-    placeholder:
-      'e.g. our paralegals re-key client intake forms into three different systems by hand',
-    guess:
-      'Contract review and client reporting look manual for a firm your size.',
-    guessKind: 'estimated',
-    guessWhy:
-      'Your site lists commercial, property and employment work with fixed-fee pricing, and neither open role mentions a document system — so we’d expect review to be done by hand. That’s a read, not a fact.',
+    placeholder: 'e.g. the same information gets re-typed into three systems',
     quantIntro: 'Once you name it, a few quick things about that work:',
   },
   {
     question:
       'What’s the second one? Something else that drains a team the same way.',
     sub: 'A different team is fine — often it’s a different one entirely.',
-    placeholder:
-      'e.g. someone rebuilds the same client status report by hand every Friday',
-    guess: 'Monthly billing prep looks like it’s assembled by hand.',
-    guessKind: 'benchmarked',
-    guessWhy:
-      'Fixed-fee firms your size usually assemble billing from timesheets manually each month. Nothing on your site says otherwise, but nothing confirms it either.',
+    placeholder: 'e.g. someone rebuilds the same report by hand every Friday',
     quantIntro: 'Same questions for this one:',
   },
   {
     question: 'And a third. The third one usually surprises people.',
     sub: 'The third one is where I start seeing the pattern rather than the incident.',
-    placeholder: 'e.g. two people chase missing documents over email all week',
-    guess:
-      'Chasing missing documents looks like email work someone does by hand.',
-    guessKind: 'scraped',
-    guessWhy:
-      'Both of your open roles ask for chasing outstanding client paperwork — that’s from your own careers page.',
+    placeholder: 'e.g. two people chase the same missing paperwork all week',
     quantIntro: 'Last set:',
   },
 ]
@@ -417,43 +405,46 @@ const EXTRA_PAIN = {
   sub: 'Worth adding only if it’s genuinely bleeding — I’d rather model three well than six loosely.',
   placeholder:
     'e.g. onboarding a new client takes a week of copy-paste across systems',
-  guess: '',
   quantIntro: 'Same questions:',
 }
 
-const painAt = (i) => PAINS[i] || EXTRA_PAIN
-
 /* The five number questions, asked the same way for every pain point.
    The last one becomes `automatable%` downstream — it is the single largest
-   guess in the whole model, which is why it is asked rather than assumed. */
+   guess in the whole model, which is why it is asked rather than assumed.
+
+   The estimate here is the one we give when we know nothing about the company,
+   and it is deliberately not a number. An estimate with no evidence under it is
+   the fabrication this whole POC exists to stop; saying so is more useful than
+   inventing a plausible figure the prospect then has to argue with. A company
+   we did scan overrides all four fields from `DEMOS`. */
 const QUANT = [
   {
     label: 'How many times does this happen, start to finish, in a month?',
-    placeholder: '200 client intakes',
-    estimate: 'about 200 a month',
-    kind: 'benchmarked',
-    why: 'A firm of 42 taking on commercial, property and employment work typically opens around 200 matters a month. This one matters — it multiplies everything below it.',
+    placeholder: '200 a month',
+    estimate: 'Nothing to base one on',
+    kind: 'estimated',
+    why: 'We couldn’t find anything public about you, so an estimate here would be a guess about a guess. This one matters most — it multiplies everything below it — so it’s worth your real number.',
   },
   {
     label: 'How many people do it?',
     placeholder: '4',
-    estimate: 'about 4 people',
-    kind: 'scraped',
-    why: 'Your team page (harbourfield.com/team) lists four paralegals under operations.',
+    estimate: 'Nothing to base one on',
+    kind: 'estimated',
+    why: 'Nothing we found tells us how many people touch this. Your number is the only one worth having.',
   },
   {
     label: 'Hours a week, each?',
     placeholder: '12',
-    estimate: 'about 12 hours',
-    kind: 'benchmarked',
-    why: 'The middle of what firms of 40–60 people report for this kind of work — not your number.',
+    estimate: 'Nothing to base one on',
+    kind: 'estimated',
+    why: 'This one varies more between two companies of the same size than almost anything else, and we have nothing on yours to narrow it.',
   },
   {
     label: 'Roughly what they earn?',
     placeholder: '$70k a year',
-    estimate: 'about $72k a year',
-    kind: 'benchmarked',
-    why: 'Regional pay data for paralegals at firms your size.',
+    estimate: 'Nothing to base one on',
+    kind: 'estimated',
+    why: 'Pay depends on the role and the market, and we don’t know either for you yet. A rough band is fine.',
   },
   {
     label:
@@ -461,209 +452,464 @@ const QUANT = [
     placeholder: 'about a third',
     estimate: 'about a third',
     kind: 'estimated',
-    why: 'Our read: re-keying follows rules, but conflict checks and odd cases still need judgment. Nothing scraped — correct it freely.',
+    why: 'Our read across this kind of work, not a read of yours: the repetitive part follows rules, the odd cases still need judgment. Nothing scraped — correct it freely.',
   },
 ]
 
-/* The company scan, canned for three demo domains (LYR-185). Live enrichment is
-   a production concern; what needs testing here is the panel's behaviour.
+/* One record per demo company (LYR-185): what the scan found, the guess the
+   analyst offers against each pain point, and the number estimates behind
+   "Let AI estimate". All three come from the same place on purpose — a guess
+   that cites a fact the panel never showed is the fabrication this POC exists
+   to stop, so every `guessWhy` and every estimate `why` points at something in
+   that company's own `scan`.
 
-   The demo domains are `drjobpro.com` (the fact set from the v17 prototype),
-   `harbourfield.com`, `northaxle.com` and `verdantdental.com` — anything else
-   is the empty state on purpose.
+   Live enrichment is a production concern; what needs testing here is the
+   behaviour. The demo domains are `drjobpro.com`, `harbourfield.com`,
+   `northaxle.com` and `verdantdental.com` — anything else gets no panel, no
+   guesses, and estimates that say they have nothing to stand on.
 
-   Every entry is something a person could go and check: a headcount, a service
-   line, a location, what the site is built on, what the careers page is
-   advertising. Nothing here is a workflow, a department or an "operating
-   model". That inference is what made the old research agent untrustworthy —
-   it was required to invent four workflows whether or not the evidence existed.
-   The scan shows what we can point at; the interview gets everything else.
+   Every scan entry is something a person could go and check: a headcount, a
+   service line, a location, what the site is built on, what the careers page is
+   advertising. Nothing in `scan` is a workflow, a department or an "operating
+   model". That inference is what made the old research agent untrustworthy — it
+   was required to invent four workflows whether or not the evidence existed.
+   The scan shows what we can point at; the interview gets everything else. The
+   guesses are allowed to infer, which is exactly why they sit in a dashed box
+   marked `estimated`, in the interview, next to a field the user can overrule.
 
    `looking` is what the panel says while that fact is still pending, so the
    status line always names the page being read rather than counting down.
 
-   Sources are text, not links: these are fictional demo companies and a dead
-   link in front of a prospect is worse than a cited path. Real enrichment fills
-   `sourceUrl` — `ScanFactRow` already renders it. */
-const SCANS = {
-  /* Dr. Job Pro is the demo we actually show. The prototype's own lines are
-     kept except where one reached past the evidence: "60–80 staff across sales,
-     support and operations" and "support arrives on all three" name departments
-     and workflows the source pages don't. The headcount and the channels stay,
-     the reading of them doesn't. */
-  'drjobpro.com': [
-    {
-      fact: 'What you do',
-      value:
-        'Job platform for the Middle East — employers post roles, candidates apply',
-      source: 'drjobpro.com',
-      looking: 'Reading your site…',
-    },
-    {
-      fact: 'Active listings',
-      value: 'About 2,800 open vacancies live on the site',
-      source: 'drjobpro.com/jobs',
-      looking: 'Counting what’s live on your jobs page…',
-    },
-    {
-      fact: 'Reach',
-      value: 'Vacancies across the Gulf, Egypt and the Levant',
-      source: 'drjobpro.com/jobs',
-      looking: 'Checking where those vacancies are…',
-    },
-    {
-      fact: 'Who buys',
-      value: 'Employers, on subscription packages',
-      source: 'drjobpro.com/employer',
-      looking: 'Reading your employer page…',
-    },
-    {
-      fact: 'Team size',
-      value: 'Roughly 60–80 staff',
-      source: 'LinkedIn company page',
-      looking: 'Checking your LinkedIn page…',
-    },
-    {
-      fact: 'Contact channels',
-      value: 'Portal, email and WhatsApp',
-      source: 'drjobpro.com/contact',
-      looking: 'Reading your contact page…',
-    },
-    {
-      fact: 'Hiring now',
-      value: 'Six open roles, mostly tele-sales and customer service',
-      source: 'drjobpro.com/careers',
-      looking: 'Checking recent job postings…',
-    },
-    {
-      fact: 'Region',
-      value: 'Headquartered in the UAE',
-      source: 'drjobpro.com/about',
-      looking: 'Looking for where you’re based…',
-    },
-  ],
-  'harbourfield.com': [
-    {
-      fact: 'Team size',
-      value: '42 people',
-      source: 'harbourfield.com/team',
-      looking: 'Reading your site…',
-    },
-    {
-      fact: 'Service lines',
-      value: 'Commercial, property, employment',
-      source: 'harbourfield.com',
-      looking: 'Checking your team page…',
-    },
-    {
-      fact: 'Pricing model',
-      value: 'Fixed fee, published openly',
-      source: 'harbourfield.com/pricing',
-      looking: 'Reading your pricing page…',
-    },
-    {
-      fact: 'Locations',
-      value: 'Two offices — Leeds and Manchester',
-      source: 'harbourfield.com/contact',
-      looking: 'Looking for other offices…',
-    },
-    {
-      fact: 'Site is built on',
-      value: 'WordPress, Calendly, Mailchimp',
-      source: 'builtwith.com',
-      looking: 'Checking what your site runs on…',
-    },
-    {
-      fact: 'Hiring now',
-      value: 'Two roles, both mention document review',
-      source: 'harbourfield.com/careers',
-      looking: 'Checking recent job postings…',
-    },
-  ],
-  'northaxle.com': [
-    {
-      fact: 'Team size',
-      value: 'About 55 people',
-      source: 'linkedin.com/company/northaxle',
-      looking: 'Reading your site…',
-    },
-    {
-      fact: 'Industry',
-      value: 'Freight brokerage and 3PL',
-      source: 'northaxle.com',
-      looking: 'Checking who you are…',
-    },
-    {
-      fact: 'Service lines',
-      value: 'LTL, full truckload, drayage',
-      source: 'northaxle.com/services',
-      looking: 'Reading your services page…',
-    },
-    {
-      fact: 'Locations',
-      value: 'Three terminals — Memphis, Dallas, Reno',
-      source: 'northaxle.com/network',
-      looking: 'Looking for your terminals…',
-    },
-    {
-      fact: 'Site is built on',
-      value: 'HubSpot forms, a McLeod portal login',
-      source: 'builtwith.com',
-      looking: 'Checking what your site runs on…',
-    },
-    {
-      fact: 'Hiring now',
-      value: 'Four roles, three of them in dispatch',
-      source: 'northaxle.com/careers',
-      looking: 'Checking recent job postings…',
-    },
-  ],
-  'verdantdental.com': [
-    {
-      fact: 'Team size',
-      value: '31 people across the practices',
-      source: 'verdantdental.com/about',
-      looking: 'Reading your site…',
-    },
-    {
-      fact: 'Industry',
-      value: 'Multi-site dental group',
-      source: 'verdantdental.com',
-      looking: 'Checking who you are…',
-    },
-    {
-      fact: 'Service lines',
-      value: 'General, orthodontics, implants',
-      source: 'verdantdental.com/services',
-      looking: 'Reading your services page…',
-    },
-    {
-      fact: 'Locations',
-      value: 'Five practices in greater Phoenix',
-      source: 'verdantdental.com/locations',
-      looking: 'Looking for your other practices…',
-    },
-    {
-      fact: 'Site is built on',
-      value: 'A Dentrix patient portal, a Podium widget',
-      source: 'builtwith.com',
-      looking: 'Checking what your site runs on…',
-    },
-    {
-      fact: 'Hiring now',
-      value: 'Two front-desk roles, both mention insurance claims',
-      source: 'verdantdental.com/careers',
-      looking: 'Checking recent job postings…',
-    },
-  ],
+   `sourceUrl` is set wherever the page really exists — Dr. Job Pro is a real
+   company and every one of its links was checked. The other three are invented
+   demo fixtures: their sources stay as text, because a source that 404s in
+   front of a prospect is worse than one that is merely quoted. That is also
+   what the live product does when enrichment has a citation but no URL. */
+const DEMOS = {
+  /* Dr. Job Pro (drjobpro.com) is the demo we actually show, so none of this is
+     invented: every line was read off the live site, and the two lines the v17
+     prototype had that reached past the evidence — "60–80 staff across sales,
+     support and operations" and "support arrives on all three" — are gone.
+     They named departments and workflows their own sources don't show. */
+  'drjobpro.com': {
+    scan: [
+      {
+        fact: 'What you do',
+        value:
+          'An AI-first recruitment platform — a job portal since 2015, now the whole hiring lifecycle',
+        source: 'drjobpro.com/about-us',
+        sourceUrl: 'https://www.drjobpro.com/about-us',
+        looking: 'Reading your site…',
+      },
+      {
+        fact: 'Scale you claim',
+        value: '10M+ users since 2015',
+        source: 'drjobpro.com/about-us',
+        sourceUrl: 'https://www.drjobpro.com/about-us',
+        looking: 'Reading your about page…',
+      },
+      {
+        fact: 'Live vacancies',
+        value: 'Thousands — Cairo alone lists about 8,000',
+        source: 'drjobpro.com/egypt',
+        sourceUrl: 'https://www.drjobpro.com/egypt',
+        looking: 'Counting what’s live on your jobs pages…',
+      },
+      {
+        fact: 'Reach',
+        value:
+          'Saudi Arabia, Kuwait, Qatar, Bahrain, Egypt, Jordan, the UK, the USA and India',
+        source: 'drjobpro.com',
+        sourceUrl: 'https://www.drjobpro.com/',
+        looking: 'Checking which markets you cover…',
+      },
+      {
+        fact: 'Offices',
+        value: 'Abu Dhabi, Giza, and Vellore in Tamil Nadu',
+        source: 'drjobpro.com/contact-us',
+        sourceUrl: 'https://www.drjobpro.com/contact-us',
+        looking: 'Looking for where you’re based…',
+      },
+      {
+        fact: 'Contact channels',
+        value: 'WhatsApp, email and a help centre',
+        source: 'drjobpro.com/contact-us',
+        sourceUrl: 'https://www.drjobpro.com/contact-us',
+        looking: 'Reading your contact page…',
+      },
+      {
+        fact: 'Who buys',
+        value: 'Employers, through a separate portal with published packages',
+        source: 'employer.drjobpro.com/pricing',
+        sourceUrl: 'https://employer.drjobpro.com/pricing',
+        looking: 'Reading your employer pages…',
+      },
+    ],
+    pains: [
+      {
+        placeholder:
+          'e.g. coordinators read every application against the job spec by hand',
+        guess: 'Reading applications against the job spec looks done by eye.',
+        guessKind: 'estimated',
+        guessWhy:
+          'Cairo alone lists about 8,000 live vacancies (drjobpro.com/egypt), so applications arrive somewhere in volume. Nothing public says who reads them or how. That’s a read, not a fact.',
+      },
+      {
+        placeholder:
+          'e.g. the same employer question gets answered on WhatsApp, email and the help centre',
+        guess: 'The same questions arriving on three channels at once.',
+        guessKind: 'scraped',
+        guessWhy:
+          'Your contact page offers WhatsApp, email and a help centre — that’s from drjobpro.com/contact-us. What we can’t see is who answers them, or how often it’s the same question.',
+      },
+      {
+        placeholder:
+          'e.g. someone rebuilds the renewal list from the billing export every month',
+        guess: 'Employer packages renewed and chased by hand.',
+        guessKind: 'benchmarked',
+        guessWhy:
+          'Packages are sold on cycles (employer.drjobpro.com/pricing), and platforms your size usually chase renewals manually until someone builds the report. Nothing on your site confirms it either way.',
+      },
+    ],
+    quant: [
+      {
+        placeholder: '2,600 applications',
+        estimate: 'about 2,600 a month',
+        kind: 'benchmarked',
+        why: 'Platforms carrying thousands of live vacancies across nine markets typically see applications in the low thousands a month. This one matters most — it multiplies everything below it.',
+      },
+      {
+        placeholder: '7',
+        estimate: 'about 7 people',
+        kind: 'benchmarked',
+        why: 'Typical for a platform at your listing volume. Nothing public tells us your team’s shape, which makes this the weakest guess on the page.',
+      },
+      {
+        placeholder: '18',
+        estimate: 'about 18 hours',
+        kind: 'benchmarked',
+        why: 'The middle of what teams doing this kind of reading report — not your number.',
+      },
+      {
+        placeholder: '$18k a year',
+        estimate: 'about $18k a year',
+        kind: 'benchmarked',
+        why: 'Regional pay data for coordinator roles in Egypt and the UAE, which is where two of your three offices are (drjobpro.com/contact-us).',
+      },
+      {
+        placeholder: 'about a quarter',
+        estimate: 'about a quarter',
+        kind: 'estimated',
+        why: 'Our read: ranking against a written spec follows rules, but borderline candidates and the final call still need a person. Nothing scraped — correct it freely.',
+      },
+    ],
+  },
+
+  'harbourfield.com': {
+    scan: [
+      {
+        fact: 'Team size',
+        value: '42 people',
+        source: 'harbourfield.com/team',
+        looking: 'Reading your site…',
+      },
+      {
+        fact: 'Service lines',
+        value: 'Commercial, property, employment',
+        source: 'harbourfield.com',
+        looking: 'Checking your team page…',
+      },
+      {
+        fact: 'Pricing model',
+        value: 'Fixed fee, published openly',
+        source: 'harbourfield.com/pricing',
+        looking: 'Reading your pricing page…',
+      },
+      {
+        fact: 'Locations',
+        value: 'Two offices — Leeds and Manchester',
+        source: 'harbourfield.com/contact',
+        looking: 'Looking for other offices…',
+      },
+      {
+        fact: 'Site is built on',
+        value: 'WordPress, Calendly, Mailchimp',
+        source: 'builtwith.com',
+        looking: 'Checking what your site runs on…',
+      },
+      {
+        fact: 'Hiring now',
+        value: 'Two roles, both mention document review',
+        source: 'harbourfield.com/careers',
+        looking: 'Checking recent job postings…',
+      },
+    ],
+    pains: [
+      {
+        placeholder:
+          'e.g. our paralegals re-key client intake forms into three different systems by hand',
+        guess:
+          'Contract review and client reporting look manual for a firm your size.',
+        guessKind: 'estimated',
+        guessWhy:
+          'Your site lists commercial, property and employment work with fixed-fee pricing, and neither open role mentions a document system — so we’d expect review to be done by hand. That’s a read, not a fact.',
+      },
+      {
+        placeholder:
+          'e.g. someone rebuilds the same client status report by hand every Friday',
+        guess: 'Monthly billing prep looks like it’s assembled by hand.',
+        guessKind: 'benchmarked',
+        guessWhy:
+          'Fixed-fee firms your size usually assemble billing from timesheets manually each month. Nothing on your site says otherwise, but nothing confirms it either.',
+      },
+      {
+        placeholder:
+          'e.g. two people chase missing documents over email all week',
+        guess:
+          'Chasing missing documents looks like email work someone does by hand.',
+        guessKind: 'scraped',
+        guessWhy:
+          'Both of your open roles ask for chasing outstanding client paperwork — that’s from your own careers page.',
+      },
+    ],
+    quant: [
+      {
+        placeholder: '200 client intakes',
+        estimate: 'about 200 a month',
+        kind: 'benchmarked',
+        why: 'A firm of 42 taking on commercial, property and employment work typically opens around 200 matters a month. This one matters — it multiplies everything below it.',
+      },
+      {
+        placeholder: '4',
+        estimate: 'about 4 people',
+        kind: 'scraped',
+        why: 'Your team page (harbourfield.com/team) lists four paralegals under operations.',
+      },
+      {
+        placeholder: '12',
+        estimate: 'about 12 hours',
+        kind: 'benchmarked',
+        why: 'The middle of what firms of 40–60 people report for this kind of work — not your number.',
+      },
+      {
+        placeholder: '$70k a year',
+        estimate: 'about $72k a year',
+        kind: 'benchmarked',
+        why: 'Regional pay data for paralegals at firms your size.',
+      },
+      {
+        placeholder: 'about a third',
+        estimate: 'about a third',
+        kind: 'estimated',
+        why: 'Our read: re-keying follows rules, but conflict checks and odd cases still need judgment. Nothing scraped — correct it freely.',
+      },
+    ],
+  },
+
+  'northaxle.com': {
+    scan: [
+      {
+        fact: 'Team size',
+        value: 'About 55 people',
+        source: 'linkedin.com/company/northaxle',
+        looking: 'Reading your site…',
+      },
+      {
+        fact: 'Industry',
+        value: 'Freight brokerage and 3PL',
+        source: 'northaxle.com',
+        looking: 'Checking who you are…',
+      },
+      {
+        fact: 'Service lines',
+        value: 'LTL, full truckload, drayage',
+        source: 'northaxle.com/services',
+        looking: 'Reading your services page…',
+      },
+      {
+        fact: 'Locations',
+        value: 'Three terminals — Memphis, Dallas, Reno',
+        source: 'northaxle.com/network',
+        looking: 'Looking for your terminals…',
+      },
+      {
+        fact: 'Site is built on',
+        value: 'HubSpot forms, a McLeod portal login',
+        source: 'builtwith.com',
+        looking: 'Checking what your site runs on…',
+      },
+      {
+        fact: 'Hiring now',
+        value: 'Four roles, three of them in dispatch',
+        source: 'northaxle.com/careers',
+        looking: 'Checking recent job postings…',
+      },
+    ],
+    pains: [
+      {
+        placeholder:
+          'e.g. load paperwork gets re-keyed from email into the TMS by hand',
+        guess: 'Building and re-keying load paperwork looks manual.',
+        guessKind: 'estimated',
+        guessWhy:
+          'Your services page lists LTL, full truckload and drayage (northaxle.com/services) — three different document sets — and the only system your site exposes is a McLeod portal login. We’d expect hand-keying between them. That’s a read, not a fact.',
+      },
+      {
+        placeholder: 'e.g. dispatchers make the same check calls all afternoon',
+        guess: 'Carrier check calls made one at a time, by phone.',
+        guessKind: 'benchmarked',
+        guessWhy:
+          'Brokerages running three terminals usually still make check calls by hand. Nothing on your site says otherwise, but nothing confirms it either.',
+      },
+      {
+        placeholder:
+          'e.g. someone chases proof-of-delivery paperwork before we can invoice',
+        guess: 'Chasing delivery paperwork before an invoice can go out.',
+        guessKind: 'benchmarked',
+        guessWhy:
+          'Three of your four open roles are in dispatch (northaxle.com/careers), and in brokerages that team usually ends up chasing the paperwork too. The postings are fact; what they spend the day on is our guess.',
+      },
+    ],
+    quant: [
+      {
+        placeholder: '900 loads',
+        estimate: 'about 900 a month',
+        kind: 'benchmarked',
+        why: 'A brokerage running three terminals typically moves loads in the high hundreds a month. This one matters — it multiplies everything below it.',
+      },
+      {
+        placeholder: '6',
+        estimate: 'about 6 people',
+        kind: 'benchmarked',
+        why: 'Typical dispatch bench for that load count. Your careers page tells us you’re hiring three more (northaxle.com/careers), not how many you have.',
+      },
+      {
+        placeholder: '15',
+        estimate: 'about 15 hours',
+        kind: 'benchmarked',
+        why: 'The middle of what dispatch teams report for paperwork and check calls — not your number.',
+      },
+      {
+        placeholder: '$52k a year',
+        estimate: 'about $54k a year',
+        kind: 'benchmarked',
+        why: 'US pay data for dispatch and brokerage support roles in your three markets.',
+      },
+      {
+        placeholder: 'about a third',
+        estimate: 'about a third',
+        kind: 'estimated',
+        why: 'Our read: the keying and the calling follow rules, but exceptions and unhappy carriers still need a person. Nothing scraped — correct it freely.',
+      },
+    ],
+  },
+
+  'verdantdental.com': {
+    scan: [
+      {
+        fact: 'Team size',
+        value: '31 people across the practices',
+        source: 'verdantdental.com/about',
+        looking: 'Reading your site…',
+      },
+      {
+        fact: 'Industry',
+        value: 'Multi-site dental group',
+        source: 'verdantdental.com',
+        looking: 'Checking who you are…',
+      },
+      {
+        fact: 'Service lines',
+        value: 'General, orthodontics, implants',
+        source: 'verdantdental.com/services',
+        looking: 'Reading your services page…',
+      },
+      {
+        fact: 'Locations',
+        value: 'Five practices in greater Phoenix',
+        source: 'verdantdental.com/locations',
+        looking: 'Looking for your other practices…',
+      },
+      {
+        fact: 'Site is built on',
+        value: 'A Dentrix patient portal, a Podium widget',
+        source: 'builtwith.com',
+        looking: 'Checking what your site runs on…',
+      },
+      {
+        fact: 'Hiring now',
+        value: 'Two front-desk roles, both mention insurance claims',
+        source: 'verdantdental.com/careers',
+        looking: 'Checking recent job postings…',
+      },
+    ],
+    pains: [
+      {
+        placeholder:
+          'e.g. the front desk prepares and resubmits insurance claims by hand',
+        guess: 'Insurance claims prepared and resubmitted by hand.',
+        guessKind: 'scraped',
+        guessWhy:
+          'Both of your open front-desk roles mention insurance claims — that’s from verdantdental.com/careers. How much of the day it takes is what we can’t see.',
+      },
+      {
+        placeholder:
+          'e.g. someone phones through the recall list for each practice every week',
+        guess: 'Recalls and reminders chased practice by practice.',
+        guessKind: 'benchmarked',
+        guessWhy:
+          'Groups with five sites (verdantdental.com/locations) usually run recalls per practice until someone centralises it. Nothing on your site confirms it.',
+      },
+      {
+        placeholder:
+          'e.g. the same patient details get re-entered when they move between practices',
+        guess: 'The same patient details re-entered between practices.',
+        guessKind: 'estimated',
+        guessWhy:
+          'Five practices and a single patient portal on the site (builtwith.com) — we’d expect some re-keying between them. That’s a read, not a fact.',
+      },
+    ],
+    quant: [
+      {
+        placeholder: '400 claims',
+        estimate: 'about 400 a month',
+        kind: 'benchmarked',
+        why: 'Typical claim volume for five practices at your service mix. This one matters — it multiplies everything below it.',
+      },
+      {
+        placeholder: '3',
+        estimate: 'about 3 people',
+        kind: 'benchmarked',
+        why: 'Front-desk cover across five sites usually lands here. Your careers page says you’re hiring two (verdantdental.com/careers), not how many you have.',
+      },
+      {
+        placeholder: '10',
+        estimate: 'about 10 hours',
+        kind: 'benchmarked',
+        why: 'The middle of what practice groups report for claims work — not your number.',
+      },
+      {
+        placeholder: '$45k a year',
+        estimate: 'about $46k a year',
+        kind: 'benchmarked',
+        why: 'Arizona pay data for dental front-desk and billing roles.',
+      },
+      {
+        placeholder: 'about a third',
+        estimate: 'about a third',
+        kind: 'estimated',
+        why: 'Our read: preparing and resubmitting follows rules, but denials and patient calls still need a person. Nothing scraped — correct it freely.',
+      },
+    ],
+  },
 }
 
-/* Whatever the user typed in the Website field, down to the key `SCANS` uses:
-   `https://www.Harbourfield.com/about` and `harbourfield.com` are one company.
-   An unrecognised domain — or an empty field — resolves to nothing, which is
-   the panel's empty state. */
-const scanFor = (website = '') =>
-  SCANS[
+/* Whatever the user typed in the Website field, down to the key `DEMOS` uses:
+   `https://www.DrJobPro.com/about` and `drjobpro.com` are one company. An
+   unrecognised domain — or an empty field — resolves to nothing, which is the
+   panel's empty state and the interview's no-guesses state. */
+const demoFor = (website = '') =>
+  DEMOS[
     website
       .trim()
       .toLowerCase()
@@ -671,6 +917,19 @@ const scanFor = (website = '') =>
       .replace(/^www\./, '')
       .split('/')[0]
   ]
+
+/* The shared question, with whatever we know about this company merged over it.
+   A company we didn't scan keeps the generic placeholder and gets no `guess` at
+   all — the block only renders when there is one. Pain points past the third
+   never get a guess, whoever the company is. */
+const painFor = (demo, i) => ({
+  ...(PAINS[i] || EXTRA_PAIN),
+  ...((PAINS[i] && demo && demo.pains[i]) || {}),
+})
+const quantFor = (demo, i) => ({
+  ...QUANT[i],
+  ...((demo && demo.quant[i]) || {}),
+})
 
 /* Two is the floor for a report that holds up; the copy says why rather than
    disabling anything. */
@@ -760,6 +1019,7 @@ function ScanPanel({ company, all, step }) {
           fact={f.fact}
           value={f.value}
           source={f.source}
+          sourceUrl={f.sourceUrl}
           last={!looking && i === facts.length - 1}
         />
       ))}
@@ -818,14 +1078,15 @@ function Interview({
   pain,
   namedCount,
   company,
-  scan,
+  demo,
   scanStep,
   onChange,
   onBack,
   onAdd,
   onFinish,
 }) {
-  const t = painAt(turn)
+  const t = painFor(demo, turn)
+  const quant = QUANT.map((_, i) => quantFor(demo, i))
   const canFinish = namedCount >= MIN_PAINS
   const set = (fields) => onChange(fields)
   const setQuant = (i, value) =>
@@ -837,7 +1098,7 @@ function Interview({
       style={{
         flex: 1,
         width: '100%',
-        maxWidth: scan ? COLUMN_PLUS_PANEL : COLUMN,
+        maxWidth: demo ? COLUMN_PLUS_PANEL : COLUMN,
         margin: '0 auto',
         padding: 'var(--space-8) var(--space-6) var(--space-20)',
         display: 'flex',
@@ -895,7 +1156,7 @@ function Interview({
           {t.quantIntro}
         </p>
 
-        {QUANT.map((q, i) => (
+        {quant.map((q, i) => (
           <Divider key={q.label}>
             <SegmentedInput
               label={q.label}
@@ -912,7 +1173,7 @@ function Interview({
         <Divider>
           <Input
             label="Which team or department handles this?"
-            placeholder="e.g. the paralegals, under operations"
+            placeholder="e.g. the team that does it, and who they sit under"
             value={pain.team}
             onChange={(e) => set({ team: e.target.value })}
           />
@@ -982,7 +1243,7 @@ function Interview({
         </div>
       </div>
 
-      <ScanPanel company={company} all={scan} step={scanStep} />
+      <ScanPanel company={company} all={demo && demo.scan} step={scanStep} />
     </section>
   )
 }
@@ -998,6 +1259,9 @@ function quantAnswer(answer = {}, q) {
 }
 
 function Reveal({ flow, onRestart }) {
+  /* The estimate a user left standing is only traceable against the company it
+     was made for, so the reveal resolves the same record the interview used. */
+  const demo = demoFor(flow.company.website)
   return (
     <section
       className="v2-rise"
@@ -1026,9 +1290,10 @@ function Reveal({ flow, onRestart }) {
             {[
               pain.text || 'Unnamed',
               pain.team || 'team not named',
-              ...pain.quant.map(
-                (a, j) => `${QUANT[j].label} ${quantAnswer(a, QUANT[j])}`,
-              ),
+              ...pain.quant.map((a, j) => {
+                const q = quantFor(demo, j)
+                return `${q.label} ${quantAnswer(a, q)}`
+              }),
               `worst part: ${pain.worst || '—'}`,
             ].join(' · ')}
           </li>
@@ -1110,7 +1375,7 @@ export default function V2() {
             onBack={() => go(-1)}
             onSubmit={() => {
               patch({ step: 'interview', scan: { step: 0 } })
-              startScan(setFlow, scanFor(flow.company.website)?.length)
+              startScan(setFlow, demoFor(flow.company.website)?.scan.length)
             }}
           />
         )}
@@ -1123,7 +1388,7 @@ export default function V2() {
             /* Resolved from the website field at render rather than copied into
                `flow` — one source of truth, and editing the website on the way
                back through the company screen re-scans by definition. */
-            scan={scanFor(flow.company.website)}
+            demo={demoFor(flow.company.website)}
             scanStep={flow.scan.step}
             onChange={(fields) =>
               setFlow((f) => ({
