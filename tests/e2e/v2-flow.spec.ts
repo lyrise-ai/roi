@@ -1,11 +1,16 @@
 /**
- * /v2 POC route (LYR-182, screens: LYR-183, interview: LYR-184) — runs in the
- * `anon` project.
+ * /v2 POC route (LYR-182, screens: LYR-183, interview: LYR-184, scan panel:
+ * LYR-185) — runs in the `anon` project.
  *
- * Four guarantees: the route is reachable without auth, flow state survives
+ * Five guarantees: the route is reachable without auth, flow state survives
  * all four steps (landing → company → interview → reveal) and going back,
- * submitting the company form does not wait on the canned scan, and every
- * interview answer — across more than one pain point — reaches the end.
+ * submitting the company form does not wait on the canned scan, every
+ * interview answer — across more than one pain point — reaches the end, and
+ * the scan panel resolves sourced facts with working sources while rendering
+ * nothing at all when there was no scan.
+ *
+ * The whole flow is also walkable with no keyboard at all, which is how the
+ * demo is given.
  */
 import { test, expect } from '@playwright/test'
 
@@ -53,11 +58,12 @@ test.describe('/v2', () => {
 
     await page.getByPlaceholder('4', { exact: true }).fill('6')
 
-    // One pain point is not enough to finish; the analyst says so.
-    await expect(page.getByText(/I need at least two/)).toBeVisible()
+    // One pain point is fewer than the analyst wants, and it says so — but
+    // leaving is never blocked on it.
+    await expect(page.getByText(/Two makes the report hold up/)).toBeVisible()
     await expect(
       page.getByRole('button', { name: 'That’s all for now' }),
-    ).toHaveCount(0)
+    ).toBeVisible()
 
     await page.getByRole('button', { name: 'I have another one' }).click()
     await expect(
@@ -70,12 +76,9 @@ test.describe('/v2', () => {
     // Going back to the first pain point shows what was typed there.
     await page.getByRole('button', { name: 'Back', exact: true }).click()
     await expect(open).toHaveValue('Re-keying intake forms')
-    // Two are named, so finishing stays on offer even from the first one.
-    await expect(
-      page.getByRole('button', { name: 'That’s all for now' }),
-    ).toBeVisible()
     await page.getByRole('button', { name: 'I have another one' }).click()
-    // A third turn opened and left blank is not a pain point.
+    // A third turn left blank falls back to the guess we showed for it; a
+    // fourth has no guess behind it, so it drops.
     await page.getByRole('button', { name: 'I have another one' }).click()
 
     await page.getByRole('button', { name: 'That’s all for now' }).click()
@@ -88,7 +91,107 @@ test.describe('/v2', () => {
     )
     await expect(page.getByText(/Re-keying intake forms/)).toContainText('6')
     await expect(page.getByText(/Rebuilding the Friday report/)).toBeVisible()
-    await expect(page.getByRole('listitem')).toHaveCount(2)
+    await expect(page.getByRole('listitem')).toHaveCount(3)
+    // The filled-in one says whose words they are.
+    await expect(page.getByText(/Chasing missing documents/)).toContainText(
+      'our guess, not yours',
+    )
+    // And an untouched number resolves to the estimate, carrying its tag.
+    await expect(page.getByText(/Chasing missing documents/)).toContainText(
+      'about 12 hours (benchmarked)',
+    )
+  })
+
+  test('fills the scan panel while the interview is being answered', async ({
+    page,
+  }) => {
+    await page.goto('/v2')
+    await page.getByRole('button', { name: 'Start with my company' }).click()
+    await page.getByLabel('Company name').fill('Dr. Job Pro')
+    // Typed the way a person would, not the way the lookup key reads.
+    await page.getByLabel('Website').fill('https://www.drjobpro.com/')
+    await page.getByRole('button', { name: 'Next', exact: true }).click()
+
+    const panel = page.getByRole('complementary')
+    await expect(panel).toContainText('What we could verify about Dr. Job Pro')
+
+    // In-flight: the panel is quietly looking and the interview is already
+    // usable — the first fact is still ~1.5s away.
+    await expect(panel).toContainText('Reading your site…')
+    const open = page.getByRole('textbox', { name: /Where do your teams lose/ })
+    await open.fill('Screening CVs by hand')
+    await expect(open).toHaveValue('Screening CVs by hand')
+
+    // Resolved: facts arrive one at a time, each with a source you can open.
+    await expect(panel).toContainText('10M+ users since 2015')
+    await expect(
+      panel.getByRole('link', { name: 'drjobpro.com/about-us' }).first(),
+    ).toHaveAttribute('href', 'https://www.drjobpro.com/about-us')
+    await expect(panel).toContainText('Abu Dhabi, Giza, and Vellore')
+
+    // Nothing inferred: no workflow, no department, no operating model.
+    await expect(panel).not.toContainText(
+      /workflow|department|operating model/i,
+    )
+
+    // The guess is this company's, and it cites this company's scan.
+    await expect(page.getByText(/Reading applications against/)).toBeVisible()
+    await expect(page.getByText(/8,000 live vacancies/)).toBeVisible()
+    // Nothing from the law firm's fact set leaks in.
+    await expect(page.getByText(/paralegals/i)).toHaveCount(0)
+  })
+
+  test('walks the whole flow without typing anything', async ({ page }) => {
+    // How the demo is actually given: Next, Next, Next. An empty company field
+    // falls back to the demo company rather than blocking the button.
+    await page.goto('/v2')
+    await page.getByRole('button', { name: 'Start with my company' }).click()
+    await page.getByRole('button', { name: 'Next', exact: true }).click()
+
+    await expect(page.getByText('Step 3 of 4')).toBeVisible()
+    // The fallback names itself, so the panel isn't addressed to "you".
+    await expect(page.getByRole('complementary')).toContainText(
+      'What we could verify about Dr. Job Pro',
+    )
+
+    // Straight to the reveal on the next click. Nothing was typed, so every
+    // pain point is the guess we showed and every number is the estimate —
+    // each one labelled as ours.
+    await page.getByRole('button', { name: 'That’s all for now' }).click()
+
+    await expect(page.getByText('Step 4 of 4')).toBeVisible()
+    await expect(page.getByRole('listitem')).toHaveCount(1)
+    const only = page.getByRole('listitem').first()
+    await expect(only).toContainText('our guess, not yours')
+    await expect(only).toContainText('about 2,600 a month (benchmarked)')
+  })
+
+  test('renders no scan panel at all when nothing was found', async ({
+    page,
+  }) => {
+    // `?scan=none` is the door to the no-scan state: with the fallback in
+    // place, an unrecognised domain no longer reaches it.
+    await page.goto('/v2?scan=none')
+    await page.getByRole('button', { name: 'Start with my company' }).click()
+    await page
+      .getByLabel('Company name')
+      .fill('Somewhere We Know Nothing About')
+    await page.getByRole('button', { name: 'Next', exact: true }).click()
+
+    // Not an empty panel — no panel. An empty one reads as broken.
+    await expect(page.getByRole('complementary')).toHaveCount(0)
+    await expect(page.getByText('What we could verify')).toHaveCount(0)
+    // And the interview is unaffected.
+    await expect(
+      page.getByRole('textbox', { name: /Where do your teams lose/ }),
+    ).toBeVisible()
+
+    // Scanned nothing, so it guesses nothing — no "from your website" block…
+    await expect(page.getByText('A guess from your website')).toHaveCount(0)
+    // …and the estimate says why it hasn't got one rather than inventing a
+    // number the prospect would have to argue with.
+    await page.getByRole('radio', { name: 'Let AI estimate' }).first().click()
+    await expect(page.getByText('Nothing to base one on').first()).toBeVisible()
   })
 
   test('pushes back once a fourth pain point is being named', async ({
