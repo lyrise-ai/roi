@@ -74,7 +74,11 @@ const hovers = {
 
    `as` swaps in something that renders its own anchor — `as={Link}` for an
    internal route, which is what `@next/next/no-html-link-for-pages` asks for
-   and what keeps the navigation client-side. */
+   and what keeps the navigation client-side.
+
+   A disabled navigation is not a navigation, so `disabled` drops the link
+   mode entirely: <button> is the only element `disabled` actually works on,
+   and a disabled <a> still follows its href however it is painted. */
 export function Button({
   variant = 'primary',
   size = 'md',
@@ -90,12 +94,13 @@ export function Button({
 }) {
   const [hover, setHover] = React.useState(false)
   const [press, setPress] = React.useState(false)
-  const Tag = As || (href ? 'a' : 'button')
+  const Tag = disabled ? 'button' : As || (href ? 'a' : 'button')
+  const isLink = Tag !== 'button'
   return (
     <Tag
-      href={href}
-      type={href ? undefined : 'button'}
-      disabled={href ? undefined : disabled}
+      href={isLink ? href : undefined}
+      type={isLink ? undefined : 'button'}
+      disabled={isLink ? undefined : disabled}
       onMouseEnter={() => setHover(true)}
       onMouseLeave={() => {
         setHover(false)
