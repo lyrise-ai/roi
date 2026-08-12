@@ -13,7 +13,8 @@
    Flow state is a single object in this component and lives in memory only.
    A refresh starts over; that's the accepted trade for a supervised demo
    (LYR-182: "state can live in memory"). Landing and company are built
-   (LYR-183), the interview is built (LYR-184); the reveal is still a stub.
+   (LYR-183), the interview is built (LYR-184), the company scan panel is
+   built (LYR-185); the reveal is still a stub.
 
    The interview does not add a step: `flow.turn` walks the pain points inside
    the `interview` step, and every answer for every pain point stays in
@@ -464,34 +465,222 @@ const QUANT = [
   },
 ]
 
-const SCAN = [
-  { fact: 'Team size', value: '42 people', source: 'harbourfield.com/team' },
-  {
-    fact: 'Practice areas',
-    value: 'Commercial, property, employment',
-    source: 'harbourfield.com',
-  },
-  {
-    fact: 'Pricing model',
-    value: 'Fixed fee, published openly',
-    source: 'harbourfield.com/pricing',
-  },
-  {
-    fact: 'Hiring now',
-    value: 'Two roles, both mention document review',
-    source: 'careers page',
-  },
-]
-const SCAN_LOOKING = [
-  'Reading your site…',
-  'Checking your team page…',
-  'Reading your pricing page…',
-  'Checking recent job postings…',
-]
+/* The company scan, canned for three demo domains (LYR-185). Live enrichment is
+   a production concern; what needs testing here is the panel's behaviour.
+
+   The demo domains are `drjobpro.com` (the fact set from the v17 prototype),
+   `harbourfield.com`, `northaxle.com` and `verdantdental.com` — anything else
+   is the empty state on purpose.
+
+   Every entry is something a person could go and check: a headcount, a service
+   line, a location, what the site is built on, what the careers page is
+   advertising. Nothing here is a workflow, a department or an "operating
+   model". That inference is what made the old research agent untrustworthy —
+   it was required to invent four workflows whether or not the evidence existed.
+   The scan shows what we can point at; the interview gets everything else.
+
+   `looking` is what the panel says while that fact is still pending, so the
+   status line always names the page being read rather than counting down.
+
+   Sources are text, not links: these are fictional demo companies and a dead
+   link in front of a prospect is worse than a cited path. Real enrichment fills
+   `sourceUrl` — `ScanFactRow` already renders it. */
+const SCANS = {
+  /* Dr. Job Pro is the demo we actually show. The prototype's own lines are
+     kept except where one reached past the evidence: "60–80 staff across sales,
+     support and operations" and "support arrives on all three" name departments
+     and workflows the source pages don't. The headcount and the channels stay,
+     the reading of them doesn't. */
+  'drjobpro.com': [
+    {
+      fact: 'What you do',
+      value:
+        'Job platform for the Middle East — employers post roles, candidates apply',
+      source: 'drjobpro.com',
+      looking: 'Reading your site…',
+    },
+    {
+      fact: 'Active listings',
+      value: 'About 2,800 open vacancies live on the site',
+      source: 'drjobpro.com/jobs',
+      looking: 'Counting what’s live on your jobs page…',
+    },
+    {
+      fact: 'Reach',
+      value: 'Vacancies across the Gulf, Egypt and the Levant',
+      source: 'drjobpro.com/jobs',
+      looking: 'Checking where those vacancies are…',
+    },
+    {
+      fact: 'Who buys',
+      value: 'Employers, on subscription packages',
+      source: 'drjobpro.com/employer',
+      looking: 'Reading your employer page…',
+    },
+    {
+      fact: 'Team size',
+      value: 'Roughly 60–80 staff',
+      source: 'LinkedIn company page',
+      looking: 'Checking your LinkedIn page…',
+    },
+    {
+      fact: 'Contact channels',
+      value: 'Portal, email and WhatsApp',
+      source: 'drjobpro.com/contact',
+      looking: 'Reading your contact page…',
+    },
+    {
+      fact: 'Hiring now',
+      value: 'Six open roles, mostly tele-sales and customer service',
+      source: 'drjobpro.com/careers',
+      looking: 'Checking recent job postings…',
+    },
+    {
+      fact: 'Region',
+      value: 'Headquartered in the UAE',
+      source: 'drjobpro.com/about',
+      looking: 'Looking for where you’re based…',
+    },
+  ],
+  'harbourfield.com': [
+    {
+      fact: 'Team size',
+      value: '42 people',
+      source: 'harbourfield.com/team',
+      looking: 'Reading your site…',
+    },
+    {
+      fact: 'Service lines',
+      value: 'Commercial, property, employment',
+      source: 'harbourfield.com',
+      looking: 'Checking your team page…',
+    },
+    {
+      fact: 'Pricing model',
+      value: 'Fixed fee, published openly',
+      source: 'harbourfield.com/pricing',
+      looking: 'Reading your pricing page…',
+    },
+    {
+      fact: 'Locations',
+      value: 'Two offices — Leeds and Manchester',
+      source: 'harbourfield.com/contact',
+      looking: 'Looking for other offices…',
+    },
+    {
+      fact: 'Site is built on',
+      value: 'WordPress, Calendly, Mailchimp',
+      source: 'builtwith.com',
+      looking: 'Checking what your site runs on…',
+    },
+    {
+      fact: 'Hiring now',
+      value: 'Two roles, both mention document review',
+      source: 'harbourfield.com/careers',
+      looking: 'Checking recent job postings…',
+    },
+  ],
+  'northaxle.com': [
+    {
+      fact: 'Team size',
+      value: 'About 55 people',
+      source: 'linkedin.com/company/northaxle',
+      looking: 'Reading your site…',
+    },
+    {
+      fact: 'Industry',
+      value: 'Freight brokerage and 3PL',
+      source: 'northaxle.com',
+      looking: 'Checking who you are…',
+    },
+    {
+      fact: 'Service lines',
+      value: 'LTL, full truckload, drayage',
+      source: 'northaxle.com/services',
+      looking: 'Reading your services page…',
+    },
+    {
+      fact: 'Locations',
+      value: 'Three terminals — Memphis, Dallas, Reno',
+      source: 'northaxle.com/network',
+      looking: 'Looking for your terminals…',
+    },
+    {
+      fact: 'Site is built on',
+      value: 'HubSpot forms, a McLeod portal login',
+      source: 'builtwith.com',
+      looking: 'Checking what your site runs on…',
+    },
+    {
+      fact: 'Hiring now',
+      value: 'Four roles, three of them in dispatch',
+      source: 'northaxle.com/careers',
+      looking: 'Checking recent job postings…',
+    },
+  ],
+  'verdantdental.com': [
+    {
+      fact: 'Team size',
+      value: '31 people across the practices',
+      source: 'verdantdental.com/about',
+      looking: 'Reading your site…',
+    },
+    {
+      fact: 'Industry',
+      value: 'Multi-site dental group',
+      source: 'verdantdental.com',
+      looking: 'Checking who you are…',
+    },
+    {
+      fact: 'Service lines',
+      value: 'General, orthodontics, implants',
+      source: 'verdantdental.com/services',
+      looking: 'Reading your services page…',
+    },
+    {
+      fact: 'Locations',
+      value: 'Five practices in greater Phoenix',
+      source: 'verdantdental.com/locations',
+      looking: 'Looking for your other practices…',
+    },
+    {
+      fact: 'Site is built on',
+      value: 'A Dentrix patient portal, a Podium widget',
+      source: 'builtwith.com',
+      looking: 'Checking what your site runs on…',
+    },
+    {
+      fact: 'Hiring now',
+      value: 'Two front-desk roles, both mention insurance claims',
+      source: 'verdantdental.com/careers',
+      looking: 'Checking recent job postings…',
+    },
+  ],
+}
+
+/* Whatever the user typed in the Website field, down to the key `SCANS` uses:
+   `https://www.Harbourfield.com/about` and `harbourfield.com` are one company.
+   An unrecognised domain — or an empty field — resolves to nothing, which is
+   the panel's empty state. */
+const scanFor = (website = '') =>
+  SCANS[
+    website
+      .trim()
+      .toLowerCase()
+      .replace(/^https?:\/\//, '')
+      .replace(/^www\./, '')
+      .split('/')[0]
+  ]
 
 /* Two is the floor for a report that holds up; the copy says why rather than
    disabling anything. */
 const MIN_PAINS = 2
+
+/* The question column, and the interview's width with the scan panel beside it.
+   Without a panel the column is the whole screen and centres, rather than
+   sitting against a gutter of nothing. */
+const COLUMN = '41rem'
+const COLUMN_PLUS_PANEL = '66rem'
 
 const emptyPain = () => ({
   text: '',
@@ -519,12 +708,21 @@ function Divider({ children }) {
 }
 
 /* What the scan found, beside the questions rather than in front of them: it
-   only ever shows what it can point to, and it never fills in an answer. */
-function ScanPanel({ company, step }) {
-  const facts = SCAN.slice(0, step)
-  const looking = step < SCAN.length
+   only ever shows what it can point to, and it never fills in an answer.
+
+   Three states, and the third one is the point: with facts it resolves them a
+   row at a time; while it still has some to find it says so quietly; with no
+   fact set at all it renders nothing. An empty panel reads as broken, and a
+   panel promising a scan it can't deliver is worse than no panel (LYR-185). */
+function ScanPanel({ company, all, step }) {
+  if (!all) return null
+  const facts = all.slice(0, step)
+  const looking = step < all.length
   return (
     <aside
+      /* Named so it stays a landmark: an unnamed <aside> inside <section> maps
+         to `generic`, not `complementary`. */
+      aria-label="Company scan"
       style={{
         flex: '1 1 17rem',
         maxWidth: '20rem',
@@ -590,7 +788,7 @@ function ScanPanel({ company, step }) {
               color: 'var(--text-muted)',
             }}
           >
-            {SCAN_LOOKING[Math.min(step, SCAN_LOOKING.length - 1)]}
+            {all[step].looking}
           </span>
         </div>
       )}
@@ -621,6 +819,7 @@ function Interview({
   namedCount,
   company,
   scan,
+  scanStep,
   onChange,
   onBack,
   onAdd,
@@ -638,7 +837,7 @@ function Interview({
       style={{
         flex: 1,
         width: '100%',
-        maxWidth: '66rem',
+        maxWidth: scan ? COLUMN_PLUS_PANEL : COLUMN,
         margin: '0 auto',
         padding: 'var(--space-8) var(--space-6) var(--space-20)',
         display: 'flex',
@@ -647,7 +846,7 @@ function Interview({
         gap: 'var(--space-12)',
       }}
     >
-      <div style={{ flex: '1 1 30rem', minWidth: 0, maxWidth: '41rem' }}>
+      <div style={{ flex: '1 1 30rem', minWidth: 0, maxWidth: COLUMN }}>
         <AnalystMark />
         <h2 style={QUESTION}>{t.question}</h2>
         <p style={{ ...LEAD, margin: 'var(--space-3) 0 var(--space-6)' }}>
@@ -783,7 +982,7 @@ function Interview({
         </div>
       </div>
 
-      <ScanPanel company={company} step={scan.step} />
+      <ScanPanel company={company} all={scan} step={scanStep} />
     </section>
   )
 }
@@ -852,16 +1051,19 @@ const emptyFlow = () => ({
 
 /* The scan is canned in the POC (LYR-178) and is fired, never awaited: the
    company form advances on the same tick and the facts land one at a time
-   while the first questions are being answered. The timer is module-level so
-   restarting the flow cannot leave two of them racing to fill the panel. */
+   while the first questions are being answered. Resolving them instantly would
+   be both unconvincing and untested — the in-flight state would never render.
+   The timer is module-level so restarting the flow cannot leave two of them
+   racing to fill the panel. */
 let scanTimer
-function startScan(setFlow) {
+function startScan(setFlow, count) {
   clearInterval(scanTimer)
+  if (!count) return // unknown company: nothing to resolve, and no panel to fill
   let step = 0
   scanTimer = setInterval(() => {
     step += 1
     setFlow((f) => ({ ...f, scan: { step } }))
-    if (step >= SCAN.length) clearInterval(scanTimer)
+    if (step >= count) clearInterval(scanTimer)
   }, 1500) // stands in for a research call; nothing downstream blocks on it
 }
 
@@ -908,7 +1110,7 @@ export default function V2() {
             onBack={() => go(-1)}
             onSubmit={() => {
               patch({ step: 'interview', scan: { step: 0 } })
-              startScan(setFlow)
+              startScan(setFlow, scanFor(flow.company.website)?.length)
             }}
           />
         )}
@@ -918,7 +1120,11 @@ export default function V2() {
             pain={flow.pains[flow.turn]}
             namedCount={flow.pains.filter(isNamed).length}
             company={flow.company.name}
-            scan={flow.scan}
+            /* Resolved from the website field at render rather than copied into
+               `flow` — one source of truth, and editing the website on the way
+               back through the company screen re-scans by definition. */
+            scan={scanFor(flow.company.website)}
+            scanStep={flow.scan.step}
             onChange={(fields) =>
               setFlow((f) => ({
                 ...f,

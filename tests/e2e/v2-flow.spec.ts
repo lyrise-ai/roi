@@ -1,11 +1,13 @@
 /**
- * /v2 POC route (LYR-182, screens: LYR-183, interview: LYR-184) — runs in the
- * `anon` project.
+ * /v2 POC route (LYR-182, screens: LYR-183, interview: LYR-184, scan panel:
+ * LYR-185) — runs in the `anon` project.
  *
- * Four guarantees: the route is reachable without auth, flow state survives
+ * Five guarantees: the route is reachable without auth, flow state survives
  * all four steps (landing → company → interview → reveal) and going back,
- * submitting the company form does not wait on the canned scan, and every
- * interview answer — across more than one pain point — reaches the end.
+ * submitting the company form does not wait on the canned scan, every
+ * interview answer — across more than one pain point — reaches the end, and
+ * the scan panel resolves sourced facts for a known company while rendering
+ * nothing at all for an unknown one.
  */
 import { test, expect } from '@playwright/test'
 
@@ -89,6 +91,57 @@ test.describe('/v2', () => {
     await expect(page.getByText(/Re-keying intake forms/)).toContainText('6')
     await expect(page.getByText(/Rebuilding the Friday report/)).toBeVisible()
     await expect(page.getByRole('listitem')).toHaveCount(2)
+  })
+
+  test('fills the scan panel while the interview is being answered', async ({
+    page,
+  }) => {
+    await page.goto('/v2')
+    await page.getByRole('button', { name: 'Start with my company' }).click()
+    await page.getByLabel('Company name').fill('Dr. Job Pro')
+    // Typed the way a person would, not the way the lookup key reads.
+    await page.getByLabel('Website').fill('https://www.drjobpro.com/')
+    await page.getByRole('button', { name: 'Next', exact: true }).click()
+
+    const panel = page.getByRole('complementary')
+    await expect(panel).toContainText('What we could verify about Dr. Job Pro')
+
+    // In-flight: the panel is quietly looking and the interview is already
+    // usable — the first fact is still ~1.5s away.
+    await expect(panel).toContainText('Reading your site…')
+    const open = page.getByRole('textbox', { name: /Where do your teams lose/ })
+    await open.fill('Screening CVs by hand')
+    await expect(open).toHaveValue('Screening CVs by hand')
+
+    // Resolved: facts arrive one at a time, each with its source beside it.
+    await expect(panel).toContainText('About 2,800 open vacancies')
+    await expect(panel).toContainText('drjobpro.com/jobs')
+    await expect(panel).toContainText('Roughly 60–80 staff')
+
+    // Nothing inferred: no workflow, no department, no operating model.
+    await expect(panel).not.toContainText(
+      /workflow|department|operating model/i,
+    )
+  })
+
+  test('renders no scan panel at all for an unknown company', async ({
+    page,
+  }) => {
+    await page.goto('/v2')
+    await page.getByRole('button', { name: 'Start with my company' }).click()
+    await page
+      .getByLabel('Company name')
+      .fill('Somewhere We Know Nothing About')
+    await page.getByLabel('Website').fill('nothing-canned-here.example')
+    await page.getByRole('button', { name: 'Next', exact: true }).click()
+
+    // Not an empty panel — no panel. An empty one reads as broken.
+    await expect(page.getByRole('complementary')).toHaveCount(0)
+    await expect(page.getByText('What we could verify')).toHaveCount(0)
+    // And the interview is unaffected.
+    await expect(
+      page.getByRole('textbox', { name: /Where do your teams lose/ }),
+    ).toBeVisible()
   })
 
   test('pushes back once a fourth pain point is being named', async ({
