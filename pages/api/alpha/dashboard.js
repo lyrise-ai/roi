@@ -217,6 +217,8 @@ export default async function handler(req, res) {
       pmf_improvement,
       not_disappointed_reason,
       intent_timeline,
+      step_credibility_choice,
+      step_credibility_comment,
       invite:alpha_invites ( email, full_name, revoked_at ),
       report:reports ( id, company_name, validation_data )
     `,

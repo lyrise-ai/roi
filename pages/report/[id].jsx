@@ -148,7 +148,6 @@ export default function ReportPage({
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
           session_token: token,
-          report_id: reportId,
           reached_report: true,
         }),
       })
