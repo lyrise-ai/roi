@@ -13,5 +13,9 @@ export interface ButtonProps extends React.ButtonHTMLAttributes<HTMLButtonElemen
   iconLeft?: React.ReactNode
   iconRight?: React.ReactNode
   children?: React.ReactNode
+  /** Renders an `<a>` in the same chrome — for navigations, not actions. */
+  href?: string
+  /** Element or component to render instead — `as={Link}` for internal routes. */
+  as?: React.ElementType
 }
 export function Button(props: ButtonProps): JSX.Element

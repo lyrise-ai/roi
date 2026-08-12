@@ -67,6 +67,18 @@ const hovers = {
   },
 }
 
+/* `href` renders an <a> in the same chrome. A navigation dressed as a button
+   still has to be a link: middle-click, open-in-new-tab and "copy link"
+   are the difference between a control and a dead end. Wrapping the <button>
+   in an <a> instead would nest interactive content, which is invalid.
+
+   `as` swaps in something that renders its own anchor — `as={Link}` for an
+   internal route, which is what `@next/next/no-html-link-for-pages` asks for
+   and what keeps the navigation client-side.
+
+   A disabled navigation is not a navigation, so `disabled` drops the link
+   mode entirely: <button> is the only element `disabled` actually works on,
+   and a disabled <a> still follows its href however it is painted. */
 export function Button({
   variant = 'primary',
   size = 'md',
@@ -76,14 +88,19 @@ export function Button({
   iconRight,
   children,
   style,
+  href,
+  as: As,
   ...rest
 }) {
   const [hover, setHover] = React.useState(false)
   const [press, setPress] = React.useState(false)
+  const Tag = disabled ? 'button' : As || (href ? 'a' : 'button')
+  const isLink = Tag !== 'button'
   return (
-    <button
-      type="button"
-      disabled={disabled}
+    <Tag
+      href={isLink ? href : undefined}
+      type={isLink ? undefined : 'button'}
+      disabled={isLink ? undefined : disabled}
       onMouseEnter={() => setHover(true)}
       onMouseLeave={() => {
         setHover(false)
@@ -99,6 +116,7 @@ export function Button({
         ...sizes[size],
         borderRadius: 'var(--radius-control)',
         cursor: disabled ? 'not-allowed' : 'pointer',
+        textDecoration: 'none',
         whiteSpace: 'nowrap',
         flexShrink: 0,
         transition: 'var(--transition-control)',
@@ -114,6 +132,6 @@ export function Button({
       {iconLeft}
       {children}
       {iconRight}
-    </button>
+    </Tag>
   )
 }
