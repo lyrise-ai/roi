@@ -35,8 +35,17 @@ const WORKING_WEEKS = 50
 const OVERHEAD_MULTIPLIER = 1.3
 
 // Not a production value — POC-only. See LYR-186.
-// TODO: confirm 1.30 (modeler prompt) vs 1.25 (design mock) with team
+// Applied as an INCREMENTAL multiplier here (uplift = OD × this), which is not
+// what production's globals.profitMultiplier means: that one is a TOTAL
+// multiplier of 1.8–4.0 (roiModeler.ts:110) applied as OD × (m − 1)
+// (roiCalculator.ts:363). 1.3 incremental sits inside production's implied
+// 0.8–3.0 incremental band, so don't "fix" this by copying 1.8–4.0 in.
 const PROFIT_MULTIPLIER = 1.3
+
+// Full-time hours per week — the denominator that turns an annual salary into
+// an hourly rate. Not the same thing as the user's hoursPerWeek input, which is
+// how much of their week the workflow eats.
+const FTE_HOURS_PER_WEEK = 40
 
 export interface MiniCalculatorInput {
   people: number
@@ -44,7 +53,9 @@ export interface MiniCalculatorInput {
   // Fully-loaded assumption applied below (OVERHEAD_MULTIPLIER) — pass the
   // raw annual salary, not an already-loaded rate.
   annualPay: number
-  automatablePct: number // 0–1
+  // 0–1, or 0–100 percentage points — anything above 1 is read as points.
+  // Clamped to 0–1 and rounded to a whole percent before it's used.
+  automatablePct: number
   team?: string
 }
 
@@ -69,32 +80,65 @@ const round = (n: number) => Math.round(n)
 const comma = (n: number) => round(n).toLocaleString('en-US')
 const money = (n: number) => `$${comma(n)}`
 
+// Every input is user-typed and every one of them can be missing mid-interview
+// (the live preview renders before the last question is answered). A missing or
+// junk number becomes 0 — a $0 line reads as "not answered yet", a $NaN line
+// reads as a broken app in front of a prospect.
+const num = (n: number) => (Number.isFinite(n) ? Number(n) : 0)
+
+// Q4 answers arrive as either 0.4 or 40 depending on how the question was
+// phrased, so treat anything above 1 as percentage points. Rounded to a whole
+// percent because that's how it's displayed, and the shown formula has to be
+// the one that was actually computed.
+const toFraction = (n: number) => {
+  const raw = num(n)
+  const fraction = raw > 1 ? raw / 100 : raw
+  return Math.min(1, Math.max(0, Math.round(fraction * 100) / 100))
+}
+
 export function calculateMiniProfitMap(
   input: MiniCalculatorInput,
 ): MiniCalculatorOutput {
-  const { people, hoursPerWeek, annualPay, automatablePct, team } = input
+  const { team } = input
+  const people = num(input.people)
+  const hoursPerWeek = num(input.hoursPerWeek)
+  const annualPay = num(input.annualPay)
+  const automatable = toFraction(input.automatablePct)
 
-  const annualHours = people * hoursPerWeek * WORKING_WEEKS
-  const hoursReturned = annualHours * automatablePct * ADOPTION * REALIZATION
-  const ratePerHour = (annualPay / (WORKING_WEEKS * 40)) * OVERHEAD_MULTIPLIER
-  const operationalDividend = hoursReturned * ratePerHour
-  const profitUplift = operationalDividend * PROFIT_MULTIPLIER
+  // Rounded at every step, not just at the end: these figures are also the
+  // operands of the formula strings below, and a prospect who checks the
+  // arithmetic by hand must get the same answer we printed. Presentable and
+  // self-consistent beats exact — see LYR-186 review.
+  const annualHours = round(people * hoursPerWeek * WORKING_WEEKS)
+  const hoursReturned = round(
+    annualHours * automatable * ADOPTION * REALIZATION,
+  )
+  const ratePerHour =
+    round(
+      (annualPay / (WORKING_WEEKS * FTE_HOURS_PER_WEEK)) *
+        OVERHEAD_MULTIPLIER *
+        100,
+    ) / 100
+  const operationalDividend = round(hoursReturned * ratePerHour)
+  const profitUplift = round(operationalDividend * PROFIT_MULTIPLIER)
   const totalFinancialGain = operationalDividend + profitUplift
 
   const forTeam = team ? ` for ${team}` : ''
+  const pct = `${round(automatable * 100)}%`
+  const rate = `$${ratePerHour.toFixed(2)}`
 
   return {
-    annualHours: round(annualHours),
-    hoursReturned: round(hoursReturned),
-    ratePerHour: Math.round(ratePerHour * 100) / 100,
-    operationalDividend: round(operationalDividend),
-    profitUplift: round(profitUplift),
-    totalFinancialGain: round(totalFinancialGain),
+    annualHours,
+    hoursReturned,
+    ratePerHour,
+    operationalDividend,
+    profitUplift,
+    totalFinancialGain,
     formulas: {
       annualHours: `${people} × ${hoursPerWeek} × ${WORKING_WEEKS} = ${comma(annualHours)} hours/year spent today${forTeam}`,
-      hoursReturned: `${comma(annualHours)} × ${automatablePct} × ${ADOPTION} × ${REALIZATION} = ${comma(hoursReturned)} hours/year returned`,
-      ratePerHour: `($${comma(annualPay)} ÷ (${WORKING_WEEKS} × 40)) × ${OVERHEAD_MULTIPLIER} = $${ratePerHour.toFixed(2)}/hour`,
-      operationalDividend: `${comma(hoursReturned)} × $${ratePerHour.toFixed(2)} = ${money(operationalDividend)}`,
+      hoursReturned: `${comma(annualHours)} × ${pct} × ${ADOPTION} × ${REALIZATION} = ${comma(hoursReturned)} hours/year returned`,
+      ratePerHour: `(${money(annualPay)} ÷ (${WORKING_WEEKS} × ${FTE_HOURS_PER_WEEK})) × ${OVERHEAD_MULTIPLIER} = ${rate}/hour`,
+      operationalDividend: `${comma(hoursReturned)} × ${rate} = ${money(operationalDividend)}`,
       profitUplift: `${money(operationalDividend)} × ${PROFIT_MULTIPLIER} = ${money(profitUplift)}`,
       totalFinancialGain: `${money(operationalDividend)} + ${money(profitUplift)} = ${money(totalFinancialGain)}`,
     },

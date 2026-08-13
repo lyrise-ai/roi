@@ -77,9 +77,113 @@ test('worked example: 12 people, 10 hrs/wk, $60k/yr, 40% automatable', () => {
     out.formulas.annualHours,
     '12 × 10 × 50 = 6,000 hours/year spent today for Finance',
   )
-  assert.match(out.formulas.hoursReturned, /^6,000 × 0\.4 × 0\.7 × 0\.8 = /)
+  assert.match(out.formulas.hoursReturned, /^6,000 × 40% × 0\.7 × 0\.8 = /)
   assert.match(out.formulas.ratePerHour, /\$39\.00\/hour$/)
   assert.match(out.formulas.totalFinancialGain, /^\$52,416 \+ \$68,141 = /)
+})
+
+// The formula strings are what a prospect checks on their phone. Every one of
+// them has to add up on its own terms, for any input — not just the worked
+// example above. Parse the arithmetic back out and re-do it.
+// First number in the fragment — the right-hand side carries a unit suffix
+// ("6,000 hours/year spent today for Finance").
+const value = (s) => Number(s.replace(/[$,%]/g, '').match(/-?\d+(\.\d+)?/)[0])
+
+const selfAdds = (formula) => {
+  const [left, right] = formula.split(' = ')
+  const sep = left.includes(' + ') ? ' + ' : ' × '
+  const operands = left
+    .replace(/^\(|\)$/g, '')
+    .split(sep)
+    .map(value)
+  const expected =
+    sep === ' + '
+      ? operands.reduce((a, b) => a + b, 0)
+      : operands.reduce((a, b) => a * b, 1)
+  // Half-unit tolerance: operands are shown rounded, so the printed result is
+  // the rounded product/sum of exactly those rounded operands.
+  return Math.abs(expected - value(right)) <= 0.5
+}
+
+test('every formula string adds up as written', () => {
+  for (const people of [1, 3, 5, 12, 40]) {
+    for (const hoursPerWeek of [2, 7, 10]) {
+      for (const annualPay of [48_000, 55_000, 60_000, 91_000]) {
+        for (const automatablePct of [0.2, 0.35, 0.4, 0.65]) {
+          const out = calculateMiniProfitMap({
+            people,
+            hoursPerWeek,
+            annualPay,
+            automatablePct,
+          })
+          const where = `${people}/${hoursPerWeek}/${annualPay}/${automatablePct}`
+          for (const key of [
+            'annualHours',
+            'operationalDividend',
+            'profitUplift',
+            'totalFinancialGain',
+          ]) {
+            assert.ok(
+              selfAdds(out.formulas[key]),
+              `${key} does not add up at ${where}: ${out.formulas[key]}`,
+            )
+          }
+        }
+      }
+    }
+  }
+})
+
+test('missing or junk answers degrade to zero, never NaN', () => {
+  const out = calculateMiniProfitMap({
+    people: 5,
+    hoursPerWeek: 8,
+    annualPay: undefined, // not asked yet — the live-preview case
+    automatablePct: 0.4,
+  })
+  assert.equal(out.ratePerHour, 0)
+  assert.equal(out.totalFinancialGain, 0)
+  assert.ok(out.hoursReturned > 0, 'hours are known before pay is')
+  for (const formula of Object.values(out.formulas)) {
+    assert.doesNotMatch(formula, /NaN|Infinity|undefined/, formula)
+  }
+})
+
+test('automatablePct accepts percentage points and clamps to 0–1', () => {
+  const asPoints = calculateMiniProfitMap({
+    people: 5,
+    hoursPerWeek: 2,
+    annualPay: 48_000,
+    automatablePct: 40,
+  })
+  const asFraction = calculateMiniProfitMap({
+    people: 5,
+    hoursPerWeek: 2,
+    annualPay: 48_000,
+    automatablePct: 0.4,
+  })
+  assert.deepEqual(asPoints, asFraction)
+
+  const absurd = calculateMiniProfitMap({
+    people: 5,
+    hoursPerWeek: 2,
+    annualPay: 48_000,
+    automatablePct: 900,
+  })
+  assert.ok(
+    absurd.hoursReturned <= absurd.annualHours,
+    'can never return more hours than are spent',
+  )
+})
+
+test('repeating fractions never leak raw floats into a formula', () => {
+  const out = calculateMiniProfitMap({
+    people: 5,
+    hoursPerWeek: 2,
+    annualPay: 48_000,
+    automatablePct: 1 / 3,
+  })
+  assert.match(out.formulas.hoursReturned, /× 33% ×/)
 })
 
 test('automatablePct of 0 returns zero hours and zero dollars, not NaN', () => {
