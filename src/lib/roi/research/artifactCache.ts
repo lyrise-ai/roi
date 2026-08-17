@@ -154,11 +154,80 @@ async function plainFetch(url: string): Promise<string | null> {
   }
 }
 
+// ── Firecrawl budget ─────────────────────────────────────────────────────────
+// We are on the free tier: 1,000 credits a month and 10 scrapes a minute. Both
+// are shared across every Profit Map the app runs, so the cache spends them
+// rather than any one scout — and it spends them defensively.
+//
+// The throttle is preventative, not reactive. Staying under 10/min means we
+// mostly never see a 429 in the first place, which matters because the
+// alternative — discovering the limit by being refused — costs a round trip
+// and a degraded row every time. A blocked scrape is never an exception: it
+// returns null, the artifact is unavailable, and downstream records a gap.
+
+const FIRECRAWL_MAX_PER_MINUTE = 10
+const FIRECRAWL_WINDOW_MS = 60_000
+
+/* Out of credits is a billing state, not a transient one — retrying every
+   request for the rest of the month would burn latency for a guaranteed 402.
+   An hour's cooldown means a warm lambda notices a top-up or the monthly reset
+   without us tracking either. */
+const FIRECRAWL_QUOTA_COOLDOWN_MS = 60 * 60 * 1000
+
+/* Timestamps of recent calls, pruned to the rolling window. */
+let firecrawlCalls: number[] = []
+let firecrawlDisabledUntil = 0
+let firecrawlDisabledReason: string | null = null
+
+/* For the coverage test and for logging: it matters whether a thin result came
+   from a company with nothing to find or from us running out of credits
+   halfway through the run. Distinguishing those is the whole point of R5 of
+   the parent card — coverage is declared, never hidden. */
+export function firecrawlBudget(): {
+  available: boolean
+  reason: string | null
+  callsInWindow: number
+} {
+  pruneFirecrawlCalls()
+  const disabled = firecrawlDisabledUntil > Date.now()
+  return {
+    available: !disabled && firecrawlCalls.length < FIRECRAWL_MAX_PER_MINUTE,
+    reason: disabled
+      ? firecrawlDisabledReason
+      : firecrawlCalls.length >= FIRECRAWL_MAX_PER_MINUTE
+        ? 'rate limit: 10/min reached'
+        : null,
+    callsInWindow: firecrawlCalls.length,
+  }
+}
+
+export function resetFirecrawlBudget(): void {
+  firecrawlCalls = []
+  firecrawlDisabledUntil = 0
+  firecrawlDisabledReason = null
+}
+
+function pruneFirecrawlCalls(): void {
+  const cutoff = Date.now() - FIRECRAWL_WINDOW_MS
+  firecrawlCalls = firecrawlCalls.filter((at) => at > cutoff)
+}
+
+function disableFirecrawl(ms: number, reason: string): void {
+  firecrawlDisabledUntil = Date.now() + ms
+  firecrawlDisabledReason = reason
+}
+
 /* Tier 2. No key configured is a normal, supported state — it returns null and
-   the artifact is simply unavailable, which is the honest answer. */
+   the artifact is simply unavailable, which is the honest answer. So is being
+   out of budget: we decline to call rather than spending a request to be told
+   no. */
 async function firecrawlFetch(url: string): Promise<string | null> {
   const key = providerKey('FIRECRAWL_API_KEY')
   if (!key) return null
+  if (!firecrawlBudget().available) return null
+
+  firecrawlCalls.push(Date.now())
+
   try {
     const response = await fetch('https://api.firecrawl.dev/v2/scrape', {
       method: 'POST',
@@ -166,10 +235,42 @@ async function firecrawlFetch(url: string): Promise<string | null> {
         authorization: `Bearer ${key}`,
         'content-type': 'application/json',
       },
+      /* Markdown, not rawHtml. Firecrawl bills one credit either way — verified
+         against /v2/team/credit-usage — and rawHtml carries strictly more
+         signal, notably the schema.org markup S1 reads for `addressCountry`.
+         Markdown still wins on size: 25KB against 546KB for the same page, and
+         every consumer of this content either strips tags or feeds it to an
+         extraction model that charges by the token.
+         ponytail: the Firecrawl path therefore has no structured-data signal,
+         so a blocked site on a generic TLD falls back to footer prose for its
+         country. Switch to ['markdown','rawHtml'] and prefer rawHtml if R8
+         shows blocked sites losing country resolution because of it. */
       body: JSON.stringify({ url, formats: ['markdown'] }),
       signal: AbortSignal.timeout(FETCH_TIMEOUT_MS * 2),
     })
+
+    if (response.status === 402) {
+      disableFirecrawl(FIRECRAWL_QUOTA_COOLDOWN_MS, 'out of credits (402)')
+      return null
+    }
+
+    if (response.status === 429) {
+      /* Honour Retry-After when Firecrawl sends one; it also returns 429 for
+         concurrent-browser limits, which clear faster than the per-minute
+         quota. We never sleep and retry inside the request — a scout waiting
+         30s to fill one row is worse than the row being absent — so this only
+         parks the tier and lets the run continue. */
+      const retryAfter = Number(response.headers?.get?.('retry-after'))
+      const cooldown =
+        Number.isFinite(retryAfter) && retryAfter > 0
+          ? Math.min(retryAfter, 120) * 1000
+          : FIRECRAWL_WINDOW_MS
+      disableFirecrawl(cooldown, 'rate limited (429)')
+      return null
+    }
+
     if (!response.ok) return null
+
     const json = await response.json()
     const markdown = json?.data?.markdown
     return typeof markdown === 'string' && markdown.trim() !== ''

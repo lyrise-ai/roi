@@ -77,6 +77,7 @@ function ok(body) {
 
 beforeEach(() => {
   cache.clearArtifactCache()
+  cache.resetFirecrawlBudget()
   delete process.env.FIRECRAWL_API_KEY
   delete process.env.NEXT_PUBLIC_SUPABASE_URL
   delete process.env.SUPABASE_SERVICE_ROLE_KEY
@@ -405,4 +406,147 @@ test('an absent excerpt stays absent rather than becoming an empty string', () =
     confidence: 'low',
   })
   assert.ok(!('excerpt' in built.provenance))
+})
+
+// ── Firecrawl budget ─────────────────────────────────────────────────────────
+// Free tier: 1,000 credits a month, 10 scrapes a minute, shared across every
+// Profit Map the app runs. Overrunning either is not an error condition to
+// recover from — it is a gap in coverage, and it has to be visible as one.
+
+test('the per-minute cap is enforced before the request, not after a 429', async () => {
+  process.env.FIRECRAWL_API_KEY = 'fc-test'
+  let scrapes = 0
+  stubFetch((url) => {
+    if (url.includes('firecrawl')) {
+      scrapes += 1
+      return {
+        ok: true,
+        status: 200,
+        json: async () => ({ data: { markdown: '# ok' } }),
+      }
+    }
+    return { ok: false, status: 403, text: async () => 'Forbidden' }
+  })
+
+  /* 12 blocked pages, but the free tier allows 10 scrapes a minute. */
+  for (let i = 0; i < 12; i += 1) {
+    await cache.getArtifact(`https://blocked.example/page-${i}`)
+  }
+
+  assert.equal(scrapes, 10, 'must stop at the documented per-minute limit')
+  assert.equal(cache.firecrawlBudget().available, false)
+  assert.match(cache.firecrawlBudget().reason, /rate limit/)
+})
+
+test('the window rolls, so the cap is per-minute and not per-process', async (t) => {
+  process.env.FIRECRAWL_API_KEY = 'fc-test'
+  let scrapes = 0
+  stubFetch((url) => {
+    if (url.includes('firecrawl')) {
+      scrapes += 1
+      return {
+        ok: true,
+        status: 200,
+        json: async () => ({ data: { markdown: '# ok' } }),
+      }
+    }
+    return { ok: false, status: 403, text: async () => 'Forbidden' }
+  })
+
+  for (let i = 0; i < 10; i += 1) {
+    await cache.getArtifact(`https://blocked.example/a-${i}`)
+  }
+  assert.equal(cache.firecrawlBudget().available, false)
+
+  const realNow = Date.now
+  t.after(() => {
+    Date.now = realNow
+  })
+  const jumped = realNow() + 61_000
+  Date.now = () => jumped
+
+  assert.equal(cache.firecrawlBudget().available, true, 'the window must roll')
+  await cache.getArtifact('https://blocked.example/b-1')
+  assert.equal(scrapes, 11)
+})
+
+test('402 parks the tier — out of credits is billing state, not a blip', async () => {
+  process.env.FIRECRAWL_API_KEY = 'fc-test'
+  let scrapes = 0
+  stubFetch((url) => {
+    if (url.includes('firecrawl')) {
+      scrapes += 1
+      return { ok: false, status: 402, json: async () => ({}) }
+    }
+    return { ok: false, status: 403, text: async () => 'Forbidden' }
+  })
+
+  assert.equal(await cache.getArtifact('https://blocked.example/one'), null)
+  assert.equal(await cache.getArtifact('https://blocked.example/two'), null)
+  assert.equal(await cache.getArtifact('https://blocked.example/three'), null)
+
+  assert.equal(scrapes, 1, 'must not keep paying latency for a guaranteed 402')
+  assert.equal(cache.firecrawlBudget().available, false)
+  assert.match(cache.firecrawlBudget().reason, /out of credits/)
+})
+
+test('429 parks the tier for Retry-After rather than sleeping mid-run', async (t) => {
+  process.env.FIRECRAWL_API_KEY = 'fc-test'
+  let scrapes = 0
+  stubFetch((url) => {
+    if (url.includes('firecrawl')) {
+      scrapes += 1
+      return {
+        ok: false,
+        status: 429,
+        headers: {
+          get: (h) => (h.toLowerCase() === 'retry-after' ? '30' : null),
+        },
+        json: async () => ({}),
+      }
+    }
+    return { ok: false, status: 403, text: async () => 'Forbidden' }
+  })
+
+  assert.equal(await cache.getArtifact('https://blocked.example/one'), null)
+  assert.equal(await cache.getArtifact('https://blocked.example/two'), null)
+  assert.equal(scrapes, 1)
+  assert.match(cache.firecrawlBudget().reason, /rate limited/)
+
+  /* A scout must never block for 30s to fill one row, so the wait is a park,
+     not a sleep — the run continues and the tier comes back on its own. */
+  const realNow = Date.now
+  t.after(() => {
+    Date.now = realNow
+  })
+  const jumped = realNow() + 31_000
+  Date.now = () => jumped
+
+  assert.equal(cache.firecrawlBudget().available, true)
+})
+
+test('a parked Firecrawl never stops a plain fetch from succeeding', async () => {
+  process.env.FIRECRAWL_API_KEY = 'fc-test'
+  stubFetch((url) => {
+    if (url.includes('firecrawl'))
+      return { ok: false, status: 402, json: async () => ({}) }
+    if (url.includes('blocked'))
+      return { ok: false, status: 403, text: async () => '' }
+    return ok('<html>fine</html>')
+  })
+
+  await cache.getArtifact('https://blocked.example/x')
+  assert.equal(cache.firecrawlBudget().available, false)
+
+  const artifact = await cache.getArtifact('https://static.example/careers')
+  assert.equal(artifact.content, '<html>fine</html>')
+})
+
+test('budget state is inspectable, so a thin run can be explained', async () => {
+  /* "We found little" and "we ran out of credits" are different findings, and
+     the coverage test has to be able to tell them apart. */
+  const fresh = cache.firecrawlBudget()
+  assert.equal(fresh.available, true)
+  assert.equal(fresh.reason, null)
+  assert.equal(fresh.callsInWindow, 0)
 })
