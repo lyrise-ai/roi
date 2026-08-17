@@ -10,11 +10,10 @@
 // Read .env.example for what each key buys and what still works without it.
 // ─────────────────────────────────────────────────────────────────────────────
 
-export type ProviderKey =
-  | 'FIRECRAWL_API_KEY'
-  | 'PDL_API_KEY'
-  | 'APOLLO_API_KEY'
-  | 'EXPLORIUM_API_KEY'
+/* Apollo and Explorium are absent on purpose — we hold neither, so S1 cascades
+   PDL → site. Adding one later means adding its key here and its adapter in
+   scouts/s1.ts; nothing downstream of the scout changes. */
+export type ProviderKey = 'FIRECRAWL_API_KEY' | 'PDL_API_KEY'
 
 /* Null, never '' — so `if (!key)` and `if (key === undefined)` behave the same
    way at every call site and a blank line in .env.local reads as "absent"
