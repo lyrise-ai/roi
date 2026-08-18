@@ -362,12 +362,17 @@ export default async function handler(req, res) {
   // matching terminal event is a generation that died without even reaching
   // the catch — a lambda timeout, or the client vanishing mid-stream.
   const telemetryStartedAt = Date.now()
+  // Share-link visitors have no authenticated session or stable visitor id at
+  // this call site. Keep the attribution gap explicit — null, which PostHog
+  // treats as anonymous — instead of grouping them under the report owner or
+  // under a shared literal, which would collapse every share-link visitor in
+  // the product into one apparent user.
   const phDistinctId = user?.id ?? null
   const phBase = {
     mode,
     is_alpha: Boolean(isAlpha),
-    company:
-      formData?.companyName ?? persistedReport?.input_data?.companyName ?? null,
+    // The join key back to the report. Without it a failure event names no
+    // run, and there is nothing to open when triaging one.
     report_id: reportId ?? null,
     is_share_link: isShareLinkChat,
   }
@@ -673,6 +678,7 @@ export default async function handler(req, res) {
           type: 'error',
           message: 'Failed to save report: ' + saveError.message,
         })
+        await flushPostHog()
         res.end()
         return
       }
@@ -788,6 +794,8 @@ export default async function handler(req, res) {
       {
         ...phBase,
         duration_ms: Date.now() - telemetryStartedAt,
+        // PostHog is the error list we triage; a failure count with no reason
+        // attached cannot be triaged.
         error_message: err?.message ?? String(err),
       },
       phDistinctId,

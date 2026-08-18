@@ -22,7 +22,8 @@
 // ─────────────────────────────────────────────────────────────────────────────
 
 export const EVENTS = {
-  /** A generation or chat-edit run began. Properties: mode, company, is_alpha. */
+  /** A generation or chat-edit run began. Properties: mode, report_id,
+   *  is_alpha and is_share_link. */
   GENERATION_STARTED: 'roi_generation_started',
   /** A chat-edit run began — the chat half of the same handler. */
   CHAT_MESSAGE_SENT: 'chat_message_sent',
@@ -34,4 +35,12 @@ export const EVENTS = {
   /** Token spend for one run, from UsageTracker.flush(). Adds cost_usd,
    *  total_tokens, models, and a per-call breakdown. */
   LLM_USAGE: 'roi_llm_usage',
+  /** An employee successfully deletes a report. */
+  REPORT_DELETED: 'report_deleted',
+  /** An authenticated report accessor successfully sends a report by email. */
+  REPORT_SHARED_VIA_EMAIL: 'report_shared_via_email',
+  /** An authorized user completes report validation. */
+  VALIDATION_COMPLETED: 'validation_completed',
+  /** An authorized user skips report validation. */
+  VALIDATION_SKIPPED: 'validation_skipped',
 } as const

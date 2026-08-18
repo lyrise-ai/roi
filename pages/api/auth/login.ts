@@ -1,6 +1,7 @@
 import type { NextApiRequest, NextApiResponse } from 'next'
 import { createRouteClient } from '../../../src/lib/supabaseRouteClient'
 import { getRoleForUser } from '../../../src/lib/authHelpers'
+import { captureServer, flushPostHog } from '@/src/lib/posthog-server'
 
 export default async function loginHandler(
   req: NextApiRequest,
@@ -27,6 +28,9 @@ export default async function loginHandler(
   if (roleError) {
     return res.status(500).json({ error: roleError })
   }
+
+  captureServer('user_logged_in', { auth_method: 'password' }, data.user.id)
+  await flushPostHog()
 
   return res.status(200).json({
     role,

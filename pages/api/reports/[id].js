@@ -2,6 +2,8 @@ import {
   createClient,
   createAdminClient,
 } from '../../../src/lib/supabase-server'
+import { EVENTS } from '@/src/lib/analytics'
+import { captureServer, flushPostHog } from '@/src/lib/posthog-server'
 
 export default async function handler(req, res) {
   const supabase = createClient(req, res)
@@ -27,6 +29,8 @@ export default async function handler(req, res) {
       return res.status(500).json({ error: 'Failed to delete report' })
     }
 
+    captureServer(EVENTS.REPORT_DELETED, { report_id: id }, user.id)
+    await flushPostHog()
     return res.status(200).json({ ok: true })
   }
 

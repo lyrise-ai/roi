@@ -30,6 +30,8 @@ import {
   getGrantForUser,
   createColleagueInvite,
 } from '@/src/lib/roi/reportGrants'
+import { EVENTS } from '@/src/lib/analytics'
+import { captureServer, flushPostHog } from '@/src/lib/posthog-server'
 
 export const config = {
   maxDuration: 120,
@@ -162,6 +164,12 @@ export default async function handler(req, res) {
       chatUrl,
     )
 
+    captureServer(
+      EVENTS.REPORT_SHARED_VIA_EMAIL,
+      { report_id: report.id, recipient_type: isSelf ? 'self' : 'colleague' },
+      user.id,
+    )
+    await flushPostHog()
     res.status(200).json({ ok: true })
   } catch (err) {
     console.error('[roi-share-email] Error:', err)

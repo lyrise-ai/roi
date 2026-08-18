@@ -5,6 +5,7 @@ import { toast, ToastContainer } from 'react-toastify'
 import clsx from 'clsx'
 import 'react-toastify/dist/ReactToastify.css'
 import MainHeader from '../src/layout/MainHeader'
+import { getPostHog } from '@/src/lib/posthog-browser'
 
 const questions = [
   {
@@ -112,6 +113,8 @@ export default function ROIFeedback() {
         throw new Error(data.error || 'Failed to submit feedback.')
       }
       setIsSuccess(true)
+      const posthog = await getPostHog()
+      posthog?.capture('feedback_submitted', { ratings: answers })
     } catch (error) {
       toast.error(
         error.message || 'Failed to submit feedback. Please try again.',

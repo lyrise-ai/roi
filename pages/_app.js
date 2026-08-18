@@ -64,6 +64,7 @@ export default function MyApp(props) {
 
   const [authUser, setAuthUser] = React.useState(null)
   const [authReady, setAuthReady] = React.useState(false)
+  const posthogUserId = React.useRef(null)
 
   React.useEffect(() => {
     let active = true
@@ -93,8 +94,24 @@ export default function MyApp(props) {
       const { getPostHog } = await import('../src/lib/posthog-browser')
       const posthog = await getPostHog()
       if (!active || !posthog) return
-      if (user) posthog.identify(user.id, { email: user.email })
-      else if (event === 'SIGNED_OUT') posthog.reset()
+
+      if (event === 'SIGNED_OUT') {
+        posthog.reset()
+        posthogUserId.current = null
+        return
+      }
+
+      // Supabase emits INITIAL_SESSION after a reload and SIGNED_IN when auth
+      // completes. Both are the identity boundary; token refreshes are not.
+      // If a second account signs in without a preceding sign-out, start a
+      // fresh PostHog identity rather than joining the two accounts.
+      if (user && (event === 'INITIAL_SESSION' || event === 'SIGNED_IN')) {
+        if (posthogUserId.current && posthogUserId.current !== user.id) {
+          posthog.reset()
+        }
+        posthog.identify(user.id, { email: user.email })
+        posthogUserId.current = user.id
+      }
     }
 
     import('../src/lib/supabase-browser')

@@ -1,6 +1,7 @@
 import type { NextApiRequest, NextApiResponse } from 'next'
 import { createRouteClient } from '../../../src/lib/supabaseRouteClient'
 import { canSignUp, createUserRecord } from '../../../src/lib/authHelpers'
+import { captureServer, flushPostHog } from '@/src/lib/posthog-server'
 
 export default async function signupHandler(
   req: NextApiRequest,
@@ -31,6 +32,13 @@ export default async function signupHandler(
     if (insertError) {
       return res.status(500).json({ error: insertError })
     }
+
+    captureServer(
+      'user_signed_up',
+      { auth_method: 'password', role },
+      data.user.id,
+    )
+    await flushPostHog()
 
     return res.status(200).json({ role })
   }

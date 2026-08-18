@@ -18,6 +18,8 @@ import {
 import { loadTemplate } from '@/src/lib/roi/pipeline/renderTemplate'
 import { VALIDATION_QUALIFY_MONTHLY_THRESHOLD } from '@/src/lib/roi/constants'
 import { buildBaselineSnapshot } from '@/src/lib/roi/pipeline/validationBaseline'
+import { EVENTS } from '@/src/lib/analytics'
+import { captureServer, flushPostHog } from '@/src/lib/posthog-server'
 
 function logEvent(admin, row) {
   admin
@@ -122,8 +124,10 @@ export default async function handler(req, res) {
     logEvent(admin, {
       user_id: user.id,
       report_id: id,
-      type: 'validation_skipped',
+      type: EVENTS.VALIDATION_SKIPPED,
     })
+    captureServer(EVENTS.VALIDATION_SKIPPED, { report_id: id }, user.id)
+    await flushPostHog()
     return res.status(200).json({ ok: true, reportId: id, qualifies: null })
   }
 
@@ -227,9 +231,21 @@ export default async function handler(req, res) {
   logEvent(admin, {
     user_id: user.id,
     report_id: id,
-    type: 'validation_completed',
+    type: EVENTS.VALIDATION_COMPLETED,
     meta: { ...feedback, budgetTiming, qualifies, xp, skipped: false },
   })
+  captureServer(
+    EVENTS.VALIDATION_COMPLETED,
+    {
+      report_id: id,
+      budget_timing: budgetTiming,
+      qualifies,
+      xp,
+      skipped: false,
+    },
+    user.id,
+  )
+  await flushPostHog()
 
   return res.status(200).json({ ok: true, reportId: id, qualifies })
 }
