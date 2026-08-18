@@ -1,10 +1,10 @@
-// Unit tests for the derived facts and the confidence model
-// (LYR-187 R5 / LYR-198).
+// Unit tests for the confidence model (LYR-187 R5 / LYR-198).
 //
-// confidenceTier is the honesty mechanism of the whole research system: it
-// decides whether a downstream writer may be specific, must hedge, or must say
-// nothing external at all. It is pure arithmetic over scout statuses precisely
-// so it can be pinned here rather than hoped for at runtime.
+// This is the honesty mechanism. The previous system had no notion of how much
+// it knew, so it wrote with the same confidence whether it had three dated job
+// postings or nothing at all. These tests pin down the two properties that
+// make "we don't know enough to say something specific" enforceable rather
+// than hoped for: NONE and ERROR score differently, and THIN is reachable.
 //
 //   Run:  node --test src/lib/roi/research/__tests__/aggregate.test.mjs
 //
@@ -42,7 +42,7 @@ after(() => {
   if (tmpDir) fs.rmSync(tmpDir, { recursive: true, force: true })
 })
 
-const result = (scout, status, facts = null, notes) => ({
+const result = (scout, status, facts = {}, notes) => ({
   scout,
   status,
   facts,
@@ -52,182 +52,143 @@ const result = (scout, status, facts = null, notes) => ({
   ...(notes ? { notes } : {}),
 })
 
-// ── NONE vs ERROR must score differently ────────────────────────────────────
+// ── NONE and ERROR must never be collapsed ───────────────────────────────────
 
-test('NONE scores higher than ERROR, and ERROR scores zero', () => {
-  /* NONE is a finding — they are not hiring, and a writer may say so. ERROR is
-     a blind spot. Scoring them alike is what let the old system treat "we
-     couldn't reach the ATS" as licence to describe a hiring pattern. */
-  assert.ok(a.STATUS_SCORES.NONE > a.STATUS_SCORES.ERROR)
-  assert.equal(a.STATUS_SCORES.ERROR, 0)
-  assert.ok(a.STATUS_SCORES.FULL > a.STATUS_SCORES.PARTIAL)
-  assert.ok(a.STATUS_SCORES.PARTIAL > a.STATUS_SCORES.NONE)
+test('NONE scores higher than ERROR', () => {
+  /* "They are not hiring" is information a writer may build on. "We could not
+     reach the ATS" supports no sentence at all. Scoring them the same is how
+     the old system lost the distinction and started inventing. */
+  const none = a.coverageScore({ S1: 'FULL', S2: 'NONE' })
+  const error = a.coverageScore({ S1: 'FULL', S2: 'ERROR' })
 
-  assert.notEqual(
-    a.coverageScore({ S1: 'FULL', S2: 'NONE' }),
-    a.coverageScore({ S1: 'FULL', S2: 'ERROR' }),
-  )
+  assert.ok(none > error, `NONE ${none} must beat ERROR ${error}`)
 })
 
-test('S2 is weighted heaviest', () => {
-  /* A job posting is the company describing its own work in its own words;
-     everything else is inference about it. */
-  assert.ok(a.SCOUT_WEIGHTS.S2 > a.SCOUT_WEIGHTS.S1)
-
-  const s2Strong = a.coverageScore({ S1: 'NONE', S2: 'FULL' })
-  const s1Strong = a.coverageScore({ S1: 'FULL', S2: 'NONE' })
-  assert.ok(s2Strong > s1Strong, `${s2Strong} should beat ${s1Strong}`)
+test('NONE scores lower than FULL', () => {
+  /* Knowing there is nothing is useful, but it gives a writer far less than
+     three dated postings do. */
+  assert.ok(a.coverageScore({ S2: 'NONE' }) < a.coverageScore({ S2: 'FULL' }))
 })
 
-// ── coverageScore ───────────────────────────────────────────────────────────
-
-test('coverageScore spans 0..1 at the extremes', () => {
-  assert.equal(a.coverageScore({ S1: 'FULL', S2: 'FULL' }), 1)
+test('an all-ERROR run scores zero', () => {
   assert.equal(a.coverageScore({ S1: 'ERROR', S2: 'ERROR' }), 0)
+})
+
+test('coverageScore weights S2 heaviest', () => {
+  /* Job postings are testimony; everything else is inference. */
+  const s2Only = a.coverageScore({ S1: 'ERROR', S2: 'FULL' })
+  const s1Only = a.coverageScore({ S1: 'FULL', S2: 'ERROR' })
+
+  assert.ok(s2Only > s1Only, `S2 ${s2Only} must outweigh S1 ${s1Only}`)
+})
+
+test('coverageScore is 0..1 and empty coverage is 0', () => {
   assert.equal(a.coverageScore({}), 0)
+  assert.equal(a.coverageScore({ S1: 'FULL', S2: 'FULL' }), 1)
+  const mid = a.coverageScore({ S1: 'PARTIAL', S2: 'PARTIAL' })
+  assert.ok(mid > 0 && mid < 1)
 })
 
-test('a scout that has not reported is excluded, not counted as zero', () => {
-  /* Mid-run the panel reads this while S2 is still crawling. An incomplete run
-     is incomplete, not bad. */
-  assert.equal(a.coverageScore({ S1: 'FULL' }), 1)
-  assert.ok(
-    a.coverageScore({ S1: 'FULL' }) >
-      a.coverageScore({ S1: 'FULL', S2: 'ERROR' }),
-  )
-})
+// ── confidenceTier ───────────────────────────────────────────────────────────
 
-test('unbuilt scouts carry no weight, so registering them changes nothing', () => {
-  const withoutS3 = a.coverageScore({ S1: 'FULL', S2: 'FULL' })
-  const withS3 = a.coverageScore({ S1: 'FULL', S2: 'FULL', S3: 'ERROR' })
-  assert.equal(withS3, withoutS3)
-})
-
-// ── confidenceTier ──────────────────────────────────────────────────────────
-
-test('RICH needs S2 FULL and corroboration from another scout', () => {
+test('RICH needs S2 FULL plus something else', () => {
   assert.equal(a.confidenceTier({ S1: 'FULL', S2: 'FULL' }), 'RICH')
   assert.equal(a.confidenceTier({ S1: 'PARTIAL', S2: 'FULL' }), 'RICH')
 })
 
-test('S2 FULL alone is not RICH — nothing corroborates it', () => {
-  assert.equal(a.confidenceTier({ S2: 'FULL' }), 'MODERATE')
+test('S2 FULL alone is not RICH', () => {
+  /* Nothing corroborates it, and the observation joins across sources. */
   assert.equal(a.confidenceTier({ S1: 'ERROR', S2: 'FULL' }), 'MODERATE')
-  assert.equal(a.confidenceTier({ S1: 'NONE', S2: 'FULL' }), 'MODERATE')
 })
 
-test('S2 thin or absent is MODERATE, however good the rest is', () => {
-  assert.equal(a.confidenceTier({ S1: 'FULL', S2: 'PARTIAL' }), 'MODERATE')
-  assert.equal(a.confidenceTier({ S1: 'FULL', S2: 'NONE' }), 'MODERATE')
-  assert.equal(a.confidenceTier({ S1: 'FULL', S2: 'ERROR' }), 'MODERATE')
+test('firmographics alone can never be RICH, however complete', () => {
+  /* The load-bearing rule. "You are a 30-person law firm in Dubai" is not a
+     sentence that makes anyone feel seen, so a perfect S1 must not unlock
+     assertive, quoting output. RICH requires testimony. */
   assert.equal(a.confidenceTier({ S1: 'FULL' }), 'MODERATE')
+  assert.equal(a.confidenceTier({ S1: 'FULL', S2: 'NONE' }), 'MODERATE')
 })
 
-test('THIN when nothing was found — the state the old system could not reach', () => {
-  /* THIN means the reveal makes NO external claim and uses only what the user
-     typed. It has to be reachable, or the system writes something plausible
-     about a company it knows nothing about. */
+test('THIN when nothing was found at all', () => {
   assert.equal(a.confidenceTier({}), 'THIN')
   assert.equal(a.confidenceTier({ S1: 'ERROR', S2: 'ERROR' }), 'THIN')
-  assert.equal(a.confidenceTier({ S1: 'NONE', S2: 'NONE' }), 'THIN')
-  assert.equal(a.confidenceTier({ S1: 'ERROR', S2: 'NONE' }), 'THIN')
 })
 
-test('a run where every scout errored is THIN however many ran', () => {
-  assert.equal(
-    a.confidenceTier({ S1: 'ERROR', S2: 'ERROR', S3: 'ERROR', S4: 'ERROR' }),
-    'THIN',
-  )
+test('a company that is simply not hiring is MODERATE, not THIN', () => {
+  /* They told us something real. The observation leans on the interview, but
+     it is not forbidden from mentioning the team they already have. */
+  assert.equal(a.confidenceTier({ S1: 'FULL', S2: 'NONE' }), 'MODERATE')
 })
 
-// ── manualWorkIndicators ────────────────────────────────────────────────────
+test('the three tiers are genuinely reachable', () => {
+  const tiers = new Set([
+    a.confidenceTier({ S1: 'FULL', S2: 'FULL' }),
+    a.confidenceTier({ S1: 'FULL', S2: 'NONE' }),
+    a.confidenceTier({ S1: 'ERROR', S2: 'ERROR' }),
+  ])
+  assert.deepEqual([...tiers].sort(), ['MODERATE', 'RICH', 'THIN'])
+})
 
-test('manualWorkIndicators keeps only mechanical verbs', () => {
+// ── manualWorkIndicators ─────────────────────────────────────────────────────
+
+test('manualWorkIndicators keeps only verbs implying repetitive data work', () => {
+  /* "draft" and "advise" are real duties, but they are judgement rather than
+     repetition — automating them is not what this product sells. */
+  const out = a.manualWorkIndicators([
+    { title: 'Paralegal', taskVerbs: ['chase', 'draft', 'reconcile'] },
+    { title: 'Bookkeeper', taskVerbs: ['advise', 'collate'] },
+  ])
+
+  assert.deepEqual(out, ['chase', 'collate', 'reconcile'])
+})
+
+test('manualWorkIndicators dedupes, sorts, and survives junk', () => {
   assert.deepEqual(
     a.manualWorkIndicators([
-      'chase',
-      'negotiate',
-      'reconcile',
-      'advise',
-      'collate',
+      { taskVerbs: ['Chase', ' chase '] },
+      { taskVerbs: ['chase'] },
     ]),
-    ['chase', 'reconcile', 'collate'],
+    ['chase'],
   )
-})
-
-test('manualWorkIndicators normalises and dedupes', () => {
-  assert.deepEqual(a.manualWorkIndicators([' Chase ', 'CHASE']), ['chase'])
-})
-
-test('manualWorkIndicators survives junk and finds nothing in judgement work', () => {
-  assert.deepEqual(a.manualWorkIndicators(['draft', 'advise', 'negotiate']), [])
   assert.deepEqual(a.manualWorkIndicators([]), [])
   assert.deepEqual(a.manualWorkIndicators(null), [])
-  assert.deepEqual(a.manualWorkIndicators([null, 42, '']), [])
+  assert.deepEqual(a.manualWorkIndicators([{}, { taskVerbs: null }]), [])
 })
 
-// ── turnoverSignals ─────────────────────────────────────────────────────────
+// ── summarize ────────────────────────────────────────────────────────────────
 
-test('turnoverSignals keeps repeats and drops single postings', () => {
-  const out = a.turnoverSignals([
-    { role: 'paralegal', count: 3, months: 7 },
-    { role: 'bookkeeper', count: 1, months: 0 },
-  ])
-  assert.equal(out.length, 1)
-  assert.equal(out[0].role, 'paralegal')
-})
-
-test('turnoverSignals survives junk', () => {
-  assert.deepEqual(a.turnoverSignals(undefined), [])
-  assert.deepEqual(a.turnoverSignals([{ role: '', count: 5 }]), [])
-})
-
-// ── aggregate() ─────────────────────────────────────────────────────────────
-
-test('aggregate builds coverage, tier and derivations from scout results', () => {
-  const out = a.aggregate({
+test('summarize reports coverage, tier and the gaps behind them', () => {
+  const summary = a.summarize({
     S1: result('S1', 'FULL'),
     S2: result('S2', 'FULL', {
-      topTaskVerbs: [
-        { value: 'chase' },
-        { value: 'draft' },
-        { value: 'reconcile' },
-      ],
-      repeatPostings: [{ role: 'paralegal', count: 2, months: 5 }],
+      postings: [{ title: 'Paralegal', taskVerbs: ['chase', 'lead'] }],
     }),
   })
 
-  assert.deepEqual(out.coverage, { S1: 'FULL', S2: 'FULL' })
-  assert.equal(out.coverageScore, 1)
-  assert.equal(out.confidenceTier, 'RICH')
-  assert.deepEqual(out.manualWorkIndicators, ['chase', 'reconcile'])
-  assert.equal(out.turnoverSignals[0].role, 'paralegal')
-  assert.deepEqual(out.gaps, [])
+  assert.deepEqual(summary.coverage, { S1: 'FULL', S2: 'FULL' })
+  assert.equal(summary.confidenceTier, 'RICH')
+  assert.equal(summary.coverageScore, 1)
+  assert.deepEqual(summary.manualWorkIndicators, ['chase'])
+  assert.deepEqual(summary.gaps, [])
 })
 
-test('aggregate records gaps so a thin result is explainable', () => {
-  /* "We found little" and "we could not look" have to be distinguishable after
-     the fact — that is what R8 measures and what the panel must not blur. */
-  const out = a.aggregate({
-    S1: result('S1', 'PARTIAL'),
-    S2: result('S2', 'NONE', null, 'greenhouse board found with no open roles'),
+test('summarize explains a thin run rather than leaving it silent', () => {
+  /* "We found little" and "we could not look" must be distinguishable after
+     the fact, or a coverage report reads as if the world were empty. */
+  const summary = a.summarize({
+    S1: result('S1', 'ERROR', null, 'site unreachable'),
+    S2: result('S2', 'ERROR', null, 'all boards 404'),
   })
 
-  assert.equal(out.confidenceTier, 'MODERATE')
-  assert.equal(out.gaps.length, 1)
-  assert.equal(out.gaps[0].scout, 'S2')
-  assert.equal(out.gaps[0].status, 'NONE')
-  assert.match(out.gaps[0].notes, /no open roles/)
+  assert.equal(summary.confidenceTier, 'THIN')
+  assert.deepEqual(summary.gaps, [
+    { scout: 'S1', reason: 'site unreachable' },
+    { scout: 'S2', reason: 'all boards 404' },
+  ])
 })
 
-test('aggregate is safe on an empty or malformed store', () => {
-  const empty = a.aggregate({})
-  assert.equal(empty.confidenceTier, 'THIN')
-  assert.equal(empty.coverageScore, 0)
-
-  const malformed = a.aggregate({
-    S2: result('S2', 'FULL', { topTaskVerbs: 'nope' }),
-  })
-  assert.deepEqual(malformed.manualWorkIndicators, [])
-  assert.deepEqual(malformed.turnoverSignals, [])
+test('summarize handles a scout that never reported', () => {
+  const summary = a.summarize({ S1: result('S1', 'FULL') })
+  assert.deepEqual(summary.coverage, { S1: 'FULL' })
+  assert.equal('S2' in summary.coverage, false)
 })

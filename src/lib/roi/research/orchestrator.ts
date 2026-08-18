@@ -2,130 +2,82 @@
 // orchestrator — runs the scouts and streams their results (LYR-187 R5 /
 // LYR-198).
 //
-//   S1 alone, first          gates everything, ~500ms-1s
-//        ↓ { region, vertical }
-//   S2 (+ future scouts)     concurrent, Promise.allSettled
+//   S1 runs alone and first (~1s)   gates everything
+//        ↓ {region, vertical}
+//   S2 runs                          Promise.allSettled, never Promise.all
 //        ↓
-//   fact store               written the moment each scout resolves
+//   results stream into the fact store as each resolves
 //        ↓
-//   aggregate                recomputed on demand, safe to read mid-run
+//   aggregation once everything settles
 //
-// S1 must finish before the rest start because they need `region` and
-// `vertical` to choose sources and vocabulary. Everything after S1 runs
-// together.
+// S1 must finish before S2 dispatches because S2's later tiers pick sources by
+// region. Scope is S1 + S2 for the POC; S3 moved out (LYR-197). The registry
+// below is what makes adding S3–S7 a config change rather than a rewrite, but
+// it deliberately does not pretend to orchestrate scouts that do not exist.
 //
-// Three properties this file exists to guarantee:
+// Two properties the scan panel depends on:
 //
-//   One scout failing never takes down the others. `Promise.allSettled`, and
-//   every scout additionally wrapped so a throw becomes an ERROR result rather
-//   than a rejected run. A failed scout is a PARTIAL run, not a failed one.
+//   Results stream. Each scout writes to the store the moment it resolves, so
+//   the panel can render S1's firmographics while S2 is still crawling. Do not
+//   batch and write at the end — that turns a progressive panel into a spinner.
 //
-//   Results stream. Each scout writes to the store as it resolves, not in a
-//   batch at the end, because the scan panel renders off S1 while S2 is still
-//   crawling. Batching would make the panel wait for the slowest scout and
-//   defeat the whole design.
-//
-//   Total wall time is capped. Anything unresolved at the deadline becomes
-//   ERROR with a note saying so — an honest gap, recorded, rather than a
-//   request that hangs until Vercel kills the lambda.
+//   A slow scout degrades one row, never the panel. Everything is wrapped so
+//   that a scout which throws, hangs or times out becomes an ERROR result
+//   alongside its siblings rather than an exception that takes down the run.
 // ─────────────────────────────────────────────────────────────────────────────
 
-import { type Aggregate, aggregate } from './aggregate'
+import { type ResearchSummary, summarize } from './aggregate'
 import { type FactStore, createFactStore } from './factStore'
-import { type S1Facts, runS1 } from './scouts/s1'
-import { type Region } from './scouts/s1Derive'
+import { runS1 } from './scouts/s1'
 import { getJobPostings } from './scouts/s2'
+import type { Region } from './scouts/s1Derive'
 import type { ScoutId, ScoutResult } from './types'
 
-/* Wall-clock ceiling for the whole run. The scan panel is allowed to be
-   incomplete; it is not allowed to hang. */
+/* Total wall-clock ceiling. Anything unresolved past this becomes ERROR with a
+   note, so a hung scout costs one row rather than the whole run. The interview
+   it runs behind lasts minutes, but nothing here should ever take 30s — that
+   is a backstop, not a budget. */
 export const RUN_BUDGET_MS = 30_000
 
-/* What S1 hands the scouts that follow it. */
-export type ScoutContext = {
-  domain: string
-  region: Region
-  vertical: string | null
-}
+const EMPTY_RESULT = (scout: ScoutId, notes: string): ScoutResult<null> => ({
+  scout,
+  status: 'ERROR',
+  facts: null,
+  sourcesAttempted: [],
+  durationMs: 0,
+  costUsd: 0,
+  notes,
+})
 
-type ScoutRegistration = {
-  id: ScoutId
-  run: (ctx: ScoutContext) => Promise<ScoutResult<unknown>>
-}
-
-/* The registry. Adding S3–S7 later is one entry each — the orchestrator does
-   not know or care what a scout does, only that it returns a ScoutResult.
-   Deliberately not populated with scouts that don't exist yet: an entry for
-   S3 today would mean a permanent ERROR row in every run's coverage. */
-const SCOUTS: ScoutRegistration[] = [
-  { id: 'S2', run: (ctx) => getJobPostings(ctx.domain, ctx.region) },
-]
-
-function errorResult(
+/* Wraps a scout so no failure mode can escape: a rejection, a hang, or a
+   scout that resolves after the deadline all become an ERROR result. ERROR and
+   not NONE — we failed to look, we did not establish there was nothing. */
+async function settle<T>(
   scout: ScoutId,
-  notes: string,
-  durationMs: number,
-): ScoutResult<unknown> {
-  return {
-    scout,
-    status: 'ERROR',
-    facts: null,
-    sourcesAttempted: [],
-    durationMs,
-    costUsd: 0,
-    notes,
-  }
-}
-
-/* Resolves to an ERROR result rather than rejecting or hanging. `ms` is
-   whatever remains of the run budget when the scout starts, so a slow S1
-   eats into the time available to the rest instead of extending the total.
-
-   Takes a thunk, not a promise, and that is load-bearing. A scout that throws
-   synchronously — a bad argument, a destructuring error before its first
-   await — never returns a promise at all, so passing `run(ctx)` directly would
-   throw while the array was still being built and escape `Promise.allSettled`
-   entirely, taking the whole run with it. Calling it inside here turns a sync
-   throw into a rejection like any other. */
-async function withDeadline(
-  scout: ScoutId,
-  start: () => Promise<ScoutResult<unknown>>,
-  ms: number,
-): Promise<ScoutResult<unknown>> {
-  const startedAt = Date.now()
+  work: Promise<ScoutResult<T>>,
+  budgetMs: number,
+): Promise<ScoutResult<T | null>> {
   let timer: ReturnType<typeof setTimeout> | undefined
+  const startedAt = Date.now()
 
-  const timeout = new Promise<ScoutResult<unknown>>((resolve) => {
+  const timeout = new Promise<ScoutResult<null>>((resolve) => {
     timer = setTimeout(
       () =>
-        resolve(
-          errorResult(
-            scout,
-            `did not finish within the ${Math.round(ms / 1000)}s budget`,
-            Date.now() - startedAt,
-          ),
-        ),
-      Math.max(ms, 0),
+        resolve({
+          ...EMPTY_RESULT(scout, `exceeded ${budgetMs}ms budget`),
+          durationMs: Date.now() - startedAt,
+        }),
+      budgetMs,
     )
   })
 
-  /* Wrapping the call in an async IIFE is what converts a synchronous throw
-     into a rejected promise the catch below can see. */
-  const work = (async () => start())()
-
   try {
-    /* A scout that throws is still a scout that ran: record it as an ERROR on
-       its own row so coverage stays honest and the other scouts continue. */
-    return await Promise.race([
-      work.catch((error) =>
-        errorResult(
-          scout,
-          `threw: ${error?.message ?? String(error)}`,
-          Date.now() - startedAt,
-        ),
-      ),
-      timeout,
-    ])
+    return await Promise.race([work, timeout])
+  } catch (error) {
+    return {
+      ...EMPTY_RESULT(scout, (error as Error)?.message ?? 'scout threw'),
+      durationMs: Date.now() - startedAt,
+    }
   } finally {
     if (timer) clearTimeout(timer)
   }
@@ -134,59 +86,68 @@ async function withDeadline(
 export type ResearchRun = {
   domain: string
   store: FactStore
-  /* Snapshot taken once every scout settled or the budget expired. Call
-     `aggregate(await store.all())` directly for a mid-run view. */
-  summary: Aggregate
+  summary: ResearchSummary
   durationMs: number
 }
 
-/* Runs the whole research pass for one domain.
-   Never throws. A caller gets a run whose store may be sparse and whose
-   `confidenceTier` may be THIN, which is a supported and meaningful outcome —
-   not an error to handle. */
+export type RunOptions = {
+  /* Called the moment a scout lands, before the run finishes. This is the hook
+     the scan panel streams from — waiting for the return value would defeat
+     the point. */
+  onScoutResolved?: (result: ScoutResult<unknown>) => void
+  budgetMs?: number
+  store?: FactStore
+}
+
 export async function runResearch(
   domain: string,
-  options: { store?: FactStore; budgetMs?: number } = {},
+  options: RunOptions = {},
 ): Promise<ResearchRun> {
   const startedAt = Date.now()
   const budgetMs = options.budgetMs ?? RUN_BUDGET_MS
-  /* Injectable so a caller — the scan panel's SSE handler — can hold the store
-     and read from it while this promise is still pending. */
   const store = options.store ?? createFactStore()
 
-  const remaining = () => budgetMs - (Date.now() - startedAt)
-
-  // ── S1: alone, first, gates the rest ──────────────────────────────────────
-  const s1 = await withDeadline('S1', () => runS1(domain), remaining())
-  await store.put('S1', s1)
-
-  const s1Facts = (s1.facts ?? {}) as S1Facts
-  const ctx: ScoutContext = {
-    domain,
-    /* 'OTHER' is the documented fallback when S1 could not determine a region:
-       downstream uses default routing and marks its confidence low. */
-    region: (s1Facts.region?.value as Region) ?? 'OTHER',
-    vertical: s1Facts.vertical?.value ?? null,
+  const land = async (result: ScoutResult<unknown>) => {
+    await store.put(result.scout, result)
+    try {
+      options.onScoutResolved?.(result)
+    } catch {
+      /* A consumer's callback throwing is the consumer's problem, not a reason
+         to fail the research run. */
+    }
   }
 
-  // ── Everything else: concurrent, streaming ────────────────────────────────
-  /* Each scout writes to the store inside its own promise chain, so a fast
-     scout is readable while a slow one is still running. `allSettled` then
-     waits for all of them — but the writes have already happened. */
-  await Promise.allSettled(
-    SCOUTS.map((registration) =>
-      withDeadline(
-        registration.id,
-        () => registration.run(ctx),
-        remaining(),
-      ).then((result) => store.put(registration.id, result)),
-    ),
-  )
+  /* S1 alone and first. Every later scout picks sources by region, so
+     dispatching them in parallel with S1 would mean routing on a region we do
+     not have yet. */
+  const s1 = await settle('S1', runS1(domain), budgetMs)
+  await land(s1)
+
+  const region = (s1.facts as { region?: { value?: Region } } | null)?.region
+    ?.value
+
+  const remaining = Math.max(1_000, budgetMs - (Date.now() - startedAt))
+
+  /* allSettled, never all. With one scout in the POC the difference is
+     invisible; with S3–S7 it is the difference between one provider outage
+     degrading a row and taking down the run. The shape is here so adding a
+     scout is appending to this array. */
+  const rest = await Promise.allSettled([
+    settle('S2', getJobPostings(domain, region), remaining),
+  ])
+
+  for (const outcome of rest) {
+    if (outcome.status === 'fulfilled') {
+      await land(outcome.value)
+    }
+  }
+
+  const all = await store.all()
 
   return {
     domain,
     store,
-    summary: aggregate(await store.all()),
+    summary: summarize(all),
     durationMs: Date.now() - startedAt,
   }
 }
