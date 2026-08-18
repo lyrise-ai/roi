@@ -1,0 +1,157 @@
+{
+  "note": "Real professional-services firms, every domain checked to resolve before inclusion. Weighted to the ICP per LYR-201: GCC deliberately over-weighted because that is where coverage is expected to thin. The `control` entries are not ICP — they are companies with confirmed public ATS boards, included only to prove the retrieval path works, so that a thin ICP result can be read as 'the firms have no public postings' rather than 'our pipeline is broken'.",
+  "domains": [
+    {
+      "domain": "tamimi.com",
+      "segment": "GCC",
+      "vertical": "legal",
+      "size": "large"
+    },
+    {
+      "domain": "alsuwaidi.ae",
+      "segment": "GCC",
+      "vertical": "legal",
+      "size": "mid"
+    },
+    {
+      "domain": "hadefpartners.com",
+      "segment": "GCC",
+      "vertical": "legal",
+      "size": "mid"
+    },
+    {
+      "domain": "galadarilaw.com",
+      "segment": "GCC",
+      "vertical": "legal",
+      "size": "mid"
+    },
+    {
+      "domain": "stalawfirm.com",
+      "segment": "GCC",
+      "vertical": "legal",
+      "size": "mid"
+    },
+    {
+      "domain": "bsabh.com",
+      "segment": "GCC",
+      "vertical": "legal",
+      "size": "mid"
+    },
+    {
+      "domain": "hlbhamt.com",
+      "segment": "GCC",
+      "vertical": "accounting",
+      "size": "mid"
+    },
+    {
+      "domain": "pkfuae.com",
+      "segment": "GCC",
+      "vertical": "accounting",
+      "size": "small"
+    },
+
+    {
+      "domain": "kingsleynapley.com",
+      "segment": "UK",
+      "vertical": "legal",
+      "size": "mid"
+    },
+    {
+      "domain": "gowlingwlg.com",
+      "segment": "UK",
+      "vertical": "legal",
+      "size": "large"
+    },
+    {
+      "domain": "mishcon.com",
+      "segment": "UK",
+      "vertical": "legal",
+      "size": "large"
+    },
+    {
+      "domain": "osborneclarke.com",
+      "segment": "UK",
+      "vertical": "legal",
+      "size": "large"
+    },
+    {
+      "domain": "shoosmiths.com",
+      "segment": "UK",
+      "vertical": "legal",
+      "size": "large"
+    },
+    {
+      "domain": "charlesrussellspeechlys.com",
+      "segment": "UK",
+      "vertical": "legal",
+      "size": "mid"
+    },
+    {
+      "domain": "farrer.co.uk",
+      "segment": "UK",
+      "vertical": "legal",
+      "size": "mid"
+    },
+    {
+      "domain": "burges-salmon.com",
+      "segment": "UK",
+      "vertical": "legal",
+      "size": "mid"
+    },
+    {
+      "domain": "stevens-bolton.com",
+      "segment": "UK",
+      "vertical": "legal",
+      "size": "small"
+    },
+    {
+      "domain": "bdo.co.uk",
+      "segment": "UK",
+      "vertical": "accounting",
+      "size": "large"
+    },
+    {
+      "domain": "morganlewis.com",
+      "segment": "US",
+      "vertical": "legal",
+      "size": "large"
+    },
+    {
+      "domain": "withersworldwide.com",
+      "segment": "US",
+      "vertical": "legal",
+      "size": "large"
+    },
+    {
+      "domain": "bakertilly.com",
+      "segment": "US",
+      "vertical": "accounting",
+      "size": "large"
+    },
+    {
+      "domain": "rsmus.com",
+      "segment": "US",
+      "vertical": "accounting",
+      "size": "large"
+    },
+
+    {
+      "domain": "figma.com",
+      "segment": "control",
+      "vertical": "software",
+      "size": "large"
+    },
+    {
+      "domain": "ramp.com",
+      "segment": "control",
+      "vertical": "software",
+      "size": "large"
+    },
+    {
+      "domain": "linear.app",
+      "segment": "control",
+      "vertical": "software",
+      "size": "mid"
+    }
+  ]
+}

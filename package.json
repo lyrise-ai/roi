@@ -16,7 +16,8 @@
     "test:e2e": "playwright test",
     "test:e2e:smoke": "playwright test --grep @smoke",
     "dev:test": "next dev --turbo -p 3777",
-    "prepare": "husky install"
+    "prepare": "husky install",
+    "eval:research": "node evals/research/coverage.mjs"
   },
   "dependencies": {
     "@ai-sdk/openai": "^3.0.48",
