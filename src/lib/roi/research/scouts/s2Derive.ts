@@ -285,6 +285,12 @@ export function filterTaskVerbs(verbs: unknown): string[] {
   return out
 }
 
+/* Below this, two postings of the same role are concurrent vacancies rather
+   than a role being refilled. Two weeks is comfortably shorter than any real
+   hire-and-leave cycle and comfortably longer than a batch of roles posted
+   across a few days. */
+const MIN_REPEAT_GAP_DAYS = 14
+
 export type CountedPosting = {
   title: string
   postedAt?: string
@@ -323,9 +329,16 @@ export function repeatPostings(
       dates.sort((a, b) => a - b)
       const spanMs = dates[dates.length - 1] - dates[0]
       const months = Math.round(spanMs / (30 * 24 * 60 * 60 * 1000))
-      /* Only within twelve months. Two postings three years apart is a firm
-         that grew, not a firm with a churn problem. */
-      if (months <= 12) out.push({ role, count: dates.length, months })
+      const days = spanMs / (24 * 60 * 60 * 1000)
+      /* Only within twelve months, and only if the postings are actually
+         spread out. Two postings three years apart is a firm that grew; two on
+         the same day is a firm filling two seats at once. Neither is churn.
+         bakertilly.com produced exactly the second case on a live run —
+         "consultant it advisory" twice with months: 0 — which would have read
+         as a turnover signal when it is just a double vacancy. */
+      if (months <= 12 && days >= MIN_REPEAT_GAP_DAYS) {
+        out.push({ role, count: dates.length, months })
+      }
     }
   }
 

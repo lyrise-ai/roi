@@ -333,3 +333,33 @@ test('rankTaskVerbs applies the same filter, so no caller can leak filler', () =
   ])
   assert.deepEqual(out, [{ verb: 'chase', count: 1 }])
 })
+
+test('same-day duplicate postings are vacancies, not churn', () => {
+  /* Regression from a live run: bakertilly.com posted "Consultant IT Advisory"
+     twice on one day, which counted as a turnover signal. Two seats filled at
+     once is not a role grinding people down. */
+  const sameDay = d.repeatPostings([
+    { title: 'Consultant IT Advisory', postedAt: daysAgo(10) },
+    { title: 'Consultant IT Advisory', postedAt: daysAgo(10) },
+  ])
+  assert.deepEqual(sameDay, [])
+
+  const aFewDaysApart = d.repeatPostings([
+    { title: 'Paralegal', postedAt: daysAgo(10) },
+    { title: 'Paralegal', postedAt: daysAgo(13) },
+  ])
+  assert.deepEqual(
+    aFewDaysApart,
+    [],
+    'a batch posted the same week is still one hire',
+  )
+})
+
+test('a role genuinely re-posted months later is still a repeat', () => {
+  const out = d.repeatPostings([
+    { title: 'Paralegal', postedAt: daysAgo(20) },
+    { title: 'Paralegal', postedAt: daysAgo(150) },
+  ])
+  assert.equal(out.length, 1)
+  assert.equal(out[0].count, 2)
+})
