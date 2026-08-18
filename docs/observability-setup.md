@@ -27,7 +27,7 @@ Vercel (all environments):
 | Var                                 | Where it comes from                                                         |
 | ----------------------------------- | --------------------------------------------------------------------------- |
 | `NEXT_PUBLIC_POSTHOG_PROJECT_TOKEN` | Project settings → Project API key (`phc_…`)                                |
-| `NEXT_PUBLIC_POSTHOG_HOST`          | `https://us.i.posthog.com` (or EU)                                          |
+| `NEXT_PUBLIC_POSTHOG_HOST`          | `https://eu.i.posthog.com` — this project is EU, not US                     |
 | `POSTHOG_PROJECT_ID`                | Project settings → Project ID (a number)                                    |
 | `POSTHOG_API_KEY`                   | Settings → Personal API keys → new key, scope **write** on _error tracking_ |
 | `POSTHOG_WEBHOOK_SECRET`            | Invent one: `openssl rand -hex 32`. Guards `/api/linear/triage` only        |
@@ -35,6 +35,15 @@ Vercel (all environments):
 
 `POSTHOG_API_KEY` and `POSTHOG_PROJECT_ID` are build-time only (source-map
 upload). Local builds skip the upload when they're absent, which is intended.
+
+**Region matters, and getting it wrong fails silently.** This project lives on
+**EU** — `ROI`, id `199195`, at `eu.posthog.com`. A key or host from the US
+region authenticates against nothing here: ingestion accepts the events and
+drops them, and the API returns 401, so the only symptom is a dashboard that
+stays empty. `POSTHOG_API_KEY` in particular must be a personal key created
+while signed in to the EU region; a US personal key will 401 on every
+source-map upload. If events stop appearing, check the region before anything
+else.
 
 Nothing breaks if you set none of these — PostHog stays completely inert. That
 is also how CI stays out of the production project.
