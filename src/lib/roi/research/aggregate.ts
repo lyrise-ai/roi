@@ -102,20 +102,40 @@ type PostingLike = {
   namedSystems?: { name: string; category: string }[]
 }
 
-/* Verbs that imply information being moved, re-entered or pursued by hand —
-   the work a system could take over. A subset of what S2 extracts, because not
-   every non-generic verb is automatable: "draft" and "advise" are real duties
-   but they are judgement, not repetition. */
+/* Verbs that indicate work a system could plausibly take over.
+
+   The first version of this set was written a priori from a generic
+   back-office picture — reconcile, re-key, chase invoices — and matched
+   NOTHING across 22 real professional-services firms. What those firms
+   actually advertise is document work: review, draft, prepare, collate, file.
+   The parent card's own worked example is "people whose first listed duty is
+   document review", so excluding `review` as judgement was the error, not the
+   absence of a signal.
+
+   The line still holds somewhere. Verbs that are irreducibly professional
+   judgement stay out — negotiate, advise, advocate, represent, mentor, coach.
+   Automating those is not what this product sells, and claiming otherwise in
+   front of a partner at a law firm would be embarrassing.
+
+   ponytail: hand-tuned vocabulary, and an English one. If the coverage test
+   starts showing false positives, tighten by looking at what the postings
+   actually said rather than by trimming this list from intuition. */
 const MANUAL_WORK_VERBS = new Set([
-  'chase',
+  // document and information handling — the ICP's automatable core
   'collate',
   'compile',
+  'draft',
+  'file',
+  'prepare',
+  'proofread',
+  'review',
+  'summarise',
+  'summarize',
+  // moving and re-entering data
   'copy',
   'cross-check',
   'enter',
   'extract',
-  'file',
-  'follow up',
   'input',
   'key',
   're-key',
@@ -127,7 +147,18 @@ const MANUAL_WORK_VERBS = new Set([
   'transfer',
   'update',
   'upload',
+  // pursuing and checking
+  'chase',
+  'check',
+  'follow up',
+  'liaise',
+  'monitor',
+  'track',
   'verify',
+  // scheduling and coordination
+  'arrange',
+  'coordinate',
+  'schedule',
 ])
 
 /* Which of the verbs the postings used actually imply manual data work. A set

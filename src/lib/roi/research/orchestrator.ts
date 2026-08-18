@@ -123,8 +123,14 @@ export async function runResearch(
   const s1 = await settle('S1', runS1(domain), budgetMs)
   await land(s1)
 
-  const region = (s1.facts as { region?: { value?: Region } } | null)?.region
-    ?.value
+  const s1Facts = s1.facts as {
+    region?: { value?: Region }
+    vertical?: { value?: string }
+  } | null
+  const region = s1Facts?.region?.value
+  /* S2's discovery tier shapes its query with the vertical when S1 resolved
+     one — "legal" and "accounting" pull very different results. */
+  const vertical = s1Facts?.vertical?.value
 
   const remaining = Math.max(1_000, budgetMs - (Date.now() - startedAt))
 
@@ -133,7 +139,7 @@ export async function runResearch(
      degrading a row and taking down the run. The shape is here so adding a
      scout is appending to this array. */
   const rest = await Promise.allSettled([
-    settle('S2', getJobPostings(domain, region), remaining),
+    settle('S2', getJobPostings(domain, region, vertical), remaining),
   ])
 
   for (const outcome of rest) {
