@@ -8,7 +8,6 @@ const DEFAULT_DEV_TEAM = [
   'adel@lyrise.ai',
   'yousef@lyrise.ai',
   'omar@lyrise.ai',
-  'y.ashraf@lyrise.ai',
 ]
 
 const DEV_TEAM = (process.env.DEV_ALERT_EMAILS ?? DEFAULT_DEV_TEAM.join(','))
