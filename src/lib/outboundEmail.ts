@@ -11,9 +11,16 @@
  * The gate is deliberately written so it can only ever *add* a block, never
  * remove one that production depends on: sending requires
  * `NODE_ENV === 'production'` (so no dev server ever sends) and an
- * environment that is not explicitly a test one. Vercel sets NODE_ENV itself,
- * so production keeps working whether or not NEXT_PUBLIC_ENV is configured
- * there.
+ * environment that is not explicitly a test one.
+ *
+ * On Vercel the decision comes from `VERCEL_ENV`, which the platform sets and
+ * nobody can typo, rather than from `NEXT_PUBLIC_ENV`, which is ours. The
+ * original version trusted `NEXT_PUBLIC_ENV` everywhere on the assumption that
+ * production either left it unset or set it to `production`. It was set to a
+ * test value there, so from 2026-08-12 the gate silently suppressed every
+ * production email — a 28-report bulk batch generated on 2026-08-17 reached
+ * Resend zero times. Preview deployments are now blocked too, which is the
+ * direction this gate is allowed to move in.
  *
  * To send for real from a local machine, set ALLOW_OUTBOUND_EMAIL=1.
  */
@@ -29,6 +36,12 @@ const TEST_ENVS = new Set(['ci', 'development', 'test'])
  */
 export function outboundEmailBlockedReason(): string | null {
   if (process.env.ALLOW_OUTBOUND_EMAIL === '1') return null
+  // Platform-owned, so it cannot drift from what the deployment actually is.
+  if (process.env.VERCEL_ENV) {
+    return process.env.VERCEL_ENV === 'production'
+      ? null
+      : `VERCEL_ENV=${process.env.VERCEL_ENV}`
+  }
   if (process.env.NODE_ENV !== 'production') {
     return `NODE_ENV=${process.env.NODE_ENV}`
   }

@@ -39,6 +39,9 @@ function StatusStrip({ rows, cursor }) {
     { PENDING: 0, GENERATING: 0, DONE: 0, FAILED: 0, CANCELLED: 0 },
   )
 
+  // A row can generate fine and still never reach its recipient.
+  const emailFailures = rows.filter((r) => r.emailError).length
+
   return (
     <div className="flex flex-col items-end gap-2">
       <div className="flex items-center gap-2 text-[10px] font-semibold uppercase tracking-wider text-gray-500">
@@ -51,6 +54,12 @@ function StatusStrip({ rows, cursor }) {
           <>
             <span>·</span>
             <span className="text-red-600">{counts.FAILED} failed</span>
+          </>
+        )}
+        {emailFailures > 0 && (
+          <>
+            <span>·</span>
+            <span className="text-amber-600">{emailFailures} not emailed</span>
           </>
         )}
         {counts.CANCELLED > 0 && (
@@ -66,7 +75,9 @@ function StatusStrip({ rows, cursor }) {
           const isCurrent = i === cursor
           let cls = ''
           if (row.status === 'DONE') {
-            cls = 'bg-green-500 text-white'
+            cls = row.emailError
+              ? 'bg-amber-500 text-white'
+              : 'bg-green-500 text-white'
           } else if (row.status === 'GENERATING') {
             cls = 'bg-[#2957FF] text-white'
           } else if (row.status === 'FAILED') {
@@ -87,11 +98,14 @@ function StatusStrip({ rows, cursor }) {
                   ? { animation: 'bulkPulse 1.4s ease-in-out infinite' }
                   : undefined
               }
-              title={
+              title={[
                 row.payload?.companyName
                   ? `${i + 1}. ${row.payload.companyName} — ${row.status}`
-                  : `${i + 1} — ${row.status}`
-              }
+                  : `${i + 1} — ${row.status}`,
+                row.emailError && `email failed: ${row.emailError}`,
+              ]
+                .filter(Boolean)
+                .join(' · ')}
             >
               {i + 1}
             </span>
