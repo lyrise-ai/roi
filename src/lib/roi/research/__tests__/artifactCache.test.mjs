@@ -550,3 +550,85 @@ test('budget state is inspectable, so a thin run can be explained', async () => 
   assert.equal(fresh.reason, null)
   assert.equal(fresh.callsInWindow, 0)
 })
+
+// ── 404 is an answer, not a refusal ──────────────────────────────────────────
+
+test('a clean 404 does not spend a Firecrawl credit', async () => {
+  /* S2 probes five candidate careers paths per company and most legitimately
+     404. Escalating those pays a credit, and 15s of wall time, to be told
+     again that the page does not exist. */
+  process.env.FIRECRAWL_API_KEY = 'fc-test'
+  stubFetch(() => ({ ok: false, status: 404, text: async () => 'Not Found' }))
+
+  assert.equal(await cache.getArtifact('https://acmelaw.com/vacancies'), null)
+  assert.equal(calls.length, 1)
+  assert.ok(!calls.some((u) => u.includes('firecrawl')))
+  assert.equal(cache.firecrawlBudget().callsInWindow, 0)
+})
+
+test('410 Gone is also an answer', async () => {
+  process.env.FIRECRAWL_API_KEY = 'fc-test'
+  stubFetch(() => ({ ok: false, status: 410, text: async () => 'Gone' }))
+
+  assert.equal(await cache.getArtifact('https://acmelaw.com/jobs'), null)
+  assert.ok(!calls.some((u) => u.includes('firecrawl')))
+})
+
+test('a refusal still escalates', async () => {
+  process.env.FIRECRAWL_API_KEY = 'fc-test'
+  for (const status of [401, 403, 429, 500, 503]) {
+    cache.clearArtifactCache()
+    cache.resetFirecrawlBudget()
+    stubFetch((url) => {
+      if (url.includes('firecrawl')) {
+        return {
+          ok: true,
+          status: 200,
+          json: async () => ({ data: { markdown: '# Careers' } }),
+        }
+      }
+      return { ok: false, status, text: async () => '' }
+    })
+
+    const artifact = await cache.getArtifact('https://blocked.example/careers')
+    assert.equal(
+      artifact?.content,
+      '# Careers',
+      `status ${status} must escalate`,
+    )
+  }
+})
+
+test('a 200 with an empty body escalates — that is a JS shell', async () => {
+  process.env.FIRECRAWL_API_KEY = 'fc-test'
+  stubFetch((url) => {
+    if (url.includes('firecrawl')) {
+      return {
+        ok: true,
+        status: 200,
+        json: async () => ({ data: { markdown: '# Careers' } }),
+      }
+    }
+    return { ok: true, status: 200, text: async () => '   ' }
+  })
+
+  const artifact = await cache.getArtifact('https://spa.example/careers')
+  assert.equal(artifact.content, '# Careers')
+})
+
+test('a network error escalates — the page may be fine and we were not', async () => {
+  process.env.FIRECRAWL_API_KEY = 'fc-test'
+  stubFetch((url) => {
+    if (url.includes('firecrawl')) {
+      return {
+        ok: true,
+        status: 200,
+        json: async () => ({ data: { markdown: '# Careers' } }),
+      }
+    }
+    throw new Error('ETIMEDOUT')
+  })
+
+  const artifact = await cache.getArtifact('https://slow.example/careers')
+  assert.equal(artifact.content, '# Careers')
+})

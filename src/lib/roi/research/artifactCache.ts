@@ -137,20 +137,52 @@ async function writePersisted(key: string, artifact: Artifact): Promise<void> {
   }
 }
 
-/* Tier 1. Returns null on a non-2xx, a timeout, a network error, or an empty
-   body — all of which mean "try Firecrawl", not "the page is empty". */
-async function plainFetch(url: string): Promise<string | null> {
+/* Tier 1, and the tier that decides whether tier 2 is even worth paying for.
+   "We were refused" and "there is no such page" look identical if you only
+   return null, and conflating them is expensive in both directions: escalating
+   a clean 404 to Firecrawl spends a credit to be told again that the page
+   doesn't exist, and it spends the wall time too. S2 probes five candidate
+   careers paths per company, most of which legitimately 404, so this is the
+   difference between one credit and five. */
+type PlainFetch =
+  | { content: string; blocked: false }
+  | { content: null; blocked: boolean }
+
+/* A refusal, not an answer: auth walls, bot blocks, rate limits and server
+   faults are all states where the page probably exists and a headless browser
+   may well get it. 404 and 410 are answers, and Firecrawl cannot improve on
+   them. */
+function isBlockingStatus(status: number): boolean {
+  return (
+    status === 401 ||
+    status === 402 ||
+    status === 403 ||
+    status === 405 ||
+    status === 406 ||
+    status === 408 ||
+    status === 429 ||
+    status >= 500
+  )
+}
+
+async function plainFetch(url: string): Promise<PlainFetch> {
   try {
     const response = await fetch(url, {
       headers: { 'user-agent': USER_AGENT, accept: 'text/html,*/*' },
       redirect: 'follow',
       signal: AbortSignal.timeout(FETCH_TIMEOUT_MS),
     })
-    if (!response.ok) return null
+    if (!response.ok) {
+      return { content: null, blocked: isBlockingStatus(response.status) }
+    }
     const body = await response.text()
-    return body && body.trim() !== '' ? body : null
+    if (body && body.trim() !== '') return { content: body, blocked: false }
+    /* 200 with nothing in it is the signature of a JS-rendered shell, which is
+       precisely what a headless browser fixes. */
+    return { content: null, blocked: true }
   } catch {
-    return null
+    /* Timeout or transport error — the page may be fine and we were not. */
+    return { content: null, blocked: true }
   }
 }
 
@@ -306,7 +338,9 @@ export async function getArtifact(url: string): Promise<Artifact | null> {
       return persisted
     }
 
-    const content = (await plainFetch(key)) ?? (await firecrawlFetch(key))
+    const plain = await plainFetch(key)
+    const content =
+      plain.content ?? (plain.blocked ? await firecrawlFetch(key) : null)
     if (!content) return null
 
     const artifact: Artifact = {
