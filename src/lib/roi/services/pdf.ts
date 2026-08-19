@@ -3,6 +3,16 @@
 // Works locally (uses locally-installed Chrome) and on Vercel serverless
 // (uses the pre-built Chromium binary from @sparticuz/chromium).
 // No external API or credentials required.
+//
+// Renders are serialised per process. @sparticuz/chromium inflates its binary
+// to /tmp/chromium, and executablePath() returns that path as soon as it
+// exists — which is the moment the write stream is created, not the moment the
+// write finishes. Two overlapping renders in one instance therefore had the
+// second one exec a half-written binary and die with `spawn ETXTBSY`. Fluid
+// Compute reuses an instance across concurrent requests, and bulk upload
+// starts a row every 60s while a run takes minutes, so overlap is the norm
+// there, not the exception: it cost a 28-report batch its PDFs and, because
+// the email is sent from the same try block, every one of its emails.
 // ─────────────────────────────────────────────────────────────────────────────
 
 export interface PdfResult {
@@ -10,10 +20,26 @@ export interface PdfResult {
   filename: string
 }
 
-export async function generatePdf(
+// ponytail: one lock per process, so renders queue instead of overlapping.
+// The ceiling is throughput — a batch's PDFs render one at a time within an
+// instance. If that ever matters, inflate Chromium to a per-call path instead.
+let queue: Promise<unknown> = Promise.resolve()
+
+/** Runs `task` after every task already queued in this process. */
+export function runExclusive<T>(task: () => Promise<T>): Promise<T> {
+  const run = queue.then(task, task)
+  queue = run.catch(() => undefined)
+  return run
+}
+
+export function generatePdf(
   html: string,
   filename = 'ROI_Report.pdf',
 ): Promise<PdfResult> {
+  return runExclusive(() => renderPdf(html, filename))
+}
+
+async function renderPdf(html: string, filename: string): Promise<PdfResult> {
   const puppeteer = await import('puppeteer-core')
 
   let executablePath: string

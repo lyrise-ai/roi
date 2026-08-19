@@ -175,6 +175,11 @@ async function generateRow(sessionId, index) {
 
     let savedReportId = null
     let sawDone = false
+    // The agent emits `done` before it renders the PDF and sends the email, so
+    // a row that reaches DONE has not necessarily been emailed. Carry the
+    // failure onto the row instead of dropping it: a whole batch once went out
+    // with every email silently failing and every row showing green.
+    let emailError = null
     await drainSSE(response.body.getReader(), new TextDecoder(), (event) => {
       if (event.type === 'text_delta') {
         appendRowLog(sessionId, index, event.delta ?? '')
@@ -185,13 +190,20 @@ async function generateRow(sessionId, index) {
         updateRowInStorage(sessionId, index, { reportId: event.report_id })
       } else if (event.type === 'done') {
         sawDone = true
+      } else if (event.type === 'email_error') {
+        emailError = event.message ?? 'Email failed'
+        appendRowLog(sessionId, index, `\n[email failed] ${emailError}\n`)
       } else if (event.type === 'error') {
         throw new Error(event.message ?? 'Generation failed')
       }
     })
 
     if (sawDone && savedReportId) {
-      updateRowInStorage(sessionId, index, { status: 'DONE', error: null })
+      updateRowInStorage(sessionId, index, {
+        status: 'DONE',
+        error: null,
+        emailError,
+      })
     } else {
       updateRowInStorage(sessionId, index, {
         status: 'FAILED',

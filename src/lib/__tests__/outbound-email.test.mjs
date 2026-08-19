@@ -18,6 +18,7 @@ const withEnv = (env, fn) => {
     NODE_ENV: process.env.NODE_ENV,
     NEXT_PUBLIC_ENV: process.env.NEXT_PUBLIC_ENV,
     ALLOW_OUTBOUND_EMAIL: process.env.ALLOW_OUTBOUND_EMAIL,
+    VERCEL_ENV: process.env.VERCEL_ENV,
   }
   for (const key of Object.keys(saved)) delete process.env[key]
   Object.assign(process.env, env)
@@ -63,5 +64,31 @@ test('a local production build flagged as development never sends', () => {
 test('ALLOW_OUTBOUND_EMAIL=1 is the deliberate local escape hatch', () => {
   withEnv({ NODE_ENV: 'development', ALLOW_OUTBOUND_EMAIL: '1' }, () =>
     assert.equal(outboundEmailBlockedReason(), null),
+  )
+})
+
+// The regression this file's second half exists for: production on Vercel
+// carried NEXT_PUBLIC_ENV from a developer's .env, and every report email was
+// suppressed for five days without an error anywhere. VERCEL_ENV is set by the
+// platform, so it wins over anything we might have misconfigured.
+test('Vercel production sends even with NEXT_PUBLIC_ENV misconfigured', () => {
+  withEnv(
+    {
+      NODE_ENV: 'production',
+      VERCEL_ENV: 'production',
+      NEXT_PUBLIC_ENV: 'development',
+    },
+    () => assert.equal(outboundEmailBlockedReason(), null),
+  )
+})
+
+test('a Vercel preview deployment never sends', () => {
+  withEnv(
+    {
+      NODE_ENV: 'production',
+      VERCEL_ENV: 'preview',
+      NEXT_PUBLIC_ENV: 'production',
+    },
+    () => assert.equal(outboundEmailBlockedReason(), 'VERCEL_ENV=preview'),
   )
 })

@@ -746,11 +746,16 @@ export default async function handler(req, res) {
             ? emailOverride.trim().toLowerCase()
             : null
         const recipient = overrideAddr ?? state.normInput.email
-        const bcc = overrideAddr
-          ? DEFAULT_REPORT_BCC.filter(
-              (addr) => addr.toLowerCase() !== overrideAddr,
-            )
-          : DEFAULT_REPORT_BCC
+        // Whoever generated the report gets a copy. DEFAULT_REPORT_BCC is a
+        // fixed pair, so an operator outside it (a new salesperson running a
+        // bulk batch) had no way to see what went to their own prospects.
+        const bcc = [
+          ...new Set(
+            [...DEFAULT_REPORT_BCC, user.email]
+              .filter(Boolean)
+              .map((addr) => addr.toLowerCase()),
+          ),
+        ].filter((addr) => addr !== recipient.toLowerCase())
         const chatUrl =
           savedReportId && generatedShareToken
             ? buildShareUrl(req, savedReportId, generatedShareToken)
