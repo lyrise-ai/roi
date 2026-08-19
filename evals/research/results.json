@@ -1,5 +1,5 @@
 {
-  "ranAt": "2026-08-18T16:37:36.592Z",
+  "ranAt": "2026-08-18T17:23:28.563Z",
   "results": [
     {
       "domain": "tamimi.com",
@@ -8,8 +8,8 @@
       "size": "large",
       "ok": true,
       "tier": "MODERATE",
-      "score": 0.2625,
-      "durationMs": 2694,
+      "score": 0.75,
+      "durationMs": 7809,
       "s1": {
         "status": "ERROR",
         "country": null,
@@ -19,17 +19,33 @@
         "wonBy": null
       },
       "s2": {
-        "status": "NONE",
-        "postings": 0,
-        "tierUsed": "L1-ats",
-        "platform": "workable",
+        "status": "FULL",
+        "postings": 6,
+        "tierUsed": "L1.5-search",
+        "platform": null,
+        "emptyBoardOn": "workable",
         "careersPath": null,
-        "topVerbs": [],
-        "systems": [],
+        "topVerbs": ["copy", "direct", "edit", "enhance", "fax"],
+        "systems": [
+          "dictation equipment",
+          "document management systems",
+          "Microsoft Office",
+          "Oracle HR",
+          "transcription software"
+        ],
         "repeats": [],
         "notes": "workable board found with no open roles"
       },
-      "manualWork": [],
+      "manualWork": [
+        "copy",
+        "file",
+        "input",
+        "prepare",
+        "review",
+        "scan",
+        "track",
+        "transcribe"
+      ],
       "gaps": [
         {
           "scout": "S1",
@@ -45,7 +61,7 @@
       "ok": true,
       "tier": "RICH",
       "score": 0.9,
-      "durationMs": 4396,
+      "durationMs": 4417,
       "s1": {
         "status": "PARTIAL",
         "country": "AE",
@@ -59,13 +75,14 @@
         "postings": 1,
         "tierUsed": "L2-careers",
         "platform": null,
+        "emptyBoardOn": null,
         "careersPath": "/careers",
         "topVerbs": ["conduct", "draft", "handle", "liaise"],
         "systems": [],
         "repeats": [],
         "notes": null
       },
-      "manualWork": [],
+      "manualWork": ["draft", "liaise"],
       "gaps": []
     },
     {
@@ -76,7 +93,7 @@
       "ok": true,
       "tier": "MODERATE",
       "score": 0.6,
-      "durationMs": 4055,
+      "durationMs": 4868,
       "s1": {
         "status": "PARTIAL",
         "country": "AE",
@@ -88,9 +105,10 @@
       "s2": {
         "status": "PARTIAL",
         "postings": 1,
-        "tierUsed": "L2-careers",
+        "tierUsed": "L1.5-search",
         "platform": null,
-        "careersPath": "/careers",
+        "emptyBoardOn": null,
+        "careersPath": null,
         "topVerbs": [],
         "systems": [],
         "repeats": [],
@@ -105,9 +123,9 @@
       "vertical": "legal",
       "size": "mid",
       "ok": true,
-      "tier": "MODERATE",
-      "score": 0.6,
-      "durationMs": 3631,
+      "tier": "RICH",
+      "score": 0.9,
+      "durationMs": 7793,
       "s1": {
         "status": "PARTIAL",
         "country": "AE",
@@ -117,17 +135,18 @@
         "wonBy": "site"
       },
       "s2": {
-        "status": "PARTIAL",
-        "postings": 1,
-        "tierUsed": "L1-ats",
-        "platform": "workable",
-        "careersPath": "/careers",
-        "topVerbs": [],
+        "status": "FULL",
+        "postings": 2,
+        "tierUsed": "L1.5-search",
+        "platform": null,
+        "emptyBoardOn": "workable",
+        "careersPath": null,
+        "topVerbs": ["advise", "draft", "handle", "liaise", "negotiate"],
         "systems": [],
         "repeats": [],
         "notes": "workable board found with no open roles"
       },
-      "manualWork": [],
+      "manualWork": ["draft", "liaise"],
       "gaps": []
     },
     {
@@ -152,6 +171,7 @@
         "postings": 0,
         "tierUsed": "none",
         "platform": null,
+        "emptyBoardOn": null,
         "careersPath": null,
         "topVerbs": [],
         "systems": [],
@@ -178,7 +198,7 @@
       "ok": true,
       "tier": "MODERATE",
       "score": 0.6,
-      "durationMs": 6699,
+      "durationMs": 2138,
       "s1": {
         "status": "PARTIAL",
         "country": null,
@@ -192,6 +212,7 @@
         "postings": 1,
         "tierUsed": "L2-careers",
         "platform": null,
+        "emptyBoardOn": null,
         "careersPath": "/careers",
         "topVerbs": [],
         "systems": [],
@@ -209,7 +230,7 @@
       "ok": true,
       "tier": "MODERATE",
       "score": 0.6,
-      "durationMs": 11553,
+      "durationMs": 3065,
       "s1": {
         "status": "PARTIAL",
         "country": "AE",
@@ -221,9 +242,10 @@
       "s2": {
         "status": "PARTIAL",
         "postings": 1,
-        "tierUsed": "L2-careers",
+        "tierUsed": "L1.5-search",
         "platform": null,
-        "careersPath": "/about/careers",
+        "emptyBoardOn": null,
+        "careersPath": null,
         "topVerbs": [],
         "systems": [],
         "repeats": [],
@@ -238,9 +260,9 @@
       "vertical": "accounting",
       "size": "small",
       "ok": true,
-      "tier": "MODERATE",
-      "score": 0.6,
-      "durationMs": 6400,
+      "tier": "RICH",
+      "score": 0.9,
+      "durationMs": 4624,
       "s1": {
         "status": "PARTIAL",
         "country": null,
@@ -250,17 +272,18 @@
         "wonBy": "site"
       },
       "s2": {
-        "status": "PARTIAL",
+        "status": "FULL",
         "postings": 1,
-        "tierUsed": "L2-careers",
-        "platform": null,
-        "careersPath": "/careers",
-        "topVerbs": [],
+        "tierUsed": "L1-ats",
+        "platform": "job-detail",
+        "emptyBoardOn": null,
+        "careersPath": null,
+        "topVerbs": ["follow up", "liaise", "monitor", "prepare", "review"],
         "systems": [],
         "repeats": [],
         "notes": null
       },
-      "manualWork": [],
+      "manualWork": ["follow up", "liaise", "monitor", "prepare", "review"],
       "gaps": []
     },
     {
@@ -271,7 +294,7 @@
       "ok": true,
       "tier": "MODERATE",
       "score": 0.4125,
-      "durationMs": 3822,
+      "durationMs": 2279,
       "s1": {
         "status": "PARTIAL",
         "country": "GB",
@@ -285,6 +308,7 @@
         "postings": 0,
         "tierUsed": "none",
         "platform": null,
+        "emptyBoardOn": null,
         "careersPath": null,
         "topVerbs": [],
         "systems": [],
@@ -302,7 +326,7 @@
       "ok": true,
       "tier": "MODERATE",
       "score": 0.6,
-      "durationMs": 4749,
+      "durationMs": 5232,
       "s1": {
         "status": "PARTIAL",
         "country": "CA",
@@ -314,9 +338,10 @@
       "s2": {
         "status": "PARTIAL",
         "postings": 1,
-        "tierUsed": "L2-careers",
+        "tierUsed": "L1.5-search",
         "platform": null,
-        "careersPath": "/careers",
+        "emptyBoardOn": null,
+        "careersPath": null,
         "topVerbs": [],
         "systems": [],
         "repeats": [],
@@ -333,7 +358,7 @@
       "ok": true,
       "tier": "MODERATE",
       "score": 0.6,
-      "durationMs": 12103,
+      "durationMs": 3834,
       "s1": {
         "status": "PARTIAL",
         "country": null,
@@ -344,10 +369,11 @@
       },
       "s2": {
         "status": "PARTIAL",
-        "postings": 1,
-        "tierUsed": "L2-careers",
-        "platform": null,
-        "careersPath": "/careers",
+        "postings": 3,
+        "tierUsed": "L1-ats",
+        "platform": "job-detail",
+        "emptyBoardOn": null,
+        "careersPath": null,
         "topVerbs": [],
         "systems": [],
         "repeats": [],
@@ -362,9 +388,9 @@
       "vertical": "legal",
       "size": "large",
       "ok": true,
-      "tier": "MODERATE",
-      "score": 0.6,
-      "durationMs": 10539,
+      "tier": "RICH",
+      "score": 0.9,
+      "durationMs": 5706,
       "s1": {
         "status": "PARTIAL",
         "country": null,
@@ -374,17 +400,18 @@
         "wonBy": "site"
       },
       "s2": {
-        "status": "PARTIAL",
-        "postings": 1,
-        "tierUsed": "L2-careers",
-        "platform": null,
-        "careersPath": "/careers",
-        "topVerbs": [],
-        "systems": [],
+        "status": "FULL",
+        "postings": 6,
+        "tierUsed": "L1-ats",
+        "platform": "job-detail",
+        "emptyBoardOn": null,
+        "careersPath": null,
+        "topVerbs": ["allocate", "champion", "conduct", "join", "monitor"],
+        "systems": ["Eploy", "InTapp"],
         "repeats": [],
         "notes": null
       },
-      "manualWork": [],
+      "manualWork": ["monitor"],
       "gaps": []
     },
     {
@@ -393,9 +420,9 @@
       "vertical": "legal",
       "size": "large",
       "ok": true,
-      "tier": "MODERATE",
-      "score": 0.6,
-      "durationMs": 11592,
+      "tier": "RICH",
+      "score": 0.9,
+      "durationMs": 25539,
       "s1": {
         "status": "PARTIAL",
         "country": null,
@@ -405,13 +432,14 @@
         "wonBy": "site"
       },
       "s2": {
-        "status": "PARTIAL",
-        "postings": 1,
-        "tierUsed": "L2-careers",
-        "platform": null,
-        "careersPath": "/careers",
+        "status": "FULL",
+        "postings": 6,
+        "tierUsed": "L1-ats",
+        "platform": "job-detail",
+        "emptyBoardOn": null,
+        "careersPath": null,
         "topVerbs": [],
-        "systems": [],
+        "systems": ["BPP University"],
         "repeats": [],
         "notes": null
       },
@@ -424,45 +452,9 @@
       "vertical": "legal",
       "size": "mid",
       "ok": true,
-      "tier": "THIN",
-      "score": 0.15,
-      "durationMs": 30003,
-      "s1": {
-        "status": "PARTIAL",
-        "country": "GB",
-        "region": "UK",
-        "vertical": "legal",
-        "sizeBand": null,
-        "wonBy": "site"
-      },
-      "s2": {
-        "status": "ERROR",
-        "postings": 0,
-        "tierUsed": "none",
-        "platform": null,
-        "careersPath": null,
-        "topVerbs": [],
-        "systems": [],
-        "repeats": [],
-        "notes": "exceeded 24807ms budget"
-      },
-      "manualWork": [],
-      "gaps": [
-        {
-          "scout": "S2",
-          "reason": "exceeded 24807ms budget"
-        }
-      ]
-    },
-    {
-      "domain": "farrer.co.uk",
-      "segment": "UK",
-      "vertical": "legal",
-      "size": "mid",
-      "ok": true,
       "tier": "MODERATE",
       "score": 0.6,
-      "durationMs": 9416,
+      "durationMs": 20803,
       "s1": {
         "status": "PARTIAL",
         "country": "GB",
@@ -475,12 +467,45 @@
         "status": "PARTIAL",
         "postings": 1,
         "tierUsed": "L1-ats",
-        "platform": "workable",
+        "platform": "job-detail",
+        "emptyBoardOn": null,
+        "careersPath": null,
+        "topVerbs": [],
+        "systems": [],
+        "repeats": [],
+        "notes": null
+      },
+      "manualWork": [],
+      "gaps": []
+    },
+    {
+      "domain": "farrer.co.uk",
+      "segment": "UK",
+      "vertical": "legal",
+      "size": "mid",
+      "ok": true,
+      "tier": "MODERATE",
+      "score": 0.6,
+      "durationMs": 2918,
+      "s1": {
+        "status": "PARTIAL",
+        "country": "GB",
+        "region": "UK",
+        "vertical": "legal",
+        "sizeBand": null,
+        "wonBy": "site"
+      },
+      "s2": {
+        "status": "PARTIAL",
+        "postings": 1,
+        "tierUsed": "L2-careers",
+        "platform": null,
+        "emptyBoardOn": null,
         "careersPath": "/careers",
         "topVerbs": [],
         "systems": [],
         "repeats": [],
-        "notes": "workable board found with no open roles"
+        "notes": null
       },
       "manualWork": [],
       "gaps": []
@@ -493,7 +518,7 @@
       "ok": true,
       "tier": "MODERATE",
       "score": 0.6,
-      "durationMs": 5325,
+      "durationMs": 2180,
       "s1": {
         "status": "PARTIAL",
         "country": null,
@@ -505,9 +530,10 @@
       "s2": {
         "status": "PARTIAL",
         "postings": 1,
-        "tierUsed": "L2-careers",
+        "tierUsed": "L1.5-search",
         "platform": null,
-        "careersPath": "/careers",
+        "emptyBoardOn": null,
+        "careersPath": null,
         "topVerbs": [],
         "systems": [],
         "repeats": [],
@@ -524,7 +550,7 @@
       "ok": true,
       "tier": "RICH",
       "score": 0.9,
-      "durationMs": 5112,
+      "durationMs": 3434,
       "s1": {
         "status": "PARTIAL",
         "country": "GB",
@@ -535,11 +561,12 @@
       },
       "s2": {
         "status": "FULL",
-        "postings": 1,
-        "tierUsed": "L2-careers",
-        "platform": null,
-        "careersPath": "/careers",
-        "topVerbs": ["join"],
+        "postings": 5,
+        "tierUsed": "L1-ats",
+        "platform": "job-detail",
+        "emptyBoardOn": null,
+        "careersPath": null,
+        "topVerbs": ["attend", "interview", "shadow"],
         "systems": [],
         "repeats": [],
         "notes": null
@@ -555,7 +582,7 @@
       "ok": true,
       "tier": "MODERATE",
       "score": 0.4125,
-      "durationMs": 4441,
+      "durationMs": 3891,
       "s1": {
         "status": "PARTIAL",
         "country": "GB",
@@ -567,13 +594,14 @@
       "s2": {
         "status": "NONE",
         "postings": 0,
-        "tierUsed": "L1-ats",
-        "platform": "workable",
+        "tierUsed": "none",
+        "platform": null,
+        "emptyBoardOn": null,
         "careersPath": null,
         "topVerbs": [],
         "systems": [],
         "repeats": [],
-        "notes": "workable board found with no open roles"
+        "notes": null
       },
       "manualWork": [],
       "gaps": []
@@ -584,9 +612,9 @@
       "vertical": "legal",
       "size": "large",
       "ok": true,
-      "tier": "MODERATE",
-      "score": 0.6,
-      "durationMs": 6761,
+      "tier": "RICH",
+      "score": 0.9,
+      "durationMs": 4848,
       "s1": {
         "status": "PARTIAL",
         "country": null,
@@ -596,17 +624,18 @@
         "wonBy": "site"
       },
       "s2": {
-        "status": "PARTIAL",
-        "postings": 1,
-        "tierUsed": "L2-careers",
-        "platform": null,
-        "careersPath": "/careers",
-        "topVerbs": [],
-        "systems": [],
+        "status": "FULL",
+        "postings": 6,
+        "tierUsed": "L1-ats",
+        "platform": "job-detail",
+        "emptyBoardOn": null,
+        "careersPath": null,
+        "topVerbs": ["attend", "conduct", "draft"],
+        "systems": ["online application system"],
         "repeats": [],
         "notes": null
       },
-      "manualWork": [],
+      "manualWork": ["draft"],
       "gaps": []
     },
     {
@@ -617,7 +646,7 @@
       "ok": true,
       "tier": "MODERATE",
       "score": 0.6,
-      "durationMs": 4038,
+      "durationMs": 7514,
       "s1": {
         "status": "PARTIAL",
         "country": "SG",
@@ -628,10 +657,11 @@
       },
       "s2": {
         "status": "PARTIAL",
-        "postings": 1,
-        "tierUsed": "L2-careers",
-        "platform": null,
-        "careersPath": "/careers",
+        "postings": 6,
+        "tierUsed": "L1-ats",
+        "platform": "job-detail",
+        "emptyBoardOn": null,
+        "careersPath": null,
         "topVerbs": [],
         "systems": [],
         "repeats": [],
@@ -648,7 +678,7 @@
       "ok": true,
       "tier": "RICH",
       "score": 0.9,
-      "durationMs": 13822,
+      "durationMs": 4591,
       "s1": {
         "status": "PARTIAL",
         "country": null,
@@ -661,14 +691,15 @@
         "status": "FULL",
         "postings": 12,
         "tierUsed": "L1-ats",
-        "platform": "workable",
+        "platform": "recruitee",
+        "emptyBoardOn": null,
         "careersPath": null,
         "topVerbs": [
-          "beoordelen",
           "ondersteunen",
+          "beoordelen",
           "opstellen",
           "adviseren",
-          "begeleiden"
+          "voorbereiden"
         ],
         "systems": [],
         "repeats": [],
@@ -685,7 +716,7 @@
       "ok": true,
       "tier": "RICH",
       "score": 0.9,
-      "durationMs": 5881,
+      "durationMs": 5695,
       "s1": {
         "status": "PARTIAL",
         "country": null,
@@ -696,20 +727,15 @@
       },
       "s2": {
         "status": "FULL",
-        "postings": 1,
+        "postings": 6,
         "tierUsed": "L1-ats",
-        "platform": "workable",
-        "careersPath": "/careers",
-        "topVerbs": [],
-        "systems": [
-          "CorporateSight",
-          "FamilySight",
-          "Microsoft",
-          "NetSuite",
-          "PartnerSight"
-        ],
+        "platform": "job-detail",
+        "emptyBoardOn": null,
+        "careersPath": null,
+        "topVerbs": ["integrate"],
+        "systems": ["Dayforce", "Salesforce", "ServiceNow", "UKG", "BlackLine"],
         "repeats": [],
-        "notes": "workable board found with no open roles"
+        "notes": null
       },
       "manualWork": [],
       "gaps": []
@@ -722,7 +748,7 @@
       "ok": true,
       "tier": "RICH",
       "score": 0.9,
-      "durationMs": 11032,
+      "durationMs": 3848,
       "s1": {
         "status": "PARTIAL",
         "country": null,
@@ -736,13 +762,14 @@
         "postings": 12,
         "tierUsed": "L1-ats",
         "platform": "workable",
+        "emptyBoardOn": null,
         "careersPath": null,
-        "topVerbs": ["set", "hire", "negotiate", "operate", "act"],
+        "topVerbs": ["negotiate", "turn", "address", "apply", "assess"],
         "systems": ["Figma", "Cvent", "Google Workspace", "JAMF", "Okta"],
         "repeats": [],
         "notes": "163 postings found, newest 12 extracted"
       },
-      "manualWork": [],
+      "manualWork": ["monitor"],
       "gaps": []
     },
     {
@@ -753,7 +780,7 @@
       "ok": true,
       "tier": "RICH",
       "score": 0.9,
-      "durationMs": 6358,
+      "durationMs": 6306,
       "s1": {
         "status": "PARTIAL",
         "country": null,
@@ -766,10 +793,11 @@
         "status": "FULL",
         "postings": 12,
         "tierUsed": "L1-ats",
-        "platform": "ashby",
+        "platform": "workable",
+        "emptyBoardOn": null,
         "careersPath": null,
-        "topVerbs": ["define", "assess", "conduct", "educate", "guide"],
-        "systems": ["Claude Code", "Codex", "Cursor", "AI", "Bolt"],
+        "topVerbs": ["define", "assess", "educate", "generate", "guide"],
+        "systems": ["AI", "AWS", "Azure", "Bolt", "Claude"],
         "repeats": [],
         "notes": "136 postings found, newest 12 extracted"
       },
@@ -784,7 +812,7 @@
       "ok": true,
       "tier": "RICH",
       "score": 0.9,
-      "durationMs": 5613,
+      "durationMs": 3598,
       "s1": {
         "status": "PARTIAL",
         "country": null,
@@ -798,13 +826,14 @@
         "postings": 12,
         "tierUsed": "L1-ats",
         "platform": "ashby",
+        "emptyBoardOn": null,
         "careersPath": null,
-        "topVerbs": ["design", "use", "automate", "activate", "assess"],
+        "topVerbs": ["define", "design", "adapt", "automate", "conduct"],
         "systems": ["Ashby", "Hubspot", "Clay", "dbt", "Figma"],
         "repeats": [],
         "notes": "32 postings found, newest 12 extracted"
       },
-      "manualWork": [],
+      "manualWork": ["schedule"],
       "gaps": []
     }
   ]

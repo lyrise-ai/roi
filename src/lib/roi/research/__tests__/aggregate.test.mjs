@@ -131,15 +131,41 @@ test('the three tiers are genuinely reachable', () => {
 
 // ── manualWorkIndicators ─────────────────────────────────────────────────────
 
-test('manualWorkIndicators keeps only verbs implying repetitive data work', () => {
-  /* "draft" and "advise" are real duties, but they are judgement rather than
-     repetition — automating them is not what this product sells. */
+test('manualWorkIndicators keeps document work and drops professional judgement', () => {
+  /* Calibrated against what 22 real professional-services firms actually
+     advertise. The first version of this set was written a priori around
+     back-office verbs (reconcile, re-key, chase invoices) and matched NOTHING
+     across the whole ICP — these firms advertise document work.
+
+     `draft` and `review` are in: the parent card's own worked example is
+     "people whose first listed duty is document review". `negotiate` and
+     `advise` are out: automating professional judgement is not what this
+     product sells, and claiming it in front of a partner would be
+     embarrassing. */
   const out = a.manualWorkIndicators([
     { title: 'Paralegal', taskVerbs: ['chase', 'draft', 'reconcile'] },
-    { title: 'Bookkeeper', taskVerbs: ['advise', 'collate'] },
+    { title: 'Associate', taskVerbs: ['negotiate', 'advise', 'review'] },
+    { title: 'Bookkeeper', taskVerbs: ['collate', 'mentor'] },
   ])
 
-  assert.deepEqual(out, ['chase', 'collate', 'reconcile'])
+  assert.deepEqual(out, ['chase', 'collate', 'draft', 'reconcile', 'review'])
+})
+
+test('irreducibly professional verbs are never counted as manual work', () => {
+  const out = a.manualWorkIndicators([
+    {
+      title: 'Partner',
+      taskVerbs: [
+        'negotiate',
+        'advise',
+        'advocate',
+        'represent',
+        'mentor',
+        'coach',
+      ],
+    },
+  ])
+  assert.deepEqual(out, [])
 })
 
 test('manualWorkIndicators dedupes, sorts, and survives junk', () => {

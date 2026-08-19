@@ -12,8 +12,16 @@
 
 /* Apollo and Explorium are absent on purpose — we hold neither, so S1 cascades
    PDL → site. Adding one later means adding its key here and its adapter in
-   scouts/s1.ts; nothing downstream of the scout changes. */
-export type ProviderKey = 'FIRECRAWL_API_KEY' | 'PDL_API_KEY'
+   scouts/s1.ts; nothing downstream of the scout changes.
+
+   Tavily and Brave are read through the same accessor even though the older ROI
+   pipeline reads them directly, so S2's discovery tier gets the same "blank is
+   a supported state" behaviour as every other provider here. */
+export type ProviderKey =
+  | 'FIRECRAWL_API_KEY'
+  | 'PDL_API_KEY'
+  | 'TAVILY_API_KEY'
+  | 'BRAVE_API_KEY'
 
 /* Null, never '' — so `if (!key)` and `if (key === undefined)` behave the same
    way at every call site and a blank line in .env.local reads as "absent"

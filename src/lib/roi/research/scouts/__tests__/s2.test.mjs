@@ -153,9 +153,14 @@ test('all six ATS platforms are attempted for every slug candidate', async () =>
 
   const result = await getJobPostings('acme-law.com')
 
+  /* `careers` is the L2 fallback and `search` is the L1.5 discovery tier —
+     neither is an ATS platform. */
   const platforms = new Set(
     result.sourcesAttempted
-      .filter((a) => !a.source.startsWith('careers'))
+      .filter(
+        (a) =>
+          !a.source.startsWith('careers') && !a.source.startsWith('search'),
+      )
       .map((a) => a.source.split(':')[0]),
   )
   assert.deepEqual([...platforms].sort(), [
@@ -170,7 +175,7 @@ test('all six ATS platforms are attempted for every slug candidate', async () =>
   /* Two slug candidates for a hyphenated domain, six platforms each. */
   const slugs = new Set(
     result.sourcesAttempted
-      .filter((a) => a.source.includes(':'))
+      .filter((a) => a.source.includes(':') && !a.source.startsWith('search'))
       .map((a) => a.source.split(':')[1]),
   )
   assert.deepEqual([...slugs].sort(), ['acme-law', 'acmelaw'])

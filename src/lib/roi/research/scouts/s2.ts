@@ -9,10 +9,18 @@
 //
 // The cascade, all of it internal to this file:
 //
-//   L0  slug candidates   domain → up to 3 guesses          deterministic
-//   L1  direct ATS        6 platforms, public no-auth JSON   concurrent
-//   L2  careers page      /careers, /jobs, … via the cache
-//   →   NONE
+//   L0   slug candidates  domain → up to 3 guesses          deterministic
+//   L1   direct ATS       6 platforms, public no-auth JSON   concurrent
+//   L1.5 search discovery ask where the jobs are, then fetch
+//   L2   careers page     /careers, /jobs, … via the cache
+//   →    NONE
+//
+// L1.5 exists because L0/L1/L2 all GUESS. Measured across 22 real
+// professional-services firms they produced usable postings for one of them:
+// most law and accountancy careers pages are recruitment-marketing prose with
+// no vacancy list and no links to job detail pages, and the ATS boards that do
+// exist sit on hosts nobody can guess (`{tenant}.wd5.myworkdayjobs.com`).
+// Searching first found a vacancy URL for 20 of the same 22.
 //
 // `getJobPostings(domain, region)` is the whole public surface. Keeping the
 // cascade private is what lets Ever Jobs — the open-source aggregator that
@@ -37,6 +45,7 @@ import { generateObject, jsonSchema } from 'ai'
 
 import { getFastModel } from '@/src/lib/roi/llm'
 import { getArtifact } from '../artifactCache'
+import { discoveryQuery, jobLinksFrom, rankHits, webSearch } from '../search'
 import {
   type Fact,
   type ScoutResult,
@@ -112,6 +121,14 @@ const MAX_POSTINGS_EXTRACTED = 12
    full run at ~30s, so one scout's fallback tier cannot be allowed to spend
    more than a fraction of that. */
 const L2_BUDGET_MS = 20_000
+
+/* How many discovered pages to fetch and extract per company. Each one is a
+   cache fetch plus one extraction call, so this is the tier's cost knob. */
+const MAX_DISCOVERED_PAGES = 4
+
+/* Individual job pages followed from a listing. Each is a cache fetch plus one
+   extraction call, so this is the other half of the tier's cost knob. */
+const MAX_JOB_LINKS = 6
 
 async function fetchJson(url: string): Promise<unknown | null> {
   try {
@@ -361,6 +378,111 @@ async function runL1(
         r.status === 'fulfilled' && r.value !== null,
     )
     .map((r) => r.value)
+}
+
+/* L1.5 — ask where the jobs are instead of guessing.
+   Everything discovered is fetched through the shared artifact cache, so a page
+   another scout already read costs nothing, and a page that blocks a plain
+   request still gets one Firecrawl attempt.
+
+   `rankHits` has already dropped LinkedIn, the scraped-content aggregators, and
+   any host that cannot be tied to this company — so nothing unattributable can
+   reach the fetch below. */
+async function runDiscovery(
+  domain: string,
+  vertical: string | undefined,
+  attempts: SourceAttempt[],
+): Promise<RawPosting[]> {
+  const startedAt = Date.now()
+  const query = discoveryQuery(domain, vertical)
+
+  let hits: Awaited<ReturnType<typeof webSearch>> = []
+  try {
+    hits = await webSearch(query)
+  } catch {
+    hits = []
+  }
+
+  const ranked = rankHits(hits, domain, MAX_DISCOVERED_PAGES)
+  attempts.push({
+    source: 'search',
+    outcome: ranked.length > 0 ? 'hit' : 'miss',
+    ms: Date.now() - startedAt,
+  })
+  if (ranked.length === 0) return []
+
+  const pages = await Promise.all(
+    ranked.map(async (hit) => {
+      const fetchedAt = Date.now()
+      const artifact = await getArtifact(hit.url)
+      const text = artifact ? stripHtml(artifact.content) : ''
+      const usable = text.length > 400
+      attempts.push({
+        source: `search:${new URL(hit.url).hostname}`,
+        outcome: usable ? 'hit' : 'miss',
+        ms: Date.now() - fetchedAt,
+      })
+      /* The search result's own title is a far better label than "Careers
+         page" — it is usually the role or the board name. */
+      return usable
+        ? {
+            page: { title: hit.title || 'Vacancies', body: text, url: hit.url },
+            links: jobLinksFrom(artifact.content, hit.url, MAX_JOB_LINKS),
+          }
+        : null
+    }),
+  )
+
+  const found = pages.filter(Boolean) as {
+    page: RawPosting
+    links: string[]
+  }[]
+
+  /* Follow the listing through to the individual roles. A board index names
+     the jobs; only the detail pages describe the work, and the work is the
+     entire point of this scout. */
+  const detailUrls = [...new Set(found.flatMap((f) => f.links))].slice(
+    0,
+    MAX_JOB_LINKS,
+  )
+  const details = await Promise.all(
+    detailUrls.map(async (url) => {
+      const startedDetail = Date.now()
+      const artifact = await getArtifact(url)
+      const text = artifact ? stripHtml(artifact.content) : ''
+      const usable = text.length > 200
+      attempts.push({
+        source: 'job-detail',
+        outcome: usable ? 'hit' : 'miss',
+        ms: Date.now() - startedDetail,
+      })
+      return usable ? { title: titleFromUrl(url), body: text, url } : null
+    }),
+  )
+  const realPostings = details.filter(Boolean) as RawPosting[]
+
+  /* Prefer real roles. Fall back to the listing pages only when following them
+     produced nothing, so a firm whose board we could read is never reported as
+     having no postings at all. */
+  return realPostings.length > 0 ? realPostings : found.map((f) => f.page)
+}
+
+/* `/en/uae/jobs/legal-assistant-1100020087` → "Legal Assistant". The slug is
+   the only title available before extraction runs, and it beats a generic
+   label for anything that later quotes the role. */
+function titleFromUrl(url: string): string {
+  try {
+    const last = new URL(url).pathname.split('/').filter(Boolean).pop() ?? ''
+    const words = last
+      .replace(/[-_]+/g, ' ')
+      .replace(/\b\d{4,}\b/g, '')
+      .trim()
+    return words === ''
+      ? 'Vacancy'
+      : words.replace(/\b[a-z]/g, (c) => c.toUpperCase())
+  } catch {
+    return 'Vacancy'
+  }
 }
 
 /* L2 — the tier that matters more than L1 for our actual customers. Most law
@@ -622,6 +744,7 @@ function buildFacts(postings: JobPostingFact[], boardUrl: SourceUrl): S2Facts {
 export async function getJobPostings(
   domainInput: string,
   region?: Region,
+  vertical?: string,
 ): Promise<ScoutResult<S2Facts>> {
   const startedAt = Date.now()
   const sourcesAttempted: SourceAttempt[] = []
@@ -664,6 +787,11 @@ export async function getJobPostings(
     notes.push(
       `${hits.map((h) => h.platform).join(', ')} board found with no open roles`,
     )
+  }
+
+  if (raw.length === 0) {
+    raw = await runDiscovery(domain, vertical, sourcesAttempted)
+    if (raw.length > 0) boardUrl = raw[0].url
   }
 
   if (raw.length === 0) {

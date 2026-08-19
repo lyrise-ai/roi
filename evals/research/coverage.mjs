@@ -86,14 +86,23 @@ async function measure(entry) {
        overstates ATS coverage — the postings, if any, came from the careers
        page. `notes` is where S2 records an empty board. */
     const emptyBoard = /board found with no open roles/.test(s2?.notes ?? '')
-    const atsHit = emptyBoard
-      ? null
-      : (s2?.sourcesAttempted ?? []).find(
-          (a) => a.outcome === 'hit' && !a.source.startsWith('careers'),
-        )
-    const emptyBoardSource = (s2?.sourcesAttempted ?? []).find(
-      (a) => a.outcome === 'hit' && !a.source.startsWith('careers'),
+    /* `search` is the L1.5 discovery tier, not an ATS platform. Counting it as
+       one overstated direct-ATS coverage in the first run of this harness. */
+    /* `job-detail` is a page followed FROM a discovered listing, so it belongs
+       to the discovery tier. Counting it as an ATS platform overstated direct
+       ATS coverage — the same mistake empty Workable boards caused earlier. */
+    const isAts = (a) =>
+      a.outcome === 'hit' &&
+      !a.source.startsWith('careers') &&
+      !a.source.startsWith('search') &&
+      a.source !== 'job-detail'
+    const searchHit = (s2?.sourcesAttempted ?? []).find(
+      (a) =>
+        a.outcome === 'hit' &&
+        (a.source.startsWith('search:') || a.source === 'job-detail'),
     )
+    const atsHit = emptyBoard ? null : (s2?.sourcesAttempted ?? []).find(isAts)
+    const emptyBoardSource = (s2?.sourcesAttempted ?? []).find(isAts)
     const careersHit = hit(s2, 'careers')
 
     return {
@@ -116,7 +125,13 @@ async function measure(entry) {
         status: s2?.status ?? null,
         postings: s2?.facts?.postings?.length ?? 0,
         /* Which tier of the cascade actually did the work — question 3. */
-        tierUsed: atsHit ? 'L1-ats' : careersHit ? 'L2-careers' : 'none',
+        tierUsed: atsHit
+          ? 'L1-ats'
+          : searchHit
+            ? 'L1.5-search'
+            : careersHit
+              ? 'L2-careers'
+              : 'none',
         platform: atsHit ? atsHit.source.split(':')[0] : null,
         emptyBoardOn:
           emptyBoard && emptyBoardSource
@@ -213,7 +228,7 @@ segmentRow(
 )
 
 console.log('\n══ Q3 — which S2 tier does the work ══')
-for (const tier of ['L1-ats', 'L2-careers', 'none']) {
+for (const tier of ['L1-ats', 'L1.5-search', 'L2-careers', 'none']) {
   const rows = icp.filter((r) => r.s2?.tierUsed === tier)
   console.log(
     `${tier.padEnd(12)} ${String(rows.length).padStart(2)}/${icp.length}  ${pct(rows.length, icp.length)}`,

@@ -507,7 +507,7 @@ function buildTools(
 
     fetch_page: tool({
       description:
-        'Fetch and read the content of a web page (company website, LinkedIn, Apollo, etc.).',
+        'Fetch and read the content of a web page (company website, Apollo, a search result, etc.). Never LinkedIn — it is blocked upstream and off-limits legally.',
       inputSchema: z.object({
         url: z.string().describe('The URL to fetch'),
       }),
@@ -1810,14 +1810,14 @@ COGNITIVE WORKFLOW (silent internal reasoning — never show phase names to user
 PHASE 1 — Intelligence Vectoring: define 3–5 Key Intelligence Questions across Executive, Corporate, and Industry vectors.
 
 PHASE 2 — Multi-Vector Intelligence Gathering. Research in this sequence:
-1. Fetch the company website directly using fetch_page
-2. Search data aggregators: web_search("{company} site:apollo.io OR site:clodura.ai OR site:zoominfo.com") then fetch_page the best result
-3. Search LinkedIn: web_search("{company} site:linkedin.com/company") then fetch_page for headcount + industry
-4. If a recipient name is provided: web_search("{name} {company} site:linkedin.com/in") and fetch_page their profile
-5. Search for financial/industry signals: web_search("{company} {industry} revenue employees {year}")
+1. Fetch the company website directly using fetch_page — the URL is given to you, so this is the one page you never have to go looking for.
+2. SEARCH BEFORE YOU FETCH for everything else. Never guess a URL beyond the homepage: do not try {website}/about, /services, /team or /careers on spec. Ask first — web_search("{company} services OR practice areas OR what we do") — and fetch_page only the URLs that come back. Firms restructure their sites constantly and guessed paths mostly 404; the search index already knows where the page really is.
+3. Search data aggregators: web_search("{company} site:apollo.io OR site:clodura.ai OR site:zoominfo.com") then fetch_page the best result
+4. Search for financial/industry signals: web_search("{company} {industry} revenue employees {year}")
+5. NEVER search or fetch LinkedIn, and never ask for a personal profile. Two separate reasons, both binding: fetch_page is hard-blocked on linkedin.com and returns an error rather than data, so it wastes a step for nothing; and unauthorised LinkedIn scraping is a live legal exposure — Proxycurl was shut down in July 2025 after LinkedIn's federal lawsuit — which matters because we sell to law firms. Headcount and industry come from the questionnaire, which is authoritative anyway.
 6. Search for salary/rate benchmarks for the roles that will own each workflow in this country and industry. MANDATORY — run at least 2 targeted searches:
    web_search("{industry} {country} operations manager hourly rate site:gulftalent.com OR site:bayt.com")
-   web_search("{industry} {country} average salary {role} {year} glassdoor OR linkedin")
+   web_search("{industry} {country} average salary {role} {year} glassdoor OR payscale")
    web_search("Robert Half salary guide {year} {country} {industry} {role}")
    Extract every specific figure (hourly, monthly, or annual) — the financial model will use them to set per-workflow seniority-differentiated rates. Without this data the modeler falls back to generic ranges.
 Narrate your findings to the user as you go. Flag confidence levels.
@@ -1835,7 +1835,7 @@ For EACH of the 4 workflows, before calling set_research_output, run a targeted 
   web_search('"{owner role}" salary {country}', maxResults=4)
 If the first attempt returns no usable salary numbers, retry ONCE with a single named source, e.g.:
   web_search('"{owner role}" salary {country} glassdoor', maxResults=4)
-Pick the source domain (glassdoor / payscale / levels.fyi / bayt / gulftalent / roberthalf / linkedin / indeed) most appropriate for the country.
+Pick the source domain (glassdoor / payscale / levels.fyi / bayt / gulftalent / roberthalf / indeed) most appropriate for the country — never linkedin, which is blocked and off-limits.
 Capture the snippets that contain salary numbers verbatim. You will pass them into set_research_output as salary_evidence[] — one entry per workflow with workflowName, roleQueried, sourceUrls, rawSnippets, and a best-effort parsed annual range. The ROI Modeler uses this evidence (not its own training data) to set the per-workflow hourly rate. If both searches return nothing for a role, still emit an evidence entry with empty arrays and null parsed values so the modeler knows to fall back to the regional benchmark table.
 
 PHASE 6 — Quantitative Dossier: baseline + automation impact + source type for each workflow.
@@ -2111,7 +2111,7 @@ RESEARCH  search_evidence(query)        — look up sources for any figure alrea
   When asked about sources: call search_evidence first. Only call web_search if evidence returns no match.
   Query patterns:
     • "{industry} {country} {role} hourly rate site:gulftalent.com OR site:bayt.com"
-    • "{industry} {country} average salary {role} {year} glassdoor OR linkedin"
+    • "{industry} {country} average salary {role} {year} glassdoor OR payscale"
     • "Robert Half salary guide {year} {industry} {country}"
   Convert to fully-loaded hourly: annual ÷ (${
     globals.workWeeksPerYear
@@ -2197,7 +2197,7 @@ export async function runReportAgent(params: {
   if (estimatesOnly) {
     roiWarn(
       'agent',
-      '⚠️  ESTIMATES-ONLY MODE — web research is DISABLED. No salary searches, no company website, no LinkedIn. Modeler will use regional benchmark fallbacks for ALL workflow rates. If you want real evidence-backed rates, do NOT click "Use Estimates"; let normal research run.',
+      '⚠️  ESTIMATES-ONLY MODE — web research is DISABLED. No salary searches, no company website. Modeler will use regional benchmark fallbacks for ALL workflow rates. If you want real evidence-backed rates, do NOT click "Use Estimates"; let normal research run.',
     )
   }
   const tracker = new UsageTracker({ company, mode })
