@@ -109,7 +109,14 @@ async function readPersisted(key: string): Promise<Artifact | null> {
     if (error || !data) return null
     if (new Date(data.expires_at).getTime() <= Date.now()) return null
     if (typeof data.content !== 'string' || data.content === '') return null
-    return { content: data.content, fetchedAt: data.fetched_at }
+    /* Postgres renders a timestamptz as "+00:00" where toISOString() renders
+       "Z". Both are valid ISO 8601 and the same instant, but this value becomes
+       Provenance.retrievedAt and gets displayed, so a cache hit and a fresh
+       fetch must not look different to anything downstream. */
+    return {
+      content: data.content,
+      fetchedAt: new Date(data.fetched_at).toISOString(),
+    }
   } catch {
     return null
   }
