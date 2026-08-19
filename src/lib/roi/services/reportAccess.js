@@ -1,4 +1,5 @@
 import { sendReportAccessAlert } from '@/src/lib/roi/services/email'
+import { visitStarts } from '@/src/lib/roi/services/visitWindow'
 
 // Prefer the request's own host over NEXT_PUBLIC_BASE_URL: the header always
 // matches whatever domain actually served this request (production, a Vercel
@@ -51,50 +52,71 @@ export async function trackReportAccess({
   const eventType = getEventType({ isShareLink, isAlpha, isEmployee })
   const accessType = getAccessType({ isShareLink, isAlpha, isEmployee })
 
-  const { count, error: countError } = await admin
+  // Record first, decide second. Two requests from the same open land
+  // milliseconds apart, so anything decided from a read taken *before* the
+  // write has both of them believing they are the only one — which is how a
+  // single visit produced two alerts numbered #2 and #3.
+  const { data: inserted, error: insertError } = await admin
     .from('events')
-    .select('id', { count: 'exact', head: true })
+    .insert({ user_id: viewerUserId, report_id: reportId, type: eventType })
+    .select('created_at')
+    .single()
+
+  if (insertError) {
+    console.error('[report-access] event insert failed:', insertError)
+  }
+
+  // Only logged-in employees viewing a report are excluded; every external
+  // and tester access is worth an alert.
+  if (isEmployee) return
+
+  // ponytail: anonymous share-link viewers share one identity, so two
+  // different people opening the same link within the window read as one
+  // visitor. Give the viewer a cookie if that distinction ever matters.
+  let history = admin
+    .from('events')
+    .select('created_at')
     .eq('report_id', reportId)
     .eq('type', eventType)
+  history = viewerUserId
+    ? history.eq('user_id', viewerUserId)
+    : history.is('user_id', null)
 
-  if (countError) {
-    console.error('[report-access] event count failed:', countError)
+  const { data: rows, error: historyError } = await history.order(
+    'created_at',
+    {
+      ascending: true,
+    },
+  )
+
+  if (historyError) {
+    console.error('[report-access] visit history failed:', historyError)
   }
 
-  const visitNumber = (count ?? 0) + 1
+  const times = (rows ?? []).map((row) => new Date(row.created_at).getTime())
+  const starts = visitStarts(times)
+  const mine = inserted?.created_at
+    ? new Date(inserted.created_at).getTime()
+    : null
 
-  const tasks = [
-    admin.from('events').insert({
-      user_id: viewerUserId,
-      report_id: reportId,
-      type: eventType,
-    }),
-  ]
+  // Someone else's request already opened this visit — it has been counted
+  // and alerted, and this one is the same person still arriving.
+  if (mine !== null && starts.at(-1) !== mine) return
 
-  // Notify ops on every external/tester access, not just the first — only
-  // logged-in employees viewing a report are excluded.
-  const shouldNotifyOps = !isEmployee
-  if (shouldNotifyOps) {
-    tasks.push(
-      sendReportAccessAlert({
-        companyName: report.company_name,
-        ownerEmail: report.email,
-        viewerEmail,
-        viewerUserId,
-        reportId,
-        reportUrl: buildReportUrl({ req, reportId, token, isAlpha }),
-        accessType,
-        visitNumber,
-      }),
-    )
+  try {
+    await sendReportAccessAlert({
+      companyName: report.company_name,
+      ownerEmail: report.email,
+      viewerEmail,
+      viewerUserId,
+      reportId,
+      reportUrl: buildReportUrl({ req, reportId, token, isAlpha }),
+      accessType,
+      visitNumber: starts.length,
+    })
+  } catch (err) {
+    // Nothing on the report path throws: a missed alert must not cost the
+    // viewer the page they asked for.
+    console.error('[report-access] alert failed:', err)
   }
-
-  const results = await Promise.allSettled(tasks)
-  results.forEach((result) => {
-    if (result.status === 'rejected') {
-      console.error('[report-access] tracking failed:', result.reason)
-    } else if (result.value?.error) {
-      console.error('[report-access] event insert failed:', result.value.error)
-    }
-  })
 }
