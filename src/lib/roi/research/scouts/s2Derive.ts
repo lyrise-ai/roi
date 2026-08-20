@@ -291,8 +291,25 @@ export function filterTaskVerbs(verbs: unknown): string[] {
    across a few days. */
 const MIN_REPEAT_GAP_DAYS = 14
 
+/* Drops listing pages. Verbs and named systems read off a careers page are
+   still real and still quotable, so `rankTaskVerbs` and `rankNamedSystems`
+   deliberately keep them — it is only the ROLE-shaped derivations, which
+   assume one entry is one job, that must not count a page. */
+export function realPostings<T extends { kind?: 'posting' | 'page' }>(
+  postings: T[],
+): T[] {
+  return Array.isArray(postings)
+    ? postings.filter((p) => (p?.kind ?? 'posting') !== 'page')
+    : []
+}
+
 export type CountedPosting = {
   title: string
+  /* 'page' entries are a careers or listing page we could read but not split
+     into roles. Every derivation below assumes one entry is one role, so they
+     are filtered out rather than counted — a single entry called "Careers
+     page" would otherwise be a role with a turnover history and a function. */
+  kind?: 'posting' | 'page'
   postedAt?: string
   taskVerbs?: string[]
   namedSystems?: { name: string; category: string }[]
@@ -309,6 +326,7 @@ export function repeatPostings(
   postings: CountedPosting[],
 ): { role: string; count: number; months: number }[] {
   if (!Array.isArray(postings)) return []
+  postings = realPostings(postings)
 
   const byRole = new Map<string, { title: string; dates: number[] }>()
   for (const posting of postings) {
@@ -350,7 +368,7 @@ export function functionDistribution(
 ): Record<string, number> {
   const out: Record<string, number> = {}
   if (!Array.isArray(postings)) return out
-  for (const posting of postings) {
+  for (const posting of realPostings(postings)) {
     const fn = functionForTitle(posting?.title ?? '')
     out[fn] = (out[fn] ?? 0) + 1
   }

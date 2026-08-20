@@ -33,11 +33,33 @@ import { getJobPostings } from './scouts/s2'
 import type { Region } from './scouts/s1Derive'
 import type { ScoutId, ScoutResult } from './types'
 
-/* Total wall-clock ceiling. Anything unresolved past this becomes ERROR with a
-   note, so a hung scout costs one row rather than the whole run. The interview
-   it runs behind lasts minutes, but nothing here should ever take 30s — that
-   is a backstop, not a budget. */
+/* Worst-case wall clock for a whole run, and deliberately the SUM of the
+   per-scout budgets below rather than a separate countdown they share. Anything
+   unresolved past its own budget becomes ERROR with a note, so a hung scout
+   costs one row rather than the run. The interview this sits behind lasts
+   minutes; nothing here should ever approach 30s. */
 export const RUN_BUDGET_MS = 30_000
+
+/* Per-scout budgets, deliberately NOT a shared countdown.
+
+   The first version handed S1 the whole run budget and gave S2 whatever was
+   left, floored at 1s. When S1 hung for the full 30s, S2 was dispatched with
+   1s, timed out instantly and reported ERROR — so the company scored THIN
+   because *both* scouts failed, when only one had. `stalawfirm.com` in the
+   25-domain coverage run is exactly this:
+
+     gaps: [ { S1, 'exceeded 30000ms budget' },
+             { S2, 'exceeded 1000ms budget'  } ]
+
+   S2's failure there was entirely an artifact of our own scheduling, and THIN
+   is the tier that tells the observation generator to say nothing at all. We
+   were staying silent about a company we could have spoken about.
+
+   S1's own target is ~1s and its observed p90 is well under 5s, so 10s is
+   generous. S2 legitimately takes longer — it searches, then fetches several
+   pages, then extracts each one. The two sum to RUN_BUDGET_MS by design. */
+export const S1_BUDGET_MS = 10_000
+export const S2_BUDGET_MS = 20_000
 
 const EMPTY_RESULT = (scout: ScoutId, notes: string): ScoutResult<null> => ({
   scout,
@@ -120,7 +142,7 @@ export async function runResearch(
   /* S1 alone and first. Every later scout picks sources by region, so
      dispatching them in parallel with S1 would mean routing on a region we do
      not have yet. */
-  const s1 = await settle('S1', runS1(domain), budgetMs)
+  const s1 = await settle('S1', runS1(domain), Math.min(S1_BUDGET_MS, budgetMs))
   await land(s1)
 
   const s1Facts = s1.facts as {
@@ -132,14 +154,18 @@ export async function runResearch(
      one — "legal" and "accounting" pull very different results. */
   const vertical = s1Facts?.vertical?.value
 
-  const remaining = Math.max(1_000, budgetMs - (Date.now() - startedAt))
+  /* S2's budget is its own, not the remainder of a shared countdown. Nothing
+     S1 did can shrink it, which is the whole point — a scout that blows its
+     budget now costs its own row and nothing else. It is still scaled down by
+     an unusually small `budgetMs` so a caller asking for a fast run gets one. */
+  const s2Budget = Math.min(S2_BUDGET_MS, budgetMs)
 
   /* allSettled, never all. With one scout in the POC the difference is
      invisible; with S3–S7 it is the difference between one provider outage
      degrading a row and taking down the run. The shape is here so adding a
      scout is appending to this array. */
   const rest = await Promise.allSettled([
-    settle('S2', getJobPostings(domain, region, vertical), remaining),
+    settle('S2', getJobPostings(domain, region, vertical), s2Budget),
   ])
 
   for (const outcome of rest) {

@@ -519,3 +519,40 @@ test('the careers sweep is bounded so one slow site cannot stall the run', async
   assert.ok(elapsed < 20_000, `sweep took ${elapsed}ms`)
   assert.ok(result.sourcesAttempted.some((a) => a.source.startsWith('careers')))
 })
+
+test('a careers-page read is labelled a page, not a job posting', async () => {
+  /* 13 of 22 ICP firms in the coverage run reported exactly one "posting"
+     that was really a recruitment-marketing page, 11 of them with no task
+     verbs. A panel rendering "1 job posting" off that shows the prospect
+     something we cannot point at — the specific failure this whole subsystem
+     exists to prevent. */
+  const careersHtml = `<html><body>${'We are hiring a paralegal to chase outstanding client documents and reconcile records. '.repeat(8)}</body></html>`
+  stubFetch((url) => {
+    if (url.includes('/careers')) {
+      return { ok: true, status: 200, text: async () => careersHtml }
+    }
+    return notFound()
+  })
+
+  const result = await getJobPostings('acmelaw.com')
+
+  assert.equal(result.facts.postings.length, 1)
+  assert.equal(result.facts.postings[0].kind, 'page')
+  assert.equal(
+    result.facts.postings.filter((p) => p.kind === 'posting').length,
+    0,
+    'nothing here is a real dated role',
+  )
+  /* And it must not become a role with a turnover history or a function. */
+  assert.deepEqual(result.facts.repeatPostings, [])
+  assert.deepEqual(result.facts.functionDistribution, {})
+})
+
+test('a real ATS posting is labelled a posting', async () => {
+  stubFetch((url) =>
+    url.includes('greenhouse') ? json({ jobs: [GREENHOUSE_JOB] }) : notFound(),
+  )
+  const result = await getJobPostings('acmelaw.com')
+  assert.equal(result.facts.postings[0].kind, 'posting')
+  assert.equal(result.facts.functionDistribution.legal, 1)
+})

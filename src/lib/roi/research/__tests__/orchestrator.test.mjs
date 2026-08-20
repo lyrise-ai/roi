@@ -314,3 +314,79 @@ test('the run reports its own duration', async () => {
   assert.equal(typeof run.durationMs, 'number')
   assert.equal(run.domain, 'acmelaw.com')
 })
+
+// ── per-scout budgets (LYR-210) ──────────────────────────────────────────────
+
+test('a hung S1 cannot starve S2 of its budget', async () => {
+  /* The bug this replaces: S1 was handed the whole run budget and S2 got
+     whatever remained, floored at 1s. A hung S1 therefore meant S2 timed out
+     before its first network call returned, and the company scored THIN
+     because *both* scouts appeared to fail — when only one had. THIN is the
+     tier that tells the observation generator to make no external claim at
+     all, so we were staying silent about companies we could have spoken
+     about, purely over our own scheduling.
+
+     S2 here takes 2s, which the old remainder budget would never have
+     allowed. */
+  globalThis.__s1 = () => new Promise(() => {})
+  globalThis.__s2 = async () => {
+    await new Promise((resolve) => setTimeout(resolve, 2_000))
+    return {
+      scout: 'S2',
+      status: 'FULL',
+      facts: { postings: [{ title: 'Paralegal' }] },
+      sourcesAttempted: [],
+      durationMs: 2_000,
+      costUsd: 0,
+    }
+  }
+
+  const run = await runResearch('acmelaw.com')
+
+  assert.equal(
+    run.summary.coverage.S1,
+    'ERROR',
+    'S1 should blow its own budget',
+  )
+  assert.equal(run.summary.coverage.S2, 'FULL', 'S2 must still get to look')
+  assert.notEqual(
+    run.summary.confidenceTier,
+    'THIN',
+    'scheduling must not push a company to THIN',
+  )
+})
+
+test('S1 is capped well below the whole run budget', async () => {
+  /* S1 targets ~1s and its observed p90 is under 5s, so it has no business
+     holding a run open for the full 30s. */
+  globalThis.__s1 = () => new Promise(() => {})
+  globalThis.__s2 = async () => ({
+    scout: 'S2',
+    status: 'NONE',
+    facts: null,
+    sourcesAttempted: [],
+    durationMs: 1,
+    costUsd: 0,
+  })
+
+  const startedAt = Date.now()
+  await runResearch('acmelaw.com')
+  const elapsed = Date.now() - startedAt
+
+  assert.ok(elapsed < 15_000, `run took ${elapsed}ms — S1 was not capped`)
+})
+
+test('an explicitly small budget still bounds both scouts', async () => {
+  /* Per-scout budgets must not silently override a caller asking for a fast
+     run. */
+  globalThis.__s1 = () => new Promise(() => {})
+  globalThis.__s2 = () => new Promise(() => {})
+
+  const startedAt = Date.now()
+  const run = await runResearch('acmelaw.com', { budgetMs: 1_000 })
+  const elapsed = Date.now() - startedAt
+
+  assert.ok(elapsed < 6_000, `run took ${elapsed}ms despite a 1s budget`)
+  assert.equal(run.summary.coverage.S1, 'ERROR')
+  assert.equal(run.summary.coverage.S2, 'ERROR')
+})
