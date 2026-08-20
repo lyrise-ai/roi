@@ -2,8 +2,12 @@
 
    Parallel route, deliberately. Everything under /v2 is isolated from the live
    alpha: no auth, no alpha cap, no `reports`/`state_data`, no SSE, and nothing
-   imported from `src/lib/roi/`. The live app must behave identically with this
-   directory deleted — which is also how it gets thrown away later.
+   imported from the production ROI pipeline (`src/lib/roi/pipeline`,
+   `src/lib/roi/agent.ts`, and friends). `src/lib/roi/v2/` is this POC's own
+   island within that directory — its own calculator (LYR-186) and answer
+   bridge (LYR-188), sharing no types or code path with the pipeline — and is
+   fair game. The live app must behave identically with this directory
+   deleted — which is also how it gets thrown away later.
 
    The token layer needs no import here: `styles/global.css` is loaded once in
    `pages/_app.js`, so every CSS custom property the primitives read is already
@@ -38,6 +42,11 @@ import {
   SegmentedInput,
   SuggestionBlock,
 } from '@components/ui'
+import {
+  assembleCalculatorInput,
+  bridgePainQuant,
+} from '@/src/lib/roi/v2/answerBridge'
+import { calculateMiniProfitMap } from '@/src/lib/roi/v2/miniCalculator'
 
 const STEPS = ['landing', 'company', 'interview', 'reveal']
 
@@ -58,6 +67,28 @@ const LEAD = {
   font: 'var(--type-body)',
   color: 'var(--neutral-600)',
   textWrap: 'pretty',
+}
+
+/* The reveal's two figures (LYR-188 / POC 10, piece 2). One size for both —
+   which one reads as "the good one" is the featured pain point's numbers,
+   not a bigger font on the second figure. */
+const FIGURE_LABEL = {
+  font: 'var(--weight-semibold) var(--text-sm)/var(--leading-normal) var(--font-body)',
+  color: 'var(--text-muted)',
+  margin: '0 0 var(--space-1)',
+}
+const FIGURE_VALUE = {
+  display: 'flex',
+  alignItems: 'baseline',
+  gap: 'var(--space-2)',
+  margin: 0,
+  font: 'var(--weight-extrabold) clamp(var(--text-3xl), 7vw, var(--text-5xl))/var(--leading-tight) var(--font-display)',
+  letterSpacing: 'var(--tracking-tight)',
+  color: 'var(--text-heading)',
+}
+const FIGURE_UNIT = {
+  font: 'var(--weight-regular) var(--text-lg)/1 var(--font-body)',
+  color: 'var(--text-muted)',
 }
 
 /* The design's entrance: each screen rises 8px as it mounts. It lives here
@@ -1259,23 +1290,69 @@ function Interview({
   )
 }
 
-/* What the calculator will read: the number the user gave, the range they gave,
-   or — for anything they left blank — the estimate, carrying the tag that says
-   whose number it is. A blank must never become a dash: the demo is walkable
-   without typing, so most answers in a demo run are blank, and a report full of
-   dashes is no report. The tag is what keeps that honest, so it is never
-   flattened away. */
-function quantAnswer(answer = {}, q) {
-  if (answer.mode === 'exact' && answer.exact) return answer.exact
-  if (answer.mode === 'range' && (answer.low || answer.high))
-    return `${answer.low || '—'} to ${answer.high || '—'}`
-  return `${q.estimate} (${q.kind})`
+const comma = (n) => Math.round(n).toLocaleString('en-US')
+const money = (n) => `$${comma(n)}`
+
+/* One pain point's quant answers, run through the bridge and the calculator.
+   annualHours never reads annualPay or automatablePct (it's just
+   people × hoursPerWeek × the calculator's own working-weeks constant), so a
+   pain point missing only pay or automatable can still show hours spent —
+   the dollar side is what gets held back, never a fabricated number. A pain
+   point missing people or hours/week has nothing to show at all. */
+function figuresFor(pain) {
+  const fields = bridgePainQuant(pain.quant)
+  const assembled = assembleCalculatorInput(fields, pain.team || undefined)
+
+  if (!assembled.incomplete) {
+    return { complete: true, calc: calculateMiniProfitMap(assembled) }
+  }
+  if (fields.people.value === null || fields.hoursPerWeek.value === null) {
+    return { complete: false, calc: null }
+  }
+  const calc = calculateMiniProfitMap({
+    people: fields.people.value,
+    hoursPerWeek: fields.hoursPerWeek.value,
+    annualPay: 0,
+    automatablePct: 0,
+  })
+  return { complete: false, calc: { annualHours: calc.annualHours } }
+}
+
+/* Deterministic feature selection (LYR-188): highest totalFinancialGain
+   wins, hoursReturned breaks a tie, pain-point order breaks anything left —
+   never random, never a model call, so the same flow always features the
+   same pain point and the choice is unit-testable. A pain point whose
+   figures are incomplete always ranks below one that isn't, regardless of
+   what its partial hours-spent number happens to be: an unbacked figure
+   should never outrank a backed one just because it looks bigger. */
+function selectFeatured(pains) {
+  return pains
+    .map((pain, index) => ({ pain, index, figures: figuresFor(pain) }))
+    .sort((a, b) => {
+      if (a.figures.complete !== b.figures.complete)
+        return a.figures.complete ? -1 : 1
+      if (a.figures.complete && b.figures.complete) {
+        const gain =
+          b.figures.calc.totalFinancialGain - a.figures.calc.totalFinancialGain
+        if (gain !== 0) return gain
+        const hours =
+          b.figures.calc.hoursReturned - a.figures.calc.hoursReturned
+        if (hours !== 0) return hours
+      }
+      return a.index - b.index
+    })[0]
 }
 
 /* `demo` is passed in rather than resolved here: an estimate the user left
    standing is only traceable against the record the interview actually showed
-   them. */
+   them.
+
+   Piece 2 (LYR-188 / POC 10): real figures for the featured pain point. The
+   observation sentence, the formula popovers and the final pitch styling are
+   later pieces — this is deliberately just the two numbers. */
 function Reveal({ flow, demo, onRestart }) {
+  const { pain, figures } = selectFeatured(flow.pains)
+
   return (
     <section
       className="v2-rise"
@@ -1290,33 +1367,64 @@ function Reveal({ flow, demo, onRestart }) {
       <h2 style={QUESTION}>
         {flow.company.name || (demo && demo.name) || 'Your company'}
       </h2>
-      {/* A stub until the reveal is built (LYR-186). It reads the interview's
-          real answers rather than a summary of them, which is the only thing
-          this screen has to prove today: everything the calculator needs is
-          in `flow.pains`. */}
-      <ol
-        style={{
-          ...LEAD,
-          margin: 'var(--space-4) 0 var(--space-6)',
-          paddingLeft: 'var(--space-5)',
-        }}
-      >
-        {flow.pains.map((pain, i) => (
-          <li key={i} style={{ marginBottom: 'var(--space-3)' }}>
-            {[
-              pain.fromGuess
-                ? `${pain.text} (our guess, not yours)`
-                : pain.text,
-              pain.team || 'team not named',
-              ...pain.quant.map((a, j) => {
-                const q = quantFor(demo, j)
-                return `${q.label} ${quantAnswer(a, q)}`
-              }),
-              `worst part: ${pain.worst || '—'}`,
-            ].join(' · ')}
-          </li>
-        ))}
-      </ol>
+
+      <p style={{ ...LEAD, margin: 'var(--space-3) 0 var(--space-8)' }}>
+        {pain.fromGuess ? `${pain.text} (our guess, not yours)` : pain.text}
+        {pain.team ? ` — ${pain.team}` : ''}
+      </p>
+
+      {!figures.calc && (
+        <p style={LEAD}>
+          Not enough here yet to put a number on it — go back and answer at
+          least how many people do this and how many hours a week.
+        </p>
+      )}
+
+      {figures.calc && (
+        <div
+          style={{
+            display: 'flex',
+            flexDirection: 'column',
+            gap: 'var(--space-8)',
+            margin: '0 0 var(--space-8)',
+          }}
+        >
+          {/* LEAD figure: hours currently SPENT. Solid and user-derived —
+              never "hours back", never "hours returned", never "hours
+              saved", and never marked, because it carries no assumption
+              beyond what was typed. */}
+          <div>
+            <p style={FIGURE_LABEL}>Hours currently spent</p>
+            <p style={FIGURE_VALUE}>
+              {comma(figures.calc.annualHours)}
+              <span style={FIGURE_UNIT}>hrs / year</span>
+            </p>
+          </div>
+
+          {figures.complete ? (
+            <div>
+              <p style={FIGURE_LABEL}>Hours returned, and what that’s worth</p>
+              <p style={FIGURE_VALUE}>
+                {comma(figures.calc.hoursReturned)}
+                <span style={FIGURE_UNIT}>hrs / year</span>
+              </p>
+              <p style={{ ...FIGURE_VALUE, marginTop: 'var(--space-2)' }}>
+                {money(figures.calc.totalFinancialGain)}
+                {/* Carries the automatable / adoption / realization
+                    assumptions — onClick is a placeholder until the formula
+                    popover (a later piece) exists. */}
+                <ProvenanceMark kind="estimated" onClick={() => {}} />
+              </p>
+            </div>
+          ) : (
+            <p style={LEAD}>
+              We don’t have enough here yet to put a return number on this one —
+              pay and how much still needs a person are missing.
+            </p>
+          )}
+        </div>
+      )}
+
       <Button variant="secondary" onClick={onRestart}>
         Start over
       </Button>
