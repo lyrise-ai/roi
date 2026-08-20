@@ -363,3 +363,51 @@ test('a role genuinely re-posted months later is still a repeat', () => {
   assert.equal(out.length, 1)
   assert.equal(out[0].count, 2)
 })
+
+// ── listing pages are not roles (LYR-211) ────────────────────────────────────
+
+test('realPostings drops listing pages and keeps real roles', () => {
+  const out = d.realPostings([
+    { title: 'Paralegal', kind: 'posting' },
+    { title: 'Careers page', kind: 'page' },
+    { title: 'Bookkeeper' },
+  ])
+  assert.deepEqual(
+    out.map((p) => p.title),
+    ['Paralegal', 'Bookkeeper'],
+  )
+  assert.deepEqual(d.realPostings(null), [])
+})
+
+test('a careers page can never look like a repeat posting', () => {
+  /* Before this, every firm reached through the careers-page tier had exactly
+     one "role" called Careers page — so turnover could never be detected for
+     the 73% of the ICP that came through that tier, and worse, two page reads
+     would have looked like a role posted twice. */
+  const out = d.repeatPostings([
+    { title: 'Careers page', kind: 'page', postedAt: daysAgo(10) },
+    { title: 'Careers page', kind: 'page', postedAt: daysAgo(60) },
+  ])
+  assert.deepEqual(out, [])
+})
+
+test('a careers page is not bucketed as a function', () => {
+  const out = d.functionDistribution([
+    { title: 'Paralegal', kind: 'posting' },
+    { title: 'Careers page', kind: 'page' },
+  ])
+  assert.deepEqual(out, { legal: 1 })
+})
+
+test('verbs read off a careers page are still kept', () => {
+  /* The page is a real source with a real URL. What it cannot support is a
+     claim about how many ROLES exist — the verbs on it are still quotable, so
+     dropping them would lose genuine signal. */
+  const out = d.rankTaskVerbs([
+    { title: 'Careers page', kind: 'page', taskVerbs: ['chase', 'collate'] },
+  ])
+  assert.deepEqual(
+    out.map((v) => v.verb),
+    ['chase', 'collate'],
+  )
+})

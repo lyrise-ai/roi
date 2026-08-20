@@ -123,7 +123,15 @@ async function measure(entry) {
       },
       s2: {
         status: s2?.status ?? null,
-        postings: s2?.facts?.postings?.length ?? 0,
+        /* Real dated roles only. A careers page we could read but not split
+           into roles is one web page, not one job, and counting it here is
+           how the measurement starts overstating what we know. */
+        postings: (s2?.facts?.postings ?? []).filter(
+          (p) => (p?.kind ?? 'posting') !== 'page',
+        ).length,
+        pagesOnly: (s2?.facts?.postings ?? []).filter(
+          (p) => p?.kind === 'page',
+        ).length,
         /* Which tier of the cascade actually did the work — question 3. */
         tierUsed: atsHit
           ? 'L1-ats'

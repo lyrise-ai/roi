@@ -69,6 +69,20 @@ import {
 
 export type JobPostingFact = {
   title: string
+  /* What this record actually is.
+
+       'posting' — one dated, individual role. The real thing: quotable,
+                   countable, and what every downstream consumer assumes.
+       'page'    — a careers or vacancy LISTING we could read but could not
+                   break into roles. One web page, not one job.
+
+     The distinction exists because collapsing it overstates what we know. 13
+     of 22 ICP firms in the coverage run reported exactly one "posting" that
+     was really a marketing page, 11 of them with no task verbs at all — and a
+     panel rendering "1 job posting" off that shows a prospect something we
+     cannot point at. Anything counting or ranking roles must filter to
+     'posting'. */
+  kind: 'posting' | 'page'
   postedAt?: string
   location?: string
   seniority?: string
@@ -108,6 +122,8 @@ type RawPosting = {
   url: string
   postedAt?: string
   location?: string
+  /* Absent means 'posting'. Only the listing-page fallbacks set 'page'. */
+  kind?: 'posting' | 'page'
 }
 
 const ATS_TIMEOUT_MS = 8_000
@@ -426,7 +442,12 @@ async function runDiscovery(
          page" — it is usually the role or the board name. */
       return usable
         ? {
-            page: { title: hit.title || 'Vacancies', body: text, url: hit.url },
+            page: {
+              kind: 'page',
+              title: hit.title || 'Vacancies',
+              body: text,
+              url: hit.url,
+            },
             links: jobLinksFrom(artifact.content, hit.url, MAX_JOB_LINKS),
           }
         : null
@@ -625,6 +646,7 @@ async function extractPosting(
   if (body.length < 80) {
     return {
       title: raw.title,
+      kind: raw.kind ?? 'posting',
       ...(raw.postedAt ? { postedAt: raw.postedAt } : {}),
       ...(raw.location ? { location: raw.location } : {}),
       sourceUrl: verifiedUrl,
@@ -658,6 +680,7 @@ async function extractPosting(
       claimed !== '' && body.includes(claimed) ? claimed : raw.title
     return {
       title: raw.title,
+      kind: raw.kind ?? 'posting',
       ...(raw.postedAt ? { postedAt: raw.postedAt } : {}),
       ...(raw.location ? { location: raw.location } : {}),
       ...(typeof out.seniority === 'string' && out.seniority !== ''
@@ -681,6 +704,7 @@ async function extractPosting(
     }
     return {
       title: raw.title,
+      kind: raw.kind ?? 'posting',
       ...(raw.postedAt ? { postedAt: raw.postedAt } : {}),
       ...(raw.location ? { location: raw.location } : {}),
       sourceUrl: verifiedUrl,
@@ -802,6 +826,7 @@ export async function getJobPostings(
          record, and marked as such by carrying the page's own URL. */
       raw = [
         {
+          kind: 'page',
           title: 'Careers page',
           body: careers.text,
           url: careers.url,
