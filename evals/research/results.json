@@ -1,0 +1,888 @@
+{
+  "ranAt": "2026-08-20T04:37:20.874Z",
+  "results": [
+    {
+      "domain": "tamimi.com",
+      "segment": "GCC",
+      "vertical": "legal",
+      "size": "large",
+      "ok": true,
+      "tier": "MODERATE",
+      "score": 0.75,
+      "durationMs": 7926,
+      "s1": {
+        "status": "ERROR",
+        "country": null,
+        "region": null,
+        "vertical": null,
+        "sizeBand": null,
+        "wonBy": null
+      },
+      "s2": {
+        "status": "FULL",
+        "postings": 6,
+        "pagesOnly": 0,
+        "tierUsed": "L1.5-search",
+        "platform": null,
+        "emptyBoardOn": "workable",
+        "careersPath": null,
+        "topVerbs": ["copy", "direct", "edit", "enhance", "fax"],
+        "systems": [
+          "dictaphone",
+          "document management systems",
+          "Oracle HR",
+          "transcription software"
+        ],
+        "repeats": [],
+        "notes": "workable board found with no open roles"
+      },
+      "manualWork": [
+        "copy",
+        "file",
+        "input",
+        "prepare",
+        "review",
+        "scan",
+        "track",
+        "transcribe"
+      ],
+      "gaps": [
+        {
+          "scout": "S1",
+          "reason": "pdl: no key configured"
+        }
+      ]
+    },
+    {
+      "domain": "alsuwaidi.ae",
+      "segment": "GCC",
+      "vertical": "legal",
+      "size": "mid",
+      "ok": true,
+      "tier": "RICH",
+      "score": 0.9,
+      "durationMs": 7303,
+      "s1": {
+        "status": "PARTIAL",
+        "country": "AE",
+        "region": "GCC",
+        "vertical": "legal",
+        "sizeBand": null,
+        "wonBy": "site"
+      },
+      "s2": {
+        "status": "FULL",
+        "postings": 0,
+        "pagesOnly": 1,
+        "tierUsed": "L1.5-search",
+        "platform": null,
+        "emptyBoardOn": null,
+        "careersPath": null,
+        "topVerbs": ["conduct", "draft", "handle", "liaise", "review"],
+        "systems": [],
+        "repeats": [],
+        "notes": null
+      },
+      "manualWork": ["draft", "liaise", "review"],
+      "gaps": []
+    },
+    {
+      "domain": "hadefpartners.com",
+      "segment": "GCC",
+      "vertical": "legal",
+      "size": "mid",
+      "ok": true,
+      "tier": "MODERATE",
+      "score": 0.6,
+      "durationMs": 7306,
+      "s1": {
+        "status": "PARTIAL",
+        "country": "AE",
+        "region": "GCC",
+        "vertical": "legal",
+        "sizeBand": null,
+        "wonBy": "site"
+      },
+      "s2": {
+        "status": "PARTIAL",
+        "postings": 0,
+        "pagesOnly": 1,
+        "tierUsed": "L1.5-search",
+        "platform": null,
+        "emptyBoardOn": null,
+        "careersPath": null,
+        "topVerbs": [],
+        "systems": [],
+        "repeats": [],
+        "notes": null
+      },
+      "manualWork": [],
+      "gaps": []
+    },
+    {
+      "domain": "galadarilaw.com",
+      "segment": "GCC",
+      "vertical": "legal",
+      "size": "mid",
+      "ok": true,
+      "tier": "RICH",
+      "score": 0.9,
+      "durationMs": 4496,
+      "s1": {
+        "status": "PARTIAL",
+        "country": "AE",
+        "region": "GCC",
+        "vertical": "legal",
+        "sizeBand": null,
+        "wonBy": "site"
+      },
+      "s2": {
+        "status": "FULL",
+        "postings": 2,
+        "pagesOnly": 0,
+        "tierUsed": "L1.5-search",
+        "platform": null,
+        "emptyBoardOn": "workable",
+        "careersPath": null,
+        "topVerbs": ["advise", "draft", "handle", "liaise", "negotiate"],
+        "systems": [],
+        "repeats": [],
+        "notes": "workable board found with no open roles"
+      },
+      "manualWork": ["draft", "liaise"],
+      "gaps": []
+    },
+    {
+      "domain": "stalawfirm.com",
+      "segment": "GCC",
+      "vertical": "legal",
+      "size": "mid",
+      "ok": true,
+      "tier": "THIN",
+      "score": 0,
+      "durationMs": 30006,
+      "s1": {
+        "status": "ERROR",
+        "country": null,
+        "region": null,
+        "vertical": null,
+        "sizeBand": null,
+        "wonBy": null
+      },
+      "s2": {
+        "status": "ERROR",
+        "postings": 0,
+        "pagesOnly": 0,
+        "tierUsed": "none",
+        "platform": null,
+        "emptyBoardOn": null,
+        "careersPath": null,
+        "topVerbs": [],
+        "systems": [],
+        "repeats": [],
+        "notes": "exceeded 20000ms budget"
+      },
+      "manualWork": [],
+      "gaps": [
+        {
+          "scout": "S1",
+          "reason": "exceeded 10000ms budget"
+        },
+        {
+          "scout": "S2",
+          "reason": "exceeded 20000ms budget"
+        }
+      ]
+    },
+    {
+      "domain": "bsabh.com",
+      "segment": "GCC",
+      "vertical": "legal",
+      "size": "mid",
+      "ok": true,
+      "tier": "MODERATE",
+      "score": 0.6,
+      "durationMs": 4933,
+      "s1": {
+        "status": "PARTIAL",
+        "country": null,
+        "region": "OTHER",
+        "vertical": "legal",
+        "sizeBand": null,
+        "wonBy": "site"
+      },
+      "s2": {
+        "status": "PARTIAL",
+        "postings": 0,
+        "pagesOnly": 1,
+        "tierUsed": "L2-careers",
+        "platform": null,
+        "emptyBoardOn": null,
+        "careersPath": "/careers",
+        "topVerbs": [],
+        "systems": [],
+        "repeats": [],
+        "notes": null
+      },
+      "manualWork": [],
+      "gaps": []
+    },
+    {
+      "domain": "hlbhamt.com",
+      "segment": "GCC",
+      "vertical": "accounting",
+      "size": "mid",
+      "ok": true,
+      "tier": "MODERATE",
+      "score": 0.6,
+      "durationMs": 3315,
+      "s1": {
+        "status": "PARTIAL",
+        "country": "AE",
+        "region": "GCC",
+        "vertical": "accounting",
+        "sizeBand": null,
+        "wonBy": "site"
+      },
+      "s2": {
+        "status": "PARTIAL",
+        "postings": 0,
+        "pagesOnly": 1,
+        "tierUsed": "L1.5-search",
+        "platform": null,
+        "emptyBoardOn": null,
+        "careersPath": null,
+        "topVerbs": [],
+        "systems": [],
+        "repeats": [],
+        "notes": null
+      },
+      "manualWork": [],
+      "gaps": []
+    },
+    {
+      "domain": "pkfuae.com",
+      "segment": "GCC",
+      "vertical": "accounting",
+      "size": "small",
+      "ok": true,
+      "tier": "RICH",
+      "score": 0.9,
+      "durationMs": 3867,
+      "s1": {
+        "status": "PARTIAL",
+        "country": null,
+        "region": "OTHER",
+        "vertical": "accounting",
+        "sizeBand": null,
+        "wonBy": "site"
+      },
+      "s2": {
+        "status": "FULL",
+        "postings": 1,
+        "pagesOnly": 0,
+        "tierUsed": "L1.5-search",
+        "platform": null,
+        "emptyBoardOn": null,
+        "careersPath": null,
+        "topVerbs": ["allocate", "arrange", "follow up", "liaise", "monitor"],
+        "systems": [],
+        "repeats": [],
+        "notes": null
+      },
+      "manualWork": [
+        "arrange",
+        "follow up",
+        "liaise",
+        "monitor",
+        "prepare",
+        "review"
+      ],
+      "gaps": []
+    },
+    {
+      "domain": "kingsleynapley.com",
+      "segment": "UK",
+      "vertical": "legal",
+      "size": "mid",
+      "ok": true,
+      "tier": "MODERATE",
+      "score": 0.4125,
+      "durationMs": 3521,
+      "s1": {
+        "status": "PARTIAL",
+        "country": "GB",
+        "region": "UK",
+        "vertical": "legal",
+        "sizeBand": null,
+        "wonBy": "site"
+      },
+      "s2": {
+        "status": "NONE",
+        "postings": 0,
+        "pagesOnly": 0,
+        "tierUsed": "none",
+        "platform": null,
+        "emptyBoardOn": null,
+        "careersPath": null,
+        "topVerbs": [],
+        "systems": [],
+        "repeats": [],
+        "notes": null
+      },
+      "manualWork": [],
+      "gaps": []
+    },
+    {
+      "domain": "gowlingwlg.com",
+      "segment": "UK",
+      "vertical": "legal",
+      "size": "large",
+      "ok": true,
+      "tier": "RICH",
+      "score": 0.9,
+      "durationMs": 15250,
+      "s1": {
+        "status": "PARTIAL",
+        "country": "CA",
+        "region": "OTHER",
+        "vertical": "legal",
+        "sizeBand": null,
+        "wonBy": "site"
+      },
+      "s2": {
+        "status": "FULL",
+        "postings": 6,
+        "pagesOnly": 0,
+        "tierUsed": "L1.5-search",
+        "platform": null,
+        "emptyBoardOn": null,
+        "careersPath": null,
+        "topVerbs": ["give", "have", "pass", "share"],
+        "systems": [],
+        "repeats": [],
+        "notes": null
+      },
+      "manualWork": [],
+      "gaps": []
+    },
+    {
+      "domain": "mishcon.com",
+      "segment": "UK",
+      "vertical": "legal",
+      "size": "large",
+      "ok": true,
+      "tier": "RICH",
+      "score": 0.9,
+      "durationMs": 14097,
+      "s1": {
+        "status": "PARTIAL",
+        "country": null,
+        "region": "OTHER",
+        "vertical": "legal",
+        "sizeBand": null,
+        "wonBy": "site"
+      },
+      "s2": {
+        "status": "FULL",
+        "postings": 6,
+        "pagesOnly": 0,
+        "tierUsed": "L1.5-search",
+        "platform": null,
+        "emptyBoardOn": null,
+        "careersPath": null,
+        "topVerbs": ["align", "plan", "track"],
+        "systems": ["The University of Law"],
+        "repeats": [],
+        "notes": null
+      },
+      "manualWork": ["track"],
+      "gaps": []
+    },
+    {
+      "domain": "osborneclarke.com",
+      "segment": "UK",
+      "vertical": "legal",
+      "size": "large",
+      "ok": true,
+      "tier": "RICH",
+      "score": 0.9,
+      "durationMs": 8491,
+      "s1": {
+        "status": "PARTIAL",
+        "country": null,
+        "region": "OTHER",
+        "vertical": "real-estate",
+        "sizeBand": null,
+        "wonBy": "site"
+      },
+      "s2": {
+        "status": "FULL",
+        "postings": 6,
+        "pagesOnly": 0,
+        "tierUsed": "L1.5-search",
+        "platform": null,
+        "emptyBoardOn": null,
+        "careersPath": null,
+        "topVerbs": ["monitor", "champion", "conduct", "deputise", "plan"],
+        "systems": ["InTapp"],
+        "repeats": [],
+        "notes": null
+      },
+      "manualWork": ["monitor"],
+      "gaps": []
+    },
+    {
+      "domain": "shoosmiths.com",
+      "segment": "UK",
+      "vertical": "legal",
+      "size": "large",
+      "ok": true,
+      "tier": "RICH",
+      "score": 0.9,
+      "durationMs": 4440,
+      "s1": {
+        "status": "PARTIAL",
+        "country": null,
+        "region": "OTHER",
+        "vertical": "legal",
+        "sizeBand": null,
+        "wonBy": "site"
+      },
+      "s2": {
+        "status": "FULL",
+        "postings": 6,
+        "pagesOnly": 0,
+        "tierUsed": "L1.5-search",
+        "platform": null,
+        "emptyBoardOn": null,
+        "careersPath": null,
+        "topVerbs": [],
+        "systems": ["BPP", "BPP University"],
+        "repeats": [],
+        "notes": null
+      },
+      "manualWork": [],
+      "gaps": []
+    },
+    {
+      "domain": "charlesrussellspeechlys.com",
+      "segment": "UK",
+      "vertical": "legal",
+      "size": "mid",
+      "ok": true,
+      "tier": "THIN",
+      "score": 0.15,
+      "durationMs": 20614,
+      "s1": {
+        "status": "PARTIAL",
+        "country": "GB",
+        "region": "UK",
+        "vertical": "legal",
+        "sizeBand": null,
+        "wonBy": "site"
+      },
+      "s2": {
+        "status": "ERROR",
+        "postings": 0,
+        "pagesOnly": 0,
+        "tierUsed": "none",
+        "platform": null,
+        "emptyBoardOn": null,
+        "careersPath": null,
+        "topVerbs": [],
+        "systems": [],
+        "repeats": [],
+        "notes": "exceeded 20000ms budget"
+      },
+      "manualWork": [],
+      "gaps": [
+        {
+          "scout": "S2",
+          "reason": "exceeded 20000ms budget"
+        }
+      ]
+    },
+    {
+      "domain": "farrer.co.uk",
+      "segment": "UK",
+      "vertical": "legal",
+      "size": "mid",
+      "ok": true,
+      "tier": "MODERATE",
+      "score": 0.6,
+      "durationMs": 4700,
+      "s1": {
+        "status": "PARTIAL",
+        "country": "GB",
+        "region": "UK",
+        "vertical": "legal",
+        "sizeBand": null,
+        "wonBy": "site"
+      },
+      "s2": {
+        "status": "PARTIAL",
+        "postings": 0,
+        "pagesOnly": 1,
+        "tierUsed": "L2-careers",
+        "platform": null,
+        "emptyBoardOn": "workable",
+        "careersPath": "/careers",
+        "topVerbs": [],
+        "systems": [],
+        "repeats": [],
+        "notes": "workable board found with no open roles"
+      },
+      "manualWork": [],
+      "gaps": []
+    },
+    {
+      "domain": "burges-salmon.com",
+      "segment": "UK",
+      "vertical": "legal",
+      "size": "mid",
+      "ok": true,
+      "tier": "RICH",
+      "score": 0.9,
+      "durationMs": 7220,
+      "s1": {
+        "status": "PARTIAL",
+        "country": null,
+        "region": "OTHER",
+        "vertical": "legal",
+        "sizeBand": null,
+        "wonBy": "site"
+      },
+      "s2": {
+        "status": "FULL",
+        "postings": 0,
+        "pagesOnly": 2,
+        "tierUsed": "L1.5-search",
+        "platform": null,
+        "emptyBoardOn": null,
+        "careersPath": null,
+        "topVerbs": ["assess", "evaluate"],
+        "systems": [
+          "Copilot",
+          "Copilot Studio",
+          "High Q",
+          "Power apps",
+          "Power BI"
+        ],
+        "repeats": [],
+        "notes": null
+      },
+      "manualWork": [],
+      "gaps": []
+    },
+    {
+      "domain": "stevens-bolton.com",
+      "segment": "UK",
+      "vertical": "legal",
+      "size": "small",
+      "ok": true,
+      "tier": "RICH",
+      "score": 0.9,
+      "durationMs": 6256,
+      "s1": {
+        "status": "PARTIAL",
+        "country": "GB",
+        "region": "UK",
+        "vertical": "legal",
+        "sizeBand": null,
+        "wonBy": "site"
+      },
+      "s2": {
+        "status": "FULL",
+        "postings": 5,
+        "pagesOnly": 0,
+        "tierUsed": "L1.5-search",
+        "platform": null,
+        "emptyBoardOn": null,
+        "careersPath": null,
+        "topVerbs": ["apply", "attend", "be involved", "contact", "interview"],
+        "systems": [],
+        "repeats": [],
+        "notes": null
+      },
+      "manualWork": [],
+      "gaps": []
+    },
+    {
+      "domain": "bdo.co.uk",
+      "segment": "UK",
+      "vertical": "accounting",
+      "size": "large",
+      "ok": true,
+      "tier": "MODERATE",
+      "score": 0.4125,
+      "durationMs": 5697,
+      "s1": {
+        "status": "PARTIAL",
+        "country": "GB",
+        "region": "UK",
+        "vertical": "accounting",
+        "sizeBand": null,
+        "wonBy": "site"
+      },
+      "s2": {
+        "status": "NONE",
+        "postings": 0,
+        "pagesOnly": 0,
+        "tierUsed": "none",
+        "platform": null,
+        "emptyBoardOn": "workable",
+        "careersPath": null,
+        "topVerbs": [],
+        "systems": [],
+        "repeats": [],
+        "notes": "workable board found with no open roles"
+      },
+      "manualWork": [],
+      "gaps": []
+    },
+    {
+      "domain": "morganlewis.com",
+      "segment": "US",
+      "vertical": "legal",
+      "size": "large",
+      "ok": true,
+      "tier": "RICH",
+      "score": 0.9,
+      "durationMs": 10901,
+      "s1": {
+        "status": "PARTIAL",
+        "country": null,
+        "region": "OTHER",
+        "vertical": "legal",
+        "sizeBand": null,
+        "wonBy": "site"
+      },
+      "s2": {
+        "status": "FULL",
+        "postings": 6,
+        "pagesOnly": 0,
+        "tierUsed": "L1.5-search",
+        "platform": null,
+        "emptyBoardOn": null,
+        "careersPath": null,
+        "topVerbs": ["attend", "conduct", "draft"],
+        "systems": ["online application system"],
+        "repeats": [],
+        "notes": null
+      },
+      "manualWork": ["draft"],
+      "gaps": []
+    },
+    {
+      "domain": "withersworldwide.com",
+      "segment": "US",
+      "vertical": "legal",
+      "size": "large",
+      "ok": true,
+      "tier": "MODERATE",
+      "score": 0.6,
+      "durationMs": 6897,
+      "s1": {
+        "status": "PARTIAL",
+        "country": "SG",
+        "region": "OTHER",
+        "vertical": "legal",
+        "sizeBand": null,
+        "wonBy": "site"
+      },
+      "s2": {
+        "status": "PARTIAL",
+        "postings": 6,
+        "pagesOnly": 0,
+        "tierUsed": "L1.5-search",
+        "platform": null,
+        "emptyBoardOn": null,
+        "careersPath": null,
+        "topVerbs": [],
+        "systems": [],
+        "repeats": [],
+        "notes": null
+      },
+      "manualWork": [],
+      "gaps": []
+    },
+    {
+      "domain": "bakertilly.com",
+      "segment": "US",
+      "vertical": "accounting",
+      "size": "large",
+      "ok": true,
+      "tier": "RICH",
+      "score": 0.9,
+      "durationMs": 2986,
+      "s1": {
+        "status": "PARTIAL",
+        "country": null,
+        "region": "OTHER",
+        "vertical": "accounting",
+        "sizeBand": null,
+        "wonBy": "site"
+      },
+      "s2": {
+        "status": "FULL",
+        "postings": 12,
+        "pagesOnly": 0,
+        "tierUsed": "L1-ats",
+        "platform": "workable",
+        "emptyBoardOn": null,
+        "careersPath": null,
+        "topVerbs": [
+          "beoordelen",
+          "ondersteunen",
+          "vertalen",
+          "beheren",
+          "ondersteun"
+        ],
+        "systems": [],
+        "repeats": [],
+        "notes": "167 postings found, newest 12 extracted"
+      },
+      "manualWork": [],
+      "gaps": []
+    },
+    {
+      "domain": "rsmus.com",
+      "segment": "US",
+      "vertical": "accounting",
+      "size": "large",
+      "ok": true,
+      "tier": "RICH",
+      "score": 0.9,
+      "durationMs": 6865,
+      "s1": {
+        "status": "PARTIAL",
+        "country": null,
+        "region": "OTHER",
+        "vertical": "accounting",
+        "sizeBand": null,
+        "wonBy": "site"
+      },
+      "s2": {
+        "status": "FULL",
+        "postings": 6,
+        "pagesOnly": 0,
+        "tierUsed": "L1.5-search",
+        "platform": null,
+        "emptyBoardOn": "workable",
+        "careersPath": null,
+        "topVerbs": [],
+        "systems": [
+          "Dayforce",
+          "Microsoft",
+          "NetSuite",
+          "Sage Intacct",
+          "Salesforce"
+        ],
+        "repeats": [],
+        "notes": "workable board found with no open roles"
+      },
+      "manualWork": [],
+      "gaps": []
+    },
+    {
+      "domain": "figma.com",
+      "segment": "control",
+      "vertical": "software",
+      "size": "large",
+      "ok": true,
+      "tier": "RICH",
+      "score": 0.9,
+      "durationMs": 5780,
+      "s1": {
+        "status": "PARTIAL",
+        "country": null,
+        "region": "OTHER",
+        "vertical": null,
+        "sizeBand": null,
+        "wonBy": "site"
+      },
+      "s2": {
+        "status": "FULL",
+        "postings": 12,
+        "pagesOnly": 0,
+        "tierUsed": "L1-ats",
+        "platform": "workable",
+        "emptyBoardOn": null,
+        "careersPath": null,
+        "topVerbs": ["define", "refine", "set", "act", "address"],
+        "systems": ["Cvent", "Figma", "Google Workspace", "JAMF", "Okta"],
+        "repeats": [],
+        "notes": "163 postings found, newest 12 extracted"
+      },
+      "manualWork": ["monitor", "track"],
+      "gaps": []
+    },
+    {
+      "domain": "ramp.com",
+      "segment": "control",
+      "vertical": "software",
+      "size": "large",
+      "ok": true,
+      "tier": "RICH",
+      "score": 0.9,
+      "durationMs": 3625,
+      "s1": {
+        "status": "PARTIAL",
+        "country": null,
+        "region": "OTHER",
+        "vertical": "accounting",
+        "sizeBand": null,
+        "wonBy": "site"
+      },
+      "s2": {
+        "status": "FULL",
+        "postings": 12,
+        "pagesOnly": 0,
+        "tierUsed": "L1-ats",
+        "platform": "workable",
+        "emptyBoardOn": null,
+        "careersPath": null,
+        "topVerbs": ["coach", "define", "design", "diagnose", "educate"],
+        "systems": ["Claude Code", "Codex", "AI", "AWS", "Azure"],
+        "repeats": [],
+        "notes": "136 postings found, newest 12 extracted"
+      },
+      "manualWork": ["follow up"],
+      "gaps": []
+    },
+    {
+      "domain": "linear.app",
+      "segment": "control",
+      "vertical": "software",
+      "size": "mid",
+      "ok": true,
+      "tier": "RICH",
+      "score": 0.9,
+      "durationMs": 3209,
+      "s1": {
+        "status": "PARTIAL",
+        "country": null,
+        "region": "OTHER",
+        "vertical": null,
+        "sizeBand": null,
+        "wonBy": "site"
+      },
+      "s2": {
+        "status": "FULL",
+        "postings": 12,
+        "pagesOnly": 0,
+        "tierUsed": "L1-ats",
+        "platform": "workable",
+        "emptyBoardOn": null,
+        "careersPath": null,
+        "topVerbs": ["design", "use", "define", "complete", "conduct"],
+        "systems": ["Ashby", "Hubspot", "Clay", "dbt Cloud", "Figma"],
+        "repeats": [],
+        "notes": "32 postings found, newest 12 extracted"
+      },
+      "manualWork": ["schedule"],
+      "gaps": []
+    }
+  ]
+}
