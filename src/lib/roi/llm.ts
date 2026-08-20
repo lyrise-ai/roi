@@ -31,6 +31,17 @@ export function getResearchModel() {
   return getOpenAIProvider()('gpt-5.6-terra')
 }
 
+/* Used for: the research analyst, which reasons once per company over
+   everything the scouts found, with structured output. The same tier as the
+   research agent above today — the helpers are separate because they answer
+   different questions, not because they happen to differ. This one runs once
+   per scout that adds sources rather than once per posting, so it is not
+   latency-critical the way extraction is, and it needs the 1.05M context
+   because a firm with thirty postings must never be truncated. */
+export function getAnalystModel() {
+  return getOpenAIProvider()('gpt-5.6-terra')
+}
+
 // Used for: ROI Modeler and job-posting extraction (structured JSON, no
 // complex reasoning needed) — the highest-volume calls in the app, one per
 // posting. Luna is the cost-sensitive tier at $0.20/$1.20 per MTok.
