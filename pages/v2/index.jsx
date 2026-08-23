@@ -35,6 +35,7 @@ import Image from 'next/image'
 import Logo from '@/src/assets/logo.svg'
 import {
   Button,
+  Dialog,
   Icon,
   Input,
   ProvenanceMark,
@@ -91,6 +92,19 @@ const FIGURE_UNIT = {
   font: 'var(--weight-regular) var(--text-lg)/1 var(--font-body)',
   color: 'var(--text-muted)',
 }
+
+/* Piece 4 (LYR-188 / POC 10): the return figure's formula popover. Every
+   line is calc.formulas[key] verbatim — never hand-rebuilt arithmetic here —
+   in the order that actually derives the return figure. `annualHours` is
+   deliberately excluded: it's the OTHER (unmarked, unestimated) figure's own
+   formula, not an assumption behind this one. */
+const FORMULA_ROWS = [
+  { key: 'hoursReturned', label: 'Hours returned' },
+  { key: 'ratePerHour', label: 'Rate per hour' },
+  { key: 'operationalDividend', label: 'Operational dividend' },
+  { key: 'profitUplift', label: 'Profit uplift' },
+  { key: 'totalFinancialGain', label: 'Total financial gain' },
+]
 
 /* The design's entrance: each screen rises 8px as it mounts. It lives here
    rather than in styles/global.css so /v2 stays deletable as one directory,
@@ -1362,6 +1376,20 @@ function Reveal({ flow, demo, onRestart }) {
     figures.calc ? figures.calc.annualHours : null,
   )
 
+  // Piece 4: the return figure's formula popover. Local to Reveal — the
+  // Dialog primitive itself has no Escape handling (neither does its one
+  // other caller, pages/ui-kit.jsx), so that's added here rather than in
+  // the shared component.
+  const [formulaOpen, setFormulaOpen] = React.useState(false)
+  React.useEffect(() => {
+    if (!formulaOpen) return undefined
+    const onKeyDown = (e) => {
+      if (e.key === 'Escape') setFormulaOpen(false)
+    }
+    window.addEventListener('keydown', onKeyDown)
+    return () => window.removeEventListener('keydown', onKeyDown)
+  }, [formulaOpen])
+
   return (
     <section
       className="v2-rise"
@@ -1419,9 +1447,11 @@ function Reveal({ flow, demo, onRestart }) {
               <p style={{ ...FIGURE_VALUE, marginTop: 'var(--space-2)' }}>
                 {money(figures.calc.totalFinancialGain)}
                 {/* Carries the automatable / adoption / realization
-                    assumptions — onClick is a placeholder until the formula
-                    popover (a later piece) exists. */}
-                <ProvenanceMark kind="estimated" onClick={() => {}} />
+                    assumptions — opens the formula popover below. */}
+                <ProvenanceMark
+                  kind="estimated"
+                  onClick={() => setFormulaOpen(true)}
+                />
               </p>
             </div>
           ) : (
@@ -1431,6 +1461,44 @@ function Reveal({ flow, demo, onRestart }) {
             </p>
           )}
         </div>
+      )}
+
+      {/* Formula popover (LYR-188 / POC 10, piece 4). Only reachable when
+          figures.complete — that's the only state where calc.formulas exists
+          and the mark that opens it is rendered — but gated again here so a
+          stale open state can never read formulas off an incomplete calc. */}
+      {figures.complete && (
+        <Dialog
+          open={formulaOpen}
+          onClose={() => setFormulaOpen(false)}
+          title="How this number was calculated"
+          description="Straight from the calculator — nothing rounded differently here than what's shown above."
+        >
+          <div
+            style={{
+              display: 'flex',
+              flexDirection: 'column',
+              gap: 'var(--space-4)',
+            }}
+          >
+            {FORMULA_ROWS.map((row) => (
+              <div key={row.key}>
+                <p style={{ ...FIGURE_LABEL, margin: '0 0 var(--space-1)' }}>
+                  {row.label}
+                </p>
+                <p
+                  style={{
+                    font: 'var(--type-body)',
+                    color: 'var(--text-heading)',
+                    margin: 0,
+                  }}
+                >
+                  {figures.calc.formulas[row.key]}
+                </p>
+              </div>
+            ))}
+          </div>
+        </Dialog>
       )}
 
       <Button variant="secondary" onClick={onRestart}>
