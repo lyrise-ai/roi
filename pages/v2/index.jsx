@@ -47,6 +47,7 @@ import {
   bridgePainQuant,
 } from '@/src/lib/roi/v2/answerBridge'
 import { calculateMiniProfitMap } from '@/src/lib/roi/v2/miniCalculator'
+import { buildObservationSentence } from '@/src/lib/roi/v2/observation'
 
 const STEPS = ['landing', 'company', 'interview', 'reveal']
 
@@ -1347,11 +1348,19 @@ function selectFeatured(pains) {
    standing is only traceable against the record the interview actually showed
    them.
 
-   Piece 2 (LYR-188 / POC 10): real figures for the featured pain point. The
-   observation sentence, the formula popovers and the final pitch styling are
-   later pieces — this is deliberately just the two numbers. */
+   Piece 2 (LYR-188 / POC 10): real figures for the featured pain point.
+   Piece 3: the observation sentence above them — the "we heard you" moment,
+   built by buildObservationSentence() from the same bridged fields figures
+   came from, never from an LLM (CLAUDE.md: the LLM never does arithmetic).
+   The formula popovers and the final pitch styling are later pieces. */
 function Reveal({ flow, demo, onRestart }) {
   const { pain, figures } = selectFeatured(flow.pains)
+  const fields = bridgePainQuant(pain.quant)
+  const observation = buildObservationSentence(
+    fields.people,
+    fields.hoursPerWeek,
+    figures.calc ? figures.calc.annualHours : null,
+  )
 
   return (
     <section
@@ -1369,8 +1378,7 @@ function Reveal({ flow, demo, onRestart }) {
       </h2>
 
       <p style={{ ...LEAD, margin: 'var(--space-3) 0 var(--space-8)' }}>
-        {pain.fromGuess ? `${pain.text} (our guess, not yours)` : pain.text}
-        {pain.team ? ` — ${pain.team}` : ''}
+        {observation}
       </p>
 
       {!figures.calc && (
