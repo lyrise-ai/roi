@@ -17,9 +17,10 @@
 // Writes evals/research/results.json next to this file and prints the summary
 // that goes onto the Linear card.
 //
-// This costs real money and real credits: one gpt-4o-mini extraction per
-// posting, and a Firecrawl credit per careers page that blocks a plain fetch.
-// It is not part of `npm test` for that reason.
+// This costs real money and real credits: one fast-model extraction per
+// posting, one analyst call per scout that adds sources, and a Firecrawl credit
+// per careers page that blocks a plain fetch. It is not part of `npm test` for
+// that reason.
 // ─────────────────────────────────────────────────────────────────────────────
 
 import fs from 'node:fs'
@@ -51,9 +52,20 @@ const CONCURRENCY = 3
 
 const cacheRoot = path.join(root, 'node_modules/.cache')
 fs.mkdirSync(cacheRoot, { recursive: true })
+
+/* One entry re-exporting both, because the analyst is the thing this harness
+   now exists to read and it does not sit inside the orchestrator — the
+   orchestrator deliberately imports no model. Bundling them separately would
+   give each its own copy of the fact-store and cache modules. */
+const entry = path.join(cacheRoot, 'r8-entry.ts')
+fs.writeFileSync(
+  entry,
+  `export { runResearch } from ${JSON.stringify(path.join(root, 'src/lib/roi/research/orchestrator.ts'))}\n` +
+    `export { createResearchAnalyst } from ${JSON.stringify(path.join(root, 'src/lib/roi/research/researchAnalyst.ts'))}\n`,
+)
 const outfile = path.join(cacheRoot, 'r8-orchestrator.mjs')
 await esbuild.build({
-  entryPoints: [path.join(root, 'src/lib/roi/research/orchestrator.ts')],
+  entryPoints: [entry],
   bundle: true,
   packages: 'external',
   platform: 'node',
@@ -62,7 +74,9 @@ await esbuild.build({
   outfile,
   logLevel: 'silent',
 })
-const { runResearch } = await import(pathToFileURL(outfile).href)
+const { runResearch, createResearchAnalyst } = await import(
+  pathToFileURL(outfile).href
+)
 
 const { domains } = JSON.parse(
   fs.readFileSync(path.join(here, 'domains.json'), 'utf8'),
@@ -72,7 +86,20 @@ const targets = domains.slice(0, LIMIT)
 async function measure(entry) {
   const startedAt = Date.now()
   try {
-    const run = await runResearch(entry.domain)
+    /* The analyst runs off the same hook the scan panel will use, so what this
+       harness prints is what a prospect would have been shown — including the
+       order it arrived in. `firstFindingMs` is the number the ~3s first-paint
+       target is judged against. */
+    let firstFindingMs = null
+    const analyst = createResearchAnalyst(entry.domain, {
+      onFinding: () => {
+        firstFindingMs ??= Date.now() - startedAt
+      },
+    })
+    const run = await runResearch(entry.domain, {
+      onScoutResolved: analyst.onScoutResolved,
+    })
+    const assessment = await analyst.settled()
     const s1 = await run.store.get('S1')
     const s2 = await run.store.get('S2')
 
@@ -129,9 +156,8 @@ async function measure(entry) {
         postings: (s2?.facts?.postings ?? []).filter(
           (p) => (p?.kind ?? 'posting') !== 'page',
         ).length,
-        pagesOnly: (s2?.facts?.postings ?? []).filter(
-          (p) => p?.kind === 'page',
-        ).length,
+        pagesOnly: (s2?.facts?.postings ?? []).filter((p) => p?.kind === 'page')
+          .length,
         /* Which tier of the cascade actually did the work — question 3. */
         tierUsed: atsHit
           ? 'L1-ats'
@@ -155,7 +181,19 @@ async function measure(entry) {
         repeats: s2?.facts?.repeatPostings ?? [],
         notes: s2?.notes ?? null,
       },
-      manualWork: run.summary.manualWorkIndicators,
+      /* The old `manualWork` field was the verb-set intersection, deleted with
+         the set in LYR-216. What replaces it cannot be scored automatically —
+         the check is reading these findings for 5-10 firms and asking whether
+         each is true, specific to that company, and worth a prospect's
+         attention. */
+      analyst: {
+        tier: assessment.confidenceTier,
+        firstFindingMs,
+        findings: assessment.findings,
+        manualWorkSignals: assessment.manualWorkSignals,
+        reasoning: assessment.reasoning,
+        gaps: assessment.gaps,
+      },
       gaps: run.summary.gaps,
     }
   } catch (error) {
@@ -189,6 +227,7 @@ await Promise.all(
           `S2=${(row.s2?.status ?? '-').padEnd(7)} ` +
           `posts=${String(row.s2?.postings ?? 0).padStart(3)} ` +
           `via=${(row.s2?.tierUsed ?? '-').padEnd(11)} ` +
+          `find=${String(row.analyst?.findings?.length ?? 0).padStart(2)} ` +
           `${Math.round((row.durationMs ?? 0) / 100) / 10}s\n`,
       )
     }

@@ -1,11 +1,22 @@
 // ─────────────────────────────────────────────────────────────────────────────
 // aggregate — derived facts and the confidence model (LYR-187 R5 / LYR-198).
 //
-// Pure functions, zero LLM, no I/O. Everything here is counting, ranking and
-// set differences over what the scouts returned. R4 of the parent card is
-// explicit that an LLM must never compute a ratio: it is untestable and it
-// drifts between runs, so two reports for the same company would disagree for
-// no reason.
+// Pure functions, zero LLM, no I/O. Everything here counts scout statuses. R4
+// of the parent card is explicit that an LLM must never compute a ratio: it is
+// untestable and it drifts between runs, so two reports for the same company
+// would disagree for no reason.
+//
+// What this file deliberately no longer does is judge LANGUAGE. It used to
+// carry a `MANUAL_WORK_VERBS` set and intersect it with the verbs the postings
+// used, which was the wrong tool for the question: `review` is document review
+// at a law firm and performance review at a consultancy, and a bare verb
+// stripped of its posting cannot carry that. That judgement now belongs to
+// `researchAnalyst.ts`, which reads the postings themselves (LYR-216).
+//
+// `confidenceTier` here is still computed and still useful, but it is now
+// EVIDENCE HANDED TO THE ANALYST rather than the final word — the analyst can
+// see what the scouts actually returned and may disagree with what the status
+// counts imply.
 //
 // `confidenceTier` is the most important output in this file, and arguably in
 // the whole subsystem. The previous system had no notion of how much it knew,
@@ -96,90 +107,10 @@ export function confidenceTier(
   return 'MODERATE'
 }
 
-type PostingLike = {
-  title?: string
-  taskVerbs?: string[]
-  namedSystems?: { name: string; category: string }[]
-}
-
-/* Verbs that indicate work a system could plausibly take over.
-
-   The first version of this set was written a priori from a generic
-   back-office picture — reconcile, re-key, chase invoices — and matched
-   NOTHING across 22 real professional-services firms. What those firms
-   actually advertise is document work: review, draft, prepare, collate, file.
-   The parent card's own worked example is "people whose first listed duty is
-   document review", so excluding `review` as judgement was the error, not the
-   absence of a signal.
-
-   The line still holds somewhere. Verbs that are irreducibly professional
-   judgement stay out — negotiate, advise, advocate, represent, mentor, coach.
-   Automating those is not what this product sells, and claiming otherwise in
-   front of a partner at a law firm would be embarrassing.
-
-   ponytail: hand-tuned vocabulary, and an English one. If the coverage test
-   starts showing false positives, tighten by looking at what the postings
-   actually said rather than by trimming this list from intuition. */
-const MANUAL_WORK_VERBS = new Set([
-  // document and information handling — the ICP's automatable core
-  'collate',
-  'compile',
-  'draft',
-  'file',
-  'prepare',
-  'proofread',
-  'review',
-  'summarise',
-  'summarize',
-  // moving and re-entering data
-  'copy',
-  'cross-check',
-  'enter',
-  'extract',
-  'input',
-  'key',
-  're-key',
-  'reconcile',
-  'record',
-  'retype',
-  'scan',
-  'transcribe',
-  'transfer',
-  'update',
-  'upload',
-  // pursuing and checking
-  'chase',
-  'check',
-  'follow up',
-  'liaise',
-  'monitor',
-  'track',
-  'verify',
-  // scheduling and coordination
-  'arrange',
-  'coordinate',
-  'schedule',
-])
-
-/* Which of the verbs the postings used actually imply manual data work. A set
-   intersection — code, not a model's opinion about what sounds manual. */
-export function manualWorkIndicators(postings: PostingLike[]): string[] {
-  if (!Array.isArray(postings)) return []
-  const found = new Set<string>()
-  for (const posting of postings) {
-    for (const raw of posting?.taskVerbs ?? []) {
-      const verb = typeof raw === 'string' ? raw.trim().toLowerCase() : ''
-      if (MANUAL_WORK_VERBS.has(verb)) found.add(verb)
-    }
-  }
-  return [...found].sort()
-}
-
 export type ResearchSummary = {
   coverage: Coverage
   coverageScore: number
   confidenceTier: ConfidenceTier
-  manualWorkIndicators: string[]
   /* Everything that failed, so a thin result can be explained rather than
      mistaken for an empty world. */
   gaps: { scout: ScoutId; reason: string }[]
@@ -203,14 +134,12 @@ export function summarize(
     }
   }
 
-  const s2 = results.S2 as ScoutResult<{ postings?: PostingLike[] }> | undefined
   const score = coverageScore(coverage)
 
   return {
     coverage,
     coverageScore: score,
     confidenceTier: confidenceTier(coverage, score),
-    manualWorkIndicators: manualWorkIndicators(s2?.facts?.postings ?? []),
     gaps,
   }
 }
