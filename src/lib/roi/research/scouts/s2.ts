@@ -408,9 +408,11 @@ async function runDiscovery(
   domain: string,
   vertical: string | undefined,
   attempts: SourceAttempt[],
+  companyName?: string,
+  canonicalDomain?: string,
 ): Promise<RawPosting[]> {
   const startedAt = Date.now()
-  const query = discoveryQuery(domain, vertical)
+  const query = discoveryQuery(domain, vertical, companyName)
 
   let hits: Awaited<ReturnType<typeof webSearch>> = []
   try {
@@ -419,7 +421,12 @@ async function runDiscovery(
     hits = []
   }
 
-  const ranked = rankHits(hits, domain, MAX_DISCOVERED_PAGES)
+  const ranked = rankHits(
+    hits,
+    domain,
+    MAX_DISCOVERED_PAGES,
+    canonicalDomain ? [canonicalDomain] : [],
+  )
   attempts.push({
     source: 'search',
     outcome: ranked.length > 0 ? 'hit' : 'miss',
@@ -769,6 +776,10 @@ export async function getJobPostings(
   domainInput: string,
   region?: Region,
   vertical?: string,
+  /* Both from S1, both optional — see `runDiscovery`. Absent means this scout
+     behaves exactly as it did before LYR-221. */
+  companyName?: string,
+  canonicalDomain?: string,
 ): Promise<ScoutResult<S2Facts>> {
   const startedAt = Date.now()
   const sourcesAttempted: SourceAttempt[] = []
@@ -814,7 +825,13 @@ export async function getJobPostings(
   }
 
   if (raw.length === 0) {
-    raw = await runDiscovery(domain, vertical, sourcesAttempted)
+    raw = await runDiscovery(
+      domain,
+      vertical,
+      sourcesAttempted,
+      companyName,
+      canonicalDomain,
+    )
     if (raw.length > 0) boardUrl = raw[0].url
   }
 

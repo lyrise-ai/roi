@@ -148,11 +148,20 @@ export async function runResearch(
   const s1Facts = s1.facts as {
     region?: { value?: Region }
     vertical?: { value?: string }
+    name?: { value?: string }
+    canonicalDomain?: { value?: string }
   } | null
   const region = s1Facts?.region?.value
   /* S2's discovery tier shapes its query with the vertical when S1 resolved
      one — "legal" and "accounting" pull very different results. */
   const vertical = s1Facts?.vertical?.value
+  /* The firm's name as it writes it, and any host it declares equivalent to
+     its domain. Both are optional and S2 degrades to its old behaviour without
+     them — but they are the difference between searching for "gowlingwlg" and
+     "Gowling WLG", and between keeping and discarding the real careers page of
+     a firm that redirects to another TLD (LYR-221). */
+  const companyName = s1Facts?.name?.value
+  const canonicalDomain = s1Facts?.canonicalDomain?.value
 
   /* S2's budget is its own, not the remainder of a shared countdown. Nothing
      S1 did can shrink it, which is the whole point — a scout that blows its
@@ -165,7 +174,11 @@ export async function runResearch(
      degrading a row and taking down the run. The shape is here so adding a
      scout is appending to this array. */
   const rest = await Promise.allSettled([
-    settle('S2', getJobPostings(domain, region, vertical), s2Budget),
+    settle(
+      'S2',
+      getJobPostings(domain, region, vertical, companyName, canonicalDomain),
+      s2Budget,
+    ),
   ])
 
   for (const outcome of rest) {

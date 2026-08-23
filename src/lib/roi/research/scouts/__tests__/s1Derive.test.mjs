@@ -372,3 +372,102 @@ test('normalizeDomain rejects over-long names and labels', () => {
   assert.equal(d.normalizeDomain('acme-.com'), null)
   assert.equal(d.normalizeDomain('acme..com'), null)
 })
+
+// ── LYR-221: the company's own name, and the domain it says is really its ────
+//
+// Every fixture below is the real markup served by that firm on 2026-08-23,
+// trimmed to the tags under test.
+
+test('og:site_name is preferred — it is authored for exactly this', () => {
+  const html = `<head><meta property="og:site_name" content="Kingsley Napley" />
+    <title>Kingsley Napley | Lawyers, Solicitors London</title></head>`
+  assert.equal(
+    d.companyNameFromHtml(html, 'kingsleynapley.com'),
+    'Kingsley Napley',
+  )
+})
+
+test('a title with a tagline yields the name, not the tagline', () => {
+  /* Observed: the name is not reliably the first segment. */
+  assert.equal(
+    d.companyNameFromHtml(
+      '<title>International Law Firm | Gowling WLG | Gowling WLG</title>',
+      'gowlingwlg.com',
+    ),
+    'Gowling WLG',
+  )
+  assert.equal(
+    d.companyNameFromHtml(
+      '<title>Accountancy and Business Advice - BDO</title>',
+      'bdo.co.uk',
+    ),
+    'BDO',
+  )
+})
+
+test('a name that does not match the domain is refused', () => {
+  /* The whole point: a wrong name searches for a different company and
+     attaches their vacancies to this prospect. */
+  assert.equal(
+    d.companyNameFromHtml(
+      '<title>Simpson Thacher &amp; Bartlett LLP</title>',
+      'stalawfirm.com',
+    ),
+    null,
+  )
+  /* A Cloudflare interstitial and a CMS default are not names. */
+  assert.equal(
+    d.companyNameFromHtml('<title>Just a moment...</title>', 'farrer.co.uk'),
+    null,
+  )
+  assert.equal(
+    d.companyNameFromHtml('<title>403 Forbidden</title>', 'rsmus.com'),
+    null,
+  )
+  assert.equal(d.companyNameFromHtml('', 'acmelaw.com'), null)
+})
+
+test('corporate form is trimmed so the phrase match is not narrowed', () => {
+  assert.equal(
+    d.companyNameFromHtml('<title>Farrer &amp; Co LLP</title>', 'farrer.co.uk'),
+    'Farrer & Co',
+  )
+})
+
+test('a declared canonical on another TLD is an alias', () => {
+  const html = `<link rel="canonical" href="https://www.kingsleynapley.co.uk/" />`
+  assert.equal(
+    d.canonicalDomainFromHtml(html, 'kingsleynapley.com'),
+    'kingsleynapley.co.uk',
+  )
+})
+
+test('a canonical pointing at a different brand is not an alias', () => {
+  /* This is the guard that keeps the alias from becoming the brand-token match
+     the search module exists to reject. */
+  assert.equal(
+    d.canonicalDomainFromHtml(
+      '<link rel="canonical" href="https://www.some-cms-host.com/" />',
+      'kingsleynapley.com',
+    ),
+    null,
+  )
+})
+
+test('no canonical means no alias — bakertilly.ca stays a stranger', () => {
+  assert.equal(
+    d.canonicalDomainFromHtml('<title>Baker Tilly</title>', 'bakertilly.com'),
+    null,
+  )
+  assert.equal(d.canonicalDomainFromHtml('', 'bakertilly.com'), null)
+})
+
+test('a canonical that just restates the domain is not an alias', () => {
+  assert.equal(
+    d.canonicalDomainFromHtml(
+      '<link rel="canonical" href="https://www.bdo.co.uk/en-gb/home" />',
+      'bdo.co.uk',
+    ),
+    null,
+  )
+})
