@@ -944,8 +944,11 @@ function buildTools(
             `attempt ${attempt + 1}/3${attempt > 0 ? ' (retry)' : ''}`,
           )
 
+          // Read the id off the model rather than restating it: a hardcoded
+          // string here silently mis-prices every report after a model swap.
+          const modelerModel = getFastModel()
           const result = await generateObject({
-            model: getFastModel(),
+            model: modelerModel,
             schema: jsonSchema(ROI_MODELER_SCHEMA as object),
             system: ROI_MODELER_SYSTEM_PROMPT,
             prompt: retryHint
@@ -955,7 +958,7 @@ function buildTools(
           const callLabel = attempt > 0 ? `modeler_retry${attempt}` : 'modeler'
           tracker?.record({
             call: callLabel,
-            model: 'gpt-4o-mini',
+            model: modelerModel.modelId,
             ...result.usage,
           })
 
@@ -2275,8 +2278,9 @@ ${
     ]
   }
 
+  const mainModel = getResearchModel()
   const result = streamText({
-    model: getResearchModel(),
+    model: mainModel,
     system,
     messages,
     tools,
@@ -2345,7 +2349,7 @@ ${
   // Track main agent loop usage and flush summary
   try {
     const usage = await result.usage
-    tracker.record({ call: 'main_agent', model: 'gpt-4o', ...usage })
+    tracker.record({ call: 'main_agent', model: mainModel.modelId, ...usage })
   } catch {
     /* usage not available — skip */
   }
