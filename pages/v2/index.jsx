@@ -1,9 +1,13 @@
 /* POC of the redesigned Profit Map (LYR-178, scaffold: LYR-182).
 
    Parallel route, deliberately. Everything under /v2 is isolated from the live
-   alpha: no auth, no alpha cap, no `reports`/`state_data`, no SSE, and nothing
-   imported from `src/lib/roi/`. The live app must behave identically with this
-   directory deleted — which is also how it gets thrown away later.
+   alpha: no auth, no alpha cap, no `reports`/`state_data`, and nothing imported
+   from `src/lib/roi/` on this page. The live app must behave identically with
+   this directory deleted — which is also how it gets thrown away later.
+
+   The one server call it makes is `/api/v2/research`, the scan panel's SSE
+   stream (LYR-199). It is opened when the company form is submitted and never
+   awaited: research takes 5-20s and the interview must be usable throughout.
 
    The token layer needs no import here: `styles/global.css` is loaded once in
    `pages/_app.js`, so every CSS custom property the primitives read is already
@@ -14,7 +18,8 @@
    A refresh starts over; that's the accepted trade for a supervised demo
    (LYR-182: "state can live in memory"). Landing and company are built
    (LYR-183), the interview is built (LYR-184), the company scan panel is
-   built (LYR-185); the reveal is still a stub.
+   built (LYR-185) and now reads real research (LYR-199); the reveal is still
+   a stub.
 
    The interview does not add a step: `flow.turn` walks the pain points inside
    the `interview` step, and every answer for every pain point stays in
@@ -29,6 +34,7 @@ import Head from 'next/head'
 import { useRouter } from 'next/router'
 import Image from 'next/image'
 import Logo from '@/src/assets/logo.svg'
+import { fmtDate } from '@/src/lib/formatDate'
 import {
   Button,
   Icon,
@@ -276,8 +282,8 @@ function Landing({ onStart }) {
   )
 }
 
-/* Two fields, then straight into the interview. Submitting starts the scan but
-   never waits for it — see `startScan`. */
+/* Two fields, then straight into the interview. Submitting opens the research
+   stream but never waits for it — see `useScan`. */
 function Company({ value, onChange, onBack, onSubmit }) {
   const submit = (e) => {
     e.preventDefault()
@@ -458,35 +464,26 @@ const QUANT = [
   },
 ]
 
-/* One record per demo company (LYR-185): what the scan found, the guess the
-   analyst offers against each pain point, and the number estimates behind
-   "Let AI estimate". All three come from the same place on purpose — a guess
-   that cites a fact the panel never showed is the fabrication this POC exists
-   to stop, so every `guessWhy` and every estimate `why` points at something in
-   that company's own `scan`.
+/* One record per demo company (LYR-185): the guess the analyst offers against
+   each pain point, and the number estimates behind "Let AI estimate".
 
-   Live enrichment is a production concern; what needs testing here is the
-   behaviour. The demo domains are `drjobpro.com`, `harbourfield.com`,
-   `northaxle.com` and `verdantdental.com` — anything else gets no panel, no
-   guesses, and estimates that say they have nothing to stand on.
+   The `scan` arrays these records used to carry are gone (LYR-199). The panel
+   reads the real research system now, so canned facts here would be a second,
+   contradicting source of truth for the same panel.
 
-   Every scan entry is something a person could go and check: a headcount, a
-   service line, a location, what the site is built on, what the careers page is
-   advertising. Nothing in `scan` is a workflow, a department or an "operating
-   model". That inference is what made the old research agent untrustworthy — it
-   was required to invent four workflows whether or not the evidence existed.
-   The scan shows what we can point at; the interview gets everything else. The
-   guesses are allowed to infer, which is exactly why they sit in a dashed box
-   marked `estimated`, in the interview, next to a field the user can overrule.
+   The guesses and estimates are still canned, and are out of this card's
+   scope — LYR-186 is where the reveal starts reading the analyst's findings.
+   Until then the demo domains are `drjobpro.com`, `harbourfield.com`,
+   `northaxle.com` and `verdantdental.com`; anything else gets no guesses and
+   estimates that say they have nothing to stand on. Note what that means: the
+   guesses may now cite something the panel never showed, because the panel is
+   live and they are not. They stay visibly junior — a dashed box marked
+   `estimated`, next to a field the user can overrule — which is the only
+   reason that is survivable for the length of one card.
 
-   `looking` is what the panel says while that fact is still pending, so the
-   status line always names the page being read rather than counting down.
-
-   `sourceUrl` is set wherever the page really exists — Dr. Job Pro is a real
-   company and every one of its links was checked. The other three are invented
-   demo fixtures: their sources stay as text, because a source that 404s in
-   front of a prospect is worse than one that is merely quoted. That is also
-   what the live product does when enrichment has a citation but no URL. */
+   Nothing here may infer a workflow, a department or an "operating model" into
+   the PANEL. That inference is what made the old research agent untrustworthy.
+   The scan shows what we can point at; the interview gets everything else. */
 const DEMOS = {
   /* Dr. Job Pro (drjobpro.com) is the demo we actually show, so none of this is
      invented: every line was read off the live site, and the two lines the v17
@@ -495,59 +492,6 @@ const DEMOS = {
      They named departments and workflows their own sources don't show. */
   'drjobpro.com': {
     name: 'Dr. Job Pro',
-    scan: [
-      {
-        fact: 'What you do',
-        value:
-          'An AI-first recruitment platform — a job portal since 2015, now the whole hiring lifecycle',
-        source: 'drjobpro.com/about-us',
-        sourceUrl: 'https://www.drjobpro.com/about-us',
-        looking: 'Reading your site…',
-      },
-      {
-        fact: 'Scale you claim',
-        value: '10M+ users since 2015',
-        source: 'drjobpro.com/about-us',
-        sourceUrl: 'https://www.drjobpro.com/about-us',
-        looking: 'Reading your about page…',
-      },
-      {
-        fact: 'Live vacancies',
-        value: 'Thousands — Cairo alone lists about 8,000',
-        source: 'drjobpro.com/egypt',
-        sourceUrl: 'https://www.drjobpro.com/egypt',
-        looking: 'Counting what’s live on your jobs pages…',
-      },
-      {
-        fact: 'Reach',
-        value:
-          'Saudi Arabia, Kuwait, Qatar, Bahrain, Egypt, Jordan, the UK, the USA and India',
-        source: 'drjobpro.com',
-        sourceUrl: 'https://www.drjobpro.com/',
-        looking: 'Checking which markets you cover…',
-      },
-      {
-        fact: 'Offices',
-        value: 'Abu Dhabi, Giza, and Vellore in Tamil Nadu',
-        source: 'drjobpro.com/contact-us',
-        sourceUrl: 'https://www.drjobpro.com/contact-us',
-        looking: 'Looking for where you’re based…',
-      },
-      {
-        fact: 'Contact channels',
-        value: 'WhatsApp, email and a help centre',
-        source: 'drjobpro.com/contact-us',
-        sourceUrl: 'https://www.drjobpro.com/contact-us',
-        looking: 'Reading your contact page…',
-      },
-      {
-        fact: 'Who buys',
-        value: 'Employers, through a separate portal with published packages',
-        source: 'employer.drjobpro.com/pricing',
-        sourceUrl: 'https://employer.drjobpro.com/pricing',
-        looking: 'Reading your employer pages…',
-      },
-    ],
     pains: [
       {
         placeholder:
@@ -610,44 +554,6 @@ const DEMOS = {
 
   'harbourfield.com': {
     name: 'Harbourfield Legal',
-    scan: [
-      {
-        fact: 'Team size',
-        value: '42 people',
-        source: 'harbourfield.com/team',
-        looking: 'Reading your site…',
-      },
-      {
-        fact: 'Service lines',
-        value: 'Commercial, property, employment',
-        source: 'harbourfield.com',
-        looking: 'Checking your team page…',
-      },
-      {
-        fact: 'Pricing model',
-        value: 'Fixed fee, published openly',
-        source: 'harbourfield.com/pricing',
-        looking: 'Reading your pricing page…',
-      },
-      {
-        fact: 'Locations',
-        value: 'Two offices — Leeds and Manchester',
-        source: 'harbourfield.com/contact',
-        looking: 'Looking for other offices…',
-      },
-      {
-        fact: 'Site is built on',
-        value: 'WordPress, Calendly, Mailchimp',
-        source: 'builtwith.com',
-        looking: 'Checking what your site runs on…',
-      },
-      {
-        fact: 'Hiring now',
-        value: 'Two roles, both mention document review',
-        source: 'harbourfield.com/careers',
-        looking: 'Checking recent job postings…',
-      },
-    ],
     pains: [
       {
         placeholder:
@@ -712,44 +618,6 @@ const DEMOS = {
 
   'northaxle.com': {
     name: 'Northaxle Freight',
-    scan: [
-      {
-        fact: 'Team size',
-        value: 'About 55 people',
-        source: 'linkedin.com/company/northaxle',
-        looking: 'Reading your site…',
-      },
-      {
-        fact: 'Industry',
-        value: 'Freight brokerage and 3PL',
-        source: 'northaxle.com',
-        looking: 'Checking who you are…',
-      },
-      {
-        fact: 'Service lines',
-        value: 'LTL, full truckload, drayage',
-        source: 'northaxle.com/services',
-        looking: 'Reading your services page…',
-      },
-      {
-        fact: 'Locations',
-        value: 'Three terminals — Memphis, Dallas, Reno',
-        source: 'northaxle.com/network',
-        looking: 'Looking for your terminals…',
-      },
-      {
-        fact: 'Site is built on',
-        value: 'HubSpot forms, a McLeod portal login',
-        source: 'builtwith.com',
-        looking: 'Checking what your site runs on…',
-      },
-      {
-        fact: 'Hiring now',
-        value: 'Four roles, three of them in dispatch',
-        source: 'northaxle.com/careers',
-        looking: 'Checking recent job postings…',
-      },
-    ],
     pains: [
       {
         placeholder:
@@ -811,44 +679,6 @@ const DEMOS = {
 
   'verdantdental.com': {
     name: 'Verdant Dental',
-    scan: [
-      {
-        fact: 'Team size',
-        value: '31 people across the practices',
-        source: 'verdantdental.com/about',
-        looking: 'Reading your site…',
-      },
-      {
-        fact: 'Industry',
-        value: 'Multi-site dental group',
-        source: 'verdantdental.com',
-        looking: 'Checking who you are…',
-      },
-      {
-        fact: 'Service lines',
-        value: 'General, orthodontics, implants',
-        source: 'verdantdental.com/services',
-        looking: 'Reading your services page…',
-      },
-      {
-        fact: 'Locations',
-        value: 'Five practices in greater Phoenix',
-        source: 'verdantdental.com/locations',
-        looking: 'Looking for your other practices…',
-      },
-      {
-        fact: 'Site is built on',
-        value: 'A Dentrix patient portal, a Podium widget',
-        source: 'builtwith.com',
-        looking: 'Checking what your site runs on…',
-      },
-      {
-        fact: 'Hiring now',
-        value: 'Two front-desk roles, both mention insurance claims',
-        source: 'verdantdental.com/careers',
-        looking: 'Checking recent job postings…',
-      },
-    ],
     pains: [
       {
         placeholder:
@@ -915,9 +745,11 @@ const DEMOS = {
 
    An empty field or an unrecognised domain falls back to the demo company, so
    the whole flow is walkable on Next, Next, Next without typing anything —
-   which is how it gets shown. The no-scan state is still real and still has to
-   work (a live prospect we find nothing on gets no panel), so it lives behind
-   `/v2?scan=none` rather than behind an unlucky typo. */
+   which is how it gets shown. `/v2?scan=none` is the door to the state where
+   we know nothing about the company: since LYR-199 it no longer suppresses the
+   panel — the panel is live, and there is nothing canned left to suppress —
+   but it still switches off the canned guesses and estimates, which is what it
+   was really for. */
 const DEFAULT_DEMO = 'drjobpro.com'
 const demoFor = (website = '') =>
   DEMOS[
@@ -930,9 +762,9 @@ const demoFor = (website = '') =>
   ] || DEMOS[DEFAULT_DEMO]
 
 /* The shared question, with whatever we know about this company merged over it.
-   A company we didn't scan keeps the generic placeholder and gets no `guess` at
-   all — the block only renders when there is one. Pain points past the third
-   never get a guess, whoever the company is. */
+   A company with no demo record keeps the generic placeholder and gets no
+   `guess` at all — the block only renders when there is one. Pain points past
+   the third never get a guess, whoever the company is. */
 const painFor = (demo, i) => ({
   ...(PAINS[i] || EXTRA_PAIN),
   ...((PAINS[i] && demo && demo.pains[i]) || {}),
@@ -977,17 +809,58 @@ function Divider({ children }) {
   )
 }
 
-/* What the scan found, beside the questions rather than in front of them: it
-   only ever shows what it can point to, and it never fills in an answer.
+/* One row's source, as something a person would read: the host, and enough of
+   the path to tell an about page from a careers page. Long ATS URLs are cut
+   rather than allowed to wrap the panel out of shape — the link still opens
+   the full URL, which is the part that has to be true. */
+const SOURCE_MAX = 34
+function sourceLabel(url) {
+  let parsed
+  try {
+    parsed = new URL(url)
+  } catch {
+    return url
+  }
+  const label = (parsed.host.replace(/^www\./, '') + parsed.pathname).replace(
+    /\/$/,
+    '',
+  )
+  return label.length > SOURCE_MAX
+    ? `${label.slice(0, SOURCE_MAX - 1)}…`
+    : label
+}
 
-   Three states, and the third one is the point: with facts it resolves them a
-   row at a time; while it still has some to find it says so quietly; with no
-   fact set at all it renders nothing. An empty panel reads as broken, and a
-   panel promising a scan it can't deliver is worse than no panel (LYR-185). */
-function ScanPanel({ company, all, step }) {
-  if (!all) return null
-  const facts = all.slice(0, step)
-  const looking = step < all.length
+/* Enrichment data is a monthly-refreshed cache, not a live read, so a fact
+   that came from it is dated in front of the prospect. A six-month-old
+   headcount presented as current is exactly the credibility damage this
+   product exists to avoid, and it is the kind of thing the person reading it
+   is best placed to notice. Everything else was fetched during this run and
+   needs no caveat. */
+function findingAge(finding) {
+  if (finding.sourceType !== 'enrichment' || !finding.retrievedAt) return null
+  const shown = fmtDate(finding.retrievedAt)
+  return shown === '—' ? null : `as of ${shown}`
+}
+
+/* What the research found, beside the questions rather than in front of them:
+   it only ever shows what it can point to, and it never fills in an answer.
+
+   Three states, and the third one is the point: findings render as they
+   stream in; while scouts are still out it says so quietly; with nothing found
+   at all it renders nothing. An empty panel reads as broken, and a panel
+   promising a scan it can't deliver is worse than no panel (LYR-185).
+
+   No ranking, no cap and no diversity rule. The analyst has already decided
+   what is worth saying and written each line (LYR-216); a second selection
+   layer here would silently discard reasoning that has already been done, and
+   a truncation would drop findings for no reason a prospect could see. The
+   headline is rendered as written and the sourceUrl as the link — this
+   component makes no model call and no judgement of its own (LYR-199). */
+function ScanPanel({ company, findings, looking }) {
+  /* Empty is nothing at all, not an empty box. Once the run is done and
+     nothing was found, the panel leaves the screen — the interview is the
+     whole product without it. */
+  if (findings.length === 0 && !looking) return null
   return (
     <aside
       /* Named so it stays a landmark: an unnamed <aside> inside <section> maps
@@ -1023,17 +896,39 @@ function ScanPanel({ company, all, step }) {
       >
         {`What we could verify about ${company || 'you'} — each with a source.`}
       </p>
-      {facts.map((f, i) => (
-        <ScanFactRow
-          key={f.fact}
-          stacked
-          fact={f.fact}
-          value={f.value}
-          source={f.source}
-          sourceUrl={f.sourceUrl}
-          last={!looking && i === facts.length - 1}
-        />
-      ))}
+      {findings.map((f, i) => {
+        const age = findingAge(f)
+        return (
+          <ScanFactRow
+            /* The analyst may say more than one thing about one source, so the
+               URL alone is not a key. */
+            key={`${f.sourceUrl}\n${f.headline}`}
+            stacked
+            fact={f.kind}
+            value={
+              age ? (
+                <>
+                  {f.headline}{' '}
+                  <span
+                    style={{
+                      font: 'var(--weight-regular) var(--text-xs)/1.4 var(--font-body)',
+                      color: 'var(--text-muted)',
+                      whiteSpace: 'nowrap',
+                    }}
+                  >
+                    ({age})
+                  </span>
+                </>
+              ) : (
+                f.headline
+              )
+            }
+            source={sourceLabel(f.sourceUrl)}
+            sourceUrl={f.sourceUrl}
+            last={!looking && i === findings.length - 1}
+          />
+        )
+      })}
       {looking && (
         <div
           style={{
@@ -1059,7 +954,7 @@ function ScanPanel({ company, all, step }) {
               color: 'var(--text-muted)',
             }}
           >
-            {all[step].looking}
+            Reading what&rsquo;s public about you&hellip;
           </span>
         </div>
       )}
@@ -1090,7 +985,7 @@ function Interview({
   namedCount,
   company,
   demo,
-  scanStep,
+  scan,
   onChange,
   onBack,
   onAdd,
@@ -1099,6 +994,14 @@ function Interview({
   const t = painFor(demo, turn)
   const quant = QUANT.map((_, i) => quantFor(demo, i))
   const sharper = namedCount >= MIN_PAINS
+  /* Whether the panel is on screen, which is what the width has to key on —
+     `demo` used to stand in for it and no longer can now that the panel is
+     live research rather than a canned array. A run that ends up finding
+     nothing therefore re-centres the column once, at the moment we learn
+     there is nothing: the alternative is leaving a gutter of nothing beside
+     the questions for the rest of the interview. */
+  const hasPanel = scan.findings.length > 0 || scan.looking
+
   const set = (fields) => onChange(fields)
   const setQuant = (i, value) =>
     onChange({ quant: pain.quant.map((q, j) => (j === i ? value : q)) })
@@ -1109,7 +1012,7 @@ function Interview({
       style={{
         flex: 1,
         width: '100%',
-        maxWidth: demo ? COLUMN_PLUS_PANEL : COLUMN,
+        maxWidth: hasPanel ? COLUMN_PLUS_PANEL : COLUMN,
         margin: '0 auto',
         padding: 'var(--space-8) var(--space-6) var(--space-20)',
         display: 'flex',
@@ -1254,7 +1157,11 @@ function Interview({
         </div>
       </div>
 
-      <ScanPanel company={company} all={demo && demo.scan} step={scanStep} />
+      <ScanPanel
+        company={company}
+        findings={scan.findings}
+        looking={scan.looking}
+      />
     </section>
   )
 }
@@ -1327,41 +1234,91 @@ function Reveal({ flow, demo, onRestart }) {
 const emptyFlow = () => ({
   step: 'landing',
   company: { name: '', website: '' },
-  scan: { step: 0 },
+  /* The website as it was when the form was submitted, which is what the
+     research stream is keyed on. Held separately from `company.website` so
+     that typing in the field does not fire a research run per keystroke. */
+  scanFor: '',
   turn: 0,
   pains: [emptyPain()],
 })
 
-/* The scan is canned in the POC (LYR-178) and is fired, never awaited: the
-   company form advances on the same tick and the facts land one at a time
-   while the first questions are being answered. Resolving them instantly would
-   be both unconvincing and untested — the in-flight state would never render.
-   The timer is module-level so restarting the flow cannot leave two of them
-   racing to fill the panel. */
-let scanTimer
-function startScan(setFlow, count) {
-  clearInterval(scanTimer)
-  if (!count) return // unknown company: nothing to resolve, and no panel to fill
-  let step = 0
-  scanTimer = setInterval(() => {
-    step += 1
-    setFlow((f) => ({ ...f, scan: { step } }))
-    if (step >= count) clearInterval(scanTimer)
-  }, 1500) // stands in for a research call; nothing downstream blocks on it
+/* The scan panel's data (LYR-199): one SSE stream, opened when the company
+   form is submitted and never awaited. The interview renders on the same tick
+   the form submits and findings append as they arrive, so a slow scout costs
+   a row rather than the panel.
+
+   `EventSource` rather than a fetch stream because it is the browser's own SSE
+   reader and this request carries one parameter — a hand-rolled reader would
+   be more code for the same bytes. The one thing it does that we do not want
+   is reconnect when the server hangs up, and a reconnect here means a second
+   research run: the same crawl and the same model calls, billed again. So the
+   client closes the stream itself on `done` and on error.
+
+   A website we cannot make a domain of is rejected by the route, which the
+   browser surfaces as an error — the panel stops looking and, having found
+   nothing, renders nothing. That is the correct outcome for a company we know
+   nothing about. */
+function useScan(website) {
+  const [scan, setScan] = React.useState({ findings: [], looking: false })
+
+  React.useEffect(() => {
+    if (!website) {
+      setScan({ findings: [], looking: false })
+      return undefined
+    }
+    setScan({ findings: [], looking: true })
+
+    const stream = new EventSource(
+      `/api/v2/research?domain=${encodeURIComponent(website)}`,
+    )
+    const stop = () => {
+      stream.close()
+      setScan((current) => ({ ...current, looking: false }))
+    }
+    stream.onmessage = (message) => {
+      let event
+      try {
+        event = JSON.parse(message.data)
+      } catch {
+        return /* a malformed frame costs its own row, never the stream */
+      }
+      if (event.type === 'done') {
+        stop()
+        return
+      }
+      /* The analyst already drops any finding whose citation is not in the
+         fact store, so a missing sourceUrl should be impossible. Checked again
+         because the failure mode if it ever happened is a line on the panel
+         with no source under it, which is precisely what the panel's own copy
+         promises never to show. Fail safe: no source, no row. */
+      if (event.type !== 'finding' || !event.finding?.sourceUrl) return
+      setScan((current) => ({
+        ...current,
+        findings: [...current.findings, event.finding],
+      }))
+    }
+    stream.onerror = stop
+
+    /* Leaving /v2 mid-run must not leave a stream setting state on nothing —
+       and closing it is also what tells the server to stop, since client
+       disconnect is the route's stop signal. */
+    return () => stream.close()
+  }, [website])
+
+  return scan
 }
 
 export default function V2() {
   const [flow, setFlow] = React.useState(emptyFlow)
-  /* `/v2?scan=none` is the no-scan state: no facts, so no panel and no guesses.
-     It needs a door of its own now that an unrecognised domain falls back to
-     the demo company. */
+  /* `/v2?scan=none` switches off the canned guesses and estimates. It needs a
+     door of its own now that an unrecognised domain falls back to the demo
+     company. */
   const demo =
     useRouter().query.scan === 'none'
       ? undefined
       : demoFor(flow.company.website)
 
-  // Leaving /v2 mid-scan must not leave the interval setting state on nothing.
-  React.useEffect(() => () => clearInterval(scanTimer), [])
+  const scan = useScan(flow.scanFor)
 
   const go = (delta) =>
     setFlow((f) => ({
@@ -1399,8 +1356,9 @@ export default function V2() {
             }
             onBack={() => go(-1)}
             onSubmit={() => {
-              patch({ step: 'interview', scan: { step: 0 } })
-              startScan(setFlow, demo?.scan.length)
+              /* Fired, not awaited: this advances to the interview on the
+                 same tick and the panel fills behind it. */
+              patch({ step: 'interview', scanFor: flow.company.website })
             }}
           />
         )}
@@ -1414,7 +1372,7 @@ export default function V2() {
                `flow` — one source of truth, and editing the website on the way
                back through the company screen re-scans by definition. */
             demo={demo}
-            scanStep={flow.scan.step}
+            scan={scan}
             onChange={(fields) =>
               setFlow((f) => ({
                 ...f,

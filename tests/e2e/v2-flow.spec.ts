@@ -1,20 +1,72 @@
 /**
  * /v2 POC route (LYR-182, screens: LYR-183, interview: LYR-184, scan panel:
- * LYR-185) — runs in the `anon` project.
+ * LYR-185, wired to real research: LYR-199) — runs in the `anon` project.
  *
  * Five guarantees: the route is reachable without auth, flow state survives
  * all four steps (landing → company → interview → reveal) and going back,
- * submitting the company form does not wait on the canned scan, every
+ * submitting the company form does not wait on the research run, every
  * interview answer — across more than one pain point — reaches the end, and
- * the scan panel resolves sourced facts with working sources while rendering
- * nothing at all when there was no scan.
+ * the scan panel renders sourced findings with working links while rendering
+ * nothing at all when the research found nothing.
  *
  * The whole flow is also walkable with no keyboard at all, which is how the
  * demo is given.
+ *
+ * `/api/v2/research` is stubbed in every test here, and deliberately so. The
+ * real route crawls a real company with real provider keys and a real model
+ * call — CI has none of them, so unstubbed it would spend up to its 30s budget
+ * failing, per test, over the network. What these tests own is the panel's
+ * behaviour given a stream; what the stream contains is the research system's
+ * own tests and `npm run eval:research`.
  */
-import { test, expect } from '@playwright/test'
+import { test, expect, type Page } from '@playwright/test'
+
+/* One enrichment-sourced finding and one posting, which is the pairing the
+   freshness rule turns on: the enrichment row is dated in front of the
+   prospect, the posting — read during this run — is not. */
+const FINDINGS = [
+  {
+    headline: 'You are about 38 people',
+    kind: 'size',
+    sourceUrl: 'https://example.com/about',
+    sourceType: 'enrichment',
+    retrievedAt: '2026-03-01T00:00:00.000Z',
+  },
+  {
+    headline:
+      'You are hiring a paralegal whose first listed duty is chasing outstanding client documents',
+    kind: 'hiring',
+    sourceUrl: 'https://example.com/careers/paralegal',
+  },
+]
+
+/* Stubs the stream. `delayMs` is what makes the in-flight state observable —
+   a route that fulfils instantly never renders the state the panel spends
+   most of a real run in. Playwright fulfils a body in one piece, so findings
+   arrive together here; that they arrive one at a time on the wire is the
+   analyst's own test (`findings stream incrementally`). */
+async function stubResearch(page: Page, findings = FINDINGS, delayMs = 1200) {
+  await page.route('**/api/v2/research*', async (route) => {
+    await new Promise((resolve) => setTimeout(resolve, delayMs))
+    await route.fulfill({
+      status: 200,
+      contentType: 'text/event-stream',
+      body:
+        findings
+          .map(
+            (finding) =>
+              `data: ${JSON.stringify({ type: 'finding', finding })}\n\n`,
+          )
+          .join('') + `data: ${JSON.stringify({ type: 'done' })}\n\n`,
+    })
+  })
+}
 
 test.describe('/v2', () => {
+  test.beforeEach(async ({ page }) => {
+    await stubResearch(page)
+  })
+
   test('@smoke walks all four steps and carries state', async ({ page }) => {
     await page.goto('/v2')
     // Landing is out of the flow: one CTA, no step counter, no splash.
@@ -30,7 +82,8 @@ test.describe('/v2', () => {
     await page.getByLabel('Website').fill('harbourfield.com')
     await page.getByRole('button', { name: 'Next', exact: true }).click()
 
-    // The canned scan takes ~1.5s per fact; the interview must already be here.
+    // The research stream is fired, never awaited: the interview is here on
+    // the same tick, well before the first finding lands.
     await expect(page.getByText('Step 3 of 4')).toBeVisible({ timeout: 1000 })
 
     // Back preserves what was typed rather than resetting the step.
@@ -108,7 +161,7 @@ test.describe('/v2', () => {
     await page.goto('/v2')
     await page.getByRole('button', { name: 'Start with my company' }).click()
     await page.getByLabel('Company name').fill('Dr. Job Pro')
-    // Typed the way a person would, not the way the lookup key reads.
+    // Typed the way a person would, not the way a domain reads.
     await page.getByLabel('Website').fill('https://www.drjobpro.com/')
     await page.getByRole('button', { name: 'Next', exact: true }).click()
 
@@ -116,29 +169,33 @@ test.describe('/v2', () => {
     await expect(panel).toContainText('What we could verify about Dr. Job Pro')
 
     // In-flight: the panel is quietly looking and the interview is already
-    // usable — the first fact is still ~1.5s away.
-    await expect(panel).toContainText('Reading your site…')
+    // usable — the first finding is still ~1.2s away.
+    await expect(panel).toContainText('Reading what’s public about you')
     const open = page.getByRole('textbox', { name: /Where do your teams lose/ })
     await open.fill('Screening CVs by hand')
     await expect(open).toHaveValue('Screening CVs by hand')
 
-    // Resolved: facts arrive one at a time, each with a source you can open.
-    await expect(panel).toContainText('10M+ users since 2015')
+    // Resolved: the analyst's sentence, rendered as written.
+    await expect(panel).toContainText(
+      'first listed duty is chasing outstanding client documents',
+    )
+    // Every line has a source you can actually open.
     await expect(
-      panel.getByRole('link', { name: 'drjobpro.com/about-us' }).first(),
-    ).toHaveAttribute('href', 'https://www.drjobpro.com/about-us')
-    await expect(panel).toContainText('Abu Dhabi, Giza, and Vellore')
+      panel.getByRole('link', { name: 'example.com/careers/paralegal' }),
+    ).toHaveAttribute('href', 'https://example.com/careers/paralegal')
+    // Enrichment is a monthly cache, so that row says how old it is.
+    await expect(panel).toContainText(
+      'You are about 38 people (as of 1 Mar 2026)',
+    )
+    // A finding read live during the run carries no such caveat.
+    await expect(panel).not.toContainText(/paralegal.*\(as of/)
 
     // Nothing inferred: no workflow, no department, no operating model.
     await expect(panel).not.toContainText(
       /workflow|department|operating model/i,
     )
-
-    // The guess is this company's, and it cites this company's scan.
-    await expect(page.getByText(/Reading applications against/)).toBeVisible()
-    await expect(page.getByText(/8,000 live vacancies/)).toBeVisible()
-    // Nothing from the law firm's fact set leaks in.
-    await expect(page.getByText(/paralegals/i)).toHaveCount(0)
+    // And the looking line goes once the run is done.
+    await expect(panel).not.toContainText('Reading what’s public about you')
   })
 
   test('walks the whole flow without typing anything', async ({ page }) => {
@@ -149,10 +206,9 @@ test.describe('/v2', () => {
     await page.getByRole('button', { name: 'Next', exact: true }).click()
 
     await expect(page.getByText('Step 3 of 4')).toBeVisible()
-    // The fallback names itself, so the panel isn't addressed to "you".
-    await expect(page.getByRole('complementary')).toContainText(
-      'What we could verify about Dr. Job Pro',
-    )
+    // Nothing was typed, so there is nothing to research and no panel — the
+    // fallback company fills the canned guesses, never the panel.
+    await expect(page.getByRole('complementary')).toHaveCount(0)
 
     // Straight to the reveal on the next click. Nothing was typed, so every
     // pain point is the guess we showed and every number is the estimate —
@@ -169,13 +225,16 @@ test.describe('/v2', () => {
   test('renders no scan panel at all when nothing was found', async ({
     page,
   }) => {
-    // `?scan=none` is the door to the no-scan state: with the fallback in
-    // place, an unrecognised domain no longer reaches it.
+    // A real company we genuinely found nothing on: the run completes and
+    // returns no findings. `?scan=none` additionally switches off the canned
+    // guesses, which is the state this test's second half is about.
+    await stubResearch(page, [], 0)
     await page.goto('/v2?scan=none')
     await page.getByRole('button', { name: 'Start with my company' }).click()
     await page
       .getByLabel('Company name')
       .fill('Somewhere We Know Nothing About')
+    await page.getByLabel('Website').fill('nothingknown.example')
     await page.getByRole('button', { name: 'Next', exact: true }).click()
 
     // Not an empty panel — no panel. An empty one reads as broken.

@@ -12,6 +12,8 @@
 // wrong sources, which is worse than an honest 'OTHER'.
 // ─────────────────────────────────────────────────────────────────────────────
 
+import { companyToken, slugMatchesCompany } from '../search'
+
 export type Region = 'US' | 'UK' | 'EU' | 'GCC' | 'OTHER'
 
 /* Strips a user-typed website down to a bare registrable hostname.
@@ -516,4 +518,159 @@ export function htmlToText(html: string): string {
     .replace(/&amp;/g, '&')
     .replace(/\s+/g, ' ')
     .trim()
+}
+
+/* The company's own name, as a human would write it (LYR-221).
+
+   This exists because the search query was being built from the domain label.
+   `gowlingwlg.com` became the query `"gowlingwlg" careers ...`, which Tavily
+   answered with a German packaging company four times; `farrer.co.uk` became
+   `"farrer"`, which pulled six unrelated US firms. Measured over the 25-domain
+   set, six firms yielded no usable URL at all, and swapping the token for the
+   real name — `"Gowling WLG"`, `"Farrer & Co"` — took two of those six from
+   zero usable hits to four each. Nobody writes their firm's name the way a
+   hostname spells it, and search engines match on how people write.
+
+   Three sources, in descending order of how deliberately the company chose the
+   string: og:site_name is authored for exactly this purpose, schema.org `name`
+   is authored for machines, and <title> is authored for humans and therefore
+   carries a tagline we have to cut.
+
+   The result is VALIDATED against the domain before it is returned, because a
+   wrong name is worse than no name: it would search for a different company
+   and attach their vacancies to this prospect. `slugMatchesCompany` is the
+   same check the ATS tier uses, so "Kingsley Napley" (→ kingsleynapley) and
+   "Farrer & Co" (→ farrerco) pass against their domains while a page whose
+   title is a parent brand or a CMS default does not.
+
+   ponytail: an acronym domain whose name expands to something longer —
+   `bsabh.com` is "BSA Ahmad Bin Hezeem" — fails validation and falls back to
+   the token, which is what it does today. Fixing it means matching initials,
+   and that accepts far more wrong names than it rescues right ones. */
+export function companyNameFromHtml(
+  html: string,
+  domain: string,
+): string | null {
+  if (typeof html !== 'string' || html === '') return null
+
+  const candidates: string[] = []
+
+  const ogSiteName = html.match(
+    /<meta[^>]+property\s*=\s*["']og:site_name["'][^>]+content\s*=\s*["']([^"']{2,80})["']/i,
+  )
+  if (ogSiteName) candidates.push(ogSiteName[1])
+
+  const schemaName = html.match(
+    /"@type"\s*:\s*"(?:Organization|LegalService|Corporation|LocalBusiness|ProfessionalService)"[\s\S]{0,400}?"name"\s*:\s*"([^"]{2,80})"/i,
+  )
+  if (schemaName) candidates.push(schemaName[1])
+
+  const title = html.match(/<title[^>]*>([\s\S]{2,200}?)<\/title>/i)
+  if (title) candidates.push(title[1])
+
+  const token = companyToken(domain)
+  for (const raw of candidates) {
+    for (const part of splitTitle(raw)) {
+      const cleaned = cleanCompanyName(part)
+      if (cleaned && slugMatchesCompany(alphanumeric(cleaned), token)) {
+        return cleaned
+      }
+    }
+  }
+  return null
+}
+
+/* A <title> is `Name | Tagline`, `Name - Tagline`, `Tagline — Name`. Every
+   segment is a candidate because the name is not reliably first: several firms
+   in the measured set lead with the tagline. Longest-first so a segment that
+   is merely the brand's first word loses to the full name. */
+function splitTitle(raw: string): string[] {
+  const decoded = raw
+    .replace(/&amp;/g, '&')
+    .replace(/&nbsp;/g, ' ')
+    .replace(/&#0?39;|&apos;/g, "'")
+    .replace(/\s+/g, ' ')
+    .trim()
+  const parts = decoded
+    .split(/\s*[|–—•·]\s*|\s+[-]\s+|\s*:\s+/)
+    .map((p) => p.trim())
+    .filter((p) => p !== '')
+  return [decoded, ...parts].sort((a, b) => b.length - a.length)
+}
+
+/* Trailing corporate-form noise and leading filler that a search engine does
+   not need and that hurts an exact-phrase match. `Farrer & Co LLP` searches
+   better as `Farrer & Co`. */
+function cleanCompanyName(raw: string): string | null {
+  const cleaned = raw
+    /* Two passes with a single `\s` each rather than `\s+(?:the\s+)?`: the
+       quantifier and the optional group both match whitespace, which is the
+       ambiguity that backtracks. `splitTitle` has already collapsed runs of
+       whitespace, so one character is all there is to eat anyway. */
+    .replace(/^(?:welcome to|home|homepage)\s/i, '')
+    .replace(/^the\s/i, '')
+    /* One separator character, not `[\s,]+`. The quantified class followed by
+       an alternation anchored at `$` backtracks quadratically on a long run of
+       spaces that never matches, and this string comes off a fetched page. The
+       trailing `.trim()` below absorbs whatever whitespace is left over. */
+    .replace(
+      /[\s,](?:llp|l\.l\.p\.|ltd|limited|plc|inc|incorporated|llc|gmbh|s\.a\.|pllc|p\.c\.)\.?$/i,
+      '',
+    )
+    .replace(/\s+/g, ' ')
+    .trim()
+  if (cleaned.length < 2 || cleaned.length > 70) return null
+  /* Must contain a letter — a title that is only punctuation or a number is
+     not a name. */
+  if (!/[a-z]/i.test(cleaned)) return null
+  return cleaned
+}
+
+function alphanumeric(value: string): string {
+  return value.toLowerCase().replace(/[^a-z0-9]/g, '')
+}
+
+/* The domain the company itself says is its real one (LYR-221).
+
+   `kingsleynapley.com` serves a 200 but redirects to — and declares
+   `rel=canonical` and `og:url` on — `kingsleynapley.co.uk`. Search correctly
+   returned `kingsleynapley.co.uk/careers`, and `classifyHost` correctly scored
+   it `other`, because on the evidence it had, a different TLD is a different
+   company. The alias closes that gap without loosening the identity rule.
+
+   Two guards keep this from becoming the brand-token match the search module
+   exists to reject:
+
+     The alias must SHARE THE BRAND TOKEN with the input domain. A canonical
+     pointing at a CMS host, a CDN, or a parent brand is not an alias.
+
+     It must be DECLARED. `bakertilly.com` publishes no canonical, so
+     `bakertilly.ca` — a different member firm — is still `other`, exactly as
+     it was. Nothing here infers an alias from spelling alone. */
+export function canonicalDomainFromHtml(
+  html: string,
+  domain: string,
+): string | null {
+  if (typeof html !== 'string' || html === '') return null
+
+  const declared =
+    html.match(
+      /<link[^>]+rel\s*=\s*["']canonical["'][^>]+href\s*=\s*["']([^"']+)["']/i,
+    ) ??
+    html.match(
+      /<link[^>]+href\s*=\s*["']([^"']+)["'][^>]+rel\s*=\s*["']canonical["']/i,
+    ) ??
+    html.match(
+      /<meta[^>]+property\s*=\s*["']og:url["'][^>]+content\s*=\s*["']([^"']+)["']/i,
+    )
+  if (!declared) return null
+
+  const alias = normalizeDomain(declared[1])
+  const input = normalizeDomain(domain)
+  if (!alias || !input || alias === input) return null
+
+  return companyToken(alias) !== '' &&
+    companyToken(alias) === companyToken(input)
+    ? alias
+    : null
 }

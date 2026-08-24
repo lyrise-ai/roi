@@ -42,6 +42,8 @@ import {
 } from '../types'
 import {
   type Region,
+  canonicalDomainFromHtml,
+  companyNameFromHtml,
   countryFromDomain,
   countryFromRegistration,
   countryFromStructuredData,
@@ -61,6 +63,13 @@ import {
    fabrication this subsystem exists to prevent. The keys are always present so
    consumers can't forget a field; the values are nullable so we can't lie. */
 export type S1Facts = {
+  /* Optional rather than one of the four routing fields: a firm whose homepage
+     we could not read still routes on country and vertical, and S2's discovery
+     query falls back to the domain token when this is absent. */
+  name?: Fact<string>
+  /* Passed to S2 so a search hit on the company's real host is not discarded
+     as a different company. Not shown to a prospect. */
+  canonicalDomain?: Fact<string>
   country: Fact<string> | null
   region: Fact<Region> | null
   vertical: Fact<string> | null
@@ -81,6 +90,16 @@ export type S1Facts = {
    inside their own adapter and there is exactly one place that turns data into
    Facts. */
 type RawRecord = {
+  /* The firm's name as it writes it — "Gowling WLG", not "gowlingwlg". Only
+     the site tier produces this; the enrichment adapters could, but PDL's
+     `name` is its own normalised spelling rather than the company's, and the
+     point of this field is how the company writes itself. See
+     `companyNameFromHtml` for why it is load-bearing (LYR-221). */
+  name?: string
+  /* A domain the company declares equivalent to the one we were given. Site
+     tier only — an enrichment record cannot tell us what a company's own
+     markup says. */
+  canonicalDomain?: string
   country?: string
   vertical?: string
   industry?: string
@@ -214,6 +233,11 @@ async function siteTier(domain: string): Promise<TierResult> {
     undefined
 
   const record: RawRecord = {
+    /* Read from the raw HTML, not `text`: og:site_name and the schema.org
+       block live in markup that `htmlToText` has already stripped. */
+    name: companyNameFromHtml(artifact.content, domain) ?? undefined,
+    canonicalDomain:
+      canonicalDomainFromHtml(artifact.content, domain) ?? undefined,
     country,
     vertical: verticalFromText(text.slice(0, 20_000)) ?? undefined,
     /* No headcount, no size band, no founding year. A homepage rarely states
@@ -291,6 +315,10 @@ function buildFacts(record: RawRecord, url: string, source: string): S1Facts {
     country,
     region,
     vertical: make(record.vertical, 'medium'),
+    ...(record.name !== undefined ? { name: make(record.name, 'high') } : {}),
+    ...(record.canonicalDomain !== undefined
+      ? { canonicalDomain: make(record.canonicalDomain, 'high') }
+      : {}),
     sizeBand: make(record.sizeBand, 'high'),
     ...(record.headcount !== undefined
       ? { headcount: make(record.headcount, 'high') }

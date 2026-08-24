@@ -29,7 +29,7 @@
 // belong to this company is dropped. We would rather return nothing.
 // ─────────────────────────────────────────────────────────────────────────────
 
-import { providerKey } from './env'
+import { webSearch as providerSearch } from '@/src/lib/roi/tools/webSearch'
 
 export type SearchHit = { url: string; title: string }
 
@@ -179,7 +179,14 @@ export function slugMatchesCompany(slug: string, token: string): boolean {
   return longer.startsWith(shorter)
 }
 
-export function classifyHost(url: string, domain: string): HostClass {
+export function classifyHost(
+  url: string,
+  domain: string,
+  /* Hosts the company itself declared equivalent to `domain` — see
+     `canonicalDomainFromHtml`. Never inferred here: this function is given
+     them or it does without. */
+  aliases: string[] = [],
+): HostClass {
   const host = hostOf(url)
   if (host === '') return 'other'
 
@@ -189,9 +196,18 @@ export function classifyHost(url: string, domain: string): HostClass {
 
   /* The company's own domain, or a subdomain of it. `careers.osborneclarke.com`
      and `jobs.rsmus.com` are the company; `bakertilly.ca` is not, and a plain
-     brand-name match would have accepted it. */
+     brand-name match would have accepted it.
+
+     Aliases extend this to a domain the company REDIRECTS to and names in its
+     own `rel=canonical` — `kingsleynapley.com` serves `kingsleynapley.co.uk`,
+     so its real careers page was scoring `other` and being dropped. This stays
+     safe precisely because the alias is read off the company's own markup
+     rather than derived from the brand token: `bakertilly.com` declares no
+     canonical, so `bakertilly.ca` is still rejected, which is the wrong-firm
+     case this module exists to prevent. */
   const own = hostOf(domain)
-  if (own && (host === own || host.endsWith(`.${own}`))) return 'own'
+  const owned = [own, ...aliases.map(hostOf)].filter((h) => h !== '')
+  if (owned.some((o) => host === o || host.endsWith(`.${o}`))) return 'own'
 
   const ats = ATS_HOSTS.find((a) => host === a || host.endsWith(`.${a}`))
   if (ats) {
@@ -202,9 +218,19 @@ export function classifyHost(url: string, domain: string): HostClass {
   return 'other'
 }
 
+/* A vacancy page names itself in the PATH (`/careers`) or in the SUBDOMAIN
+   (`careers.bdo.co.uk`). Checking only the path dropped `careers.bdo.co.uk` —
+   classified `own`, exactly the right page — because its pathname is bare `/`.
+   That was one of the six zero-yield domains in the LYR-221 measurement. */
 export function isVacancyUrl(url: string): boolean {
   try {
-    return VACANCY_PATH.test(new URL(url).pathname)
+    const parsed = new URL(url)
+    if (VACANCY_PATH.test(parsed.pathname)) return true
+    const label = parsed.hostname
+      .toLowerCase()
+      .replace(/^www\./, '')
+      .split('.')[0]
+    return VACANCY_PATH.test(`/${label}`)
   } catch {
     return false
   }
@@ -219,6 +245,7 @@ export function rankHits(
   hits: SearchHit[],
   domain: string,
   limit = 4,
+  aliases: string[] = [],
 ): SearchHit[] {
   if (!Array.isArray(hits)) return []
   const seen = new Set<string>()
@@ -226,7 +253,7 @@ export function rankHits(
 
   for (const hit of hits) {
     const url = typeof hit?.url === 'string' ? hit.url : ''
-    const cls = url === '' ? 'other' : classifyHost(url, domain)
+    const cls = url === '' ? 'other' : classifyHost(url, domain, aliases)
     /* A non-vacancy page on the company's own domain is usually the About page
        and carries no postings; on an ATS host the root IS the board. */
     const keep =
@@ -249,76 +276,67 @@ export function rankHits(
     .map((s) => s.hit)
 }
 
+/* Tight because S2 runs inside a 20s budget and the cascade may try two
+   engines. The provider layer's own default is 15s, for the older ROI agent
+   which has no such ceiling. */
 const SEARCH_TIMEOUT_MS = 6_000
 
-async function tavily(query: string, limit: number): Promise<SearchHit[]> {
-  const key = providerKey('TAVILY_API_KEY')
-  if (!key) return []
-  const response = await fetch('https://api.tavily.com/search', {
-    method: 'POST',
-    headers: { 'content-type': 'application/json' },
-    body: JSON.stringify({
-      api_key: key,
-      query,
-      max_results: limit,
-      search_depth: 'basic',
-    }),
-    signal: AbortSignal.timeout(SEARCH_TIMEOUT_MS),
-  })
-  if (!response.ok) return []
-  const body = await response.json()
-  return (body?.results ?? [])
-    .map((r: { url?: string; title?: string }) => ({
-      url: String(r?.url ?? ''),
-      title: String(r?.title ?? ''),
-    }))
-    .filter((r: SearchHit) => r.url !== '')
-}
-
-async function brave(query: string, limit: number): Promise<SearchHit[]> {
-  const key = providerKey('BRAVE_API_KEY')
-  if (!key) return []
-  const endpoint = `https://api.search.brave.com/res/v1/web/search?q=${encodeURIComponent(query)}&count=${limit}`
-  const response = await fetch(endpoint, {
-    headers: { accept: 'application/json', 'x-subscription-token': key },
-    signal: AbortSignal.timeout(SEARCH_TIMEOUT_MS),
-  })
-  if (!response.ok) return []
-  const body = await response.json()
-  return (body?.web?.results ?? [])
-    .map((r: { url?: string; title?: string }) => ({
-      url: String(r?.url ?? ''),
-      title: String(r?.title ?? ''),
-    }))
-    .filter((r: SearchHit) => r.url !== '')
-}
-
-/* Tavily first, Brave as fallback. Both free tiers, both already configured in
-   this repo for the older ROI pipeline. No key at all is a supported state: it
-   returns [] and the caller records a miss, exactly like every other tier. */
+/* The engines, their keys, their failover and their error handling all live in
+   `tools/webSearch` — this is the only place that used to carry a second copy
+   of them, and the two drifted (LYR-221). All this does is narrow the rich
+   provider shape to the {url, title} pairs the scouts rank on; the snippet and
+   the generated answer are deliberately dropped, because a scout must read the
+   page itself rather than trust a search engine's summary of it. */
 export async function webSearch(
   query: string,
   limit = 8,
 ): Promise<SearchHit[]> {
-  for (const engine of [tavily, brave]) {
-    try {
-      const hits = await engine(query, limit)
-      if (hits.length > 0) return hits
-    } catch {
-      /* Try the next engine; a search outage is a miss, not a failed run. */
-    }
+  try {
+    const { results } = await providerSearch(query, limit, SEARCH_TIMEOUT_MS)
+    return results
+      .map((r) => ({
+        url: String(r?.url ?? ''),
+        title: String(r?.title ?? ''),
+      }))
+      .filter((r) => r.url !== '')
+  } catch {
+    /* A search outage is a miss, not a failed run. */
+    return []
   }
-  return []
 }
 
-/* The query that found `tamimi.talentera.com` on the first attempt. Company
-   name comes from the domain rather than from a scout, so this tier does not
-   depend on S1 having resolved anything. */
-export function discoveryQuery(domain: string, vertical?: string): string {
+/* The query that found `tamimi.talentera.com` on the first attempt.
+
+   `companyName` is S1's — the firm's name as it writes it. It is optional and
+   the domain-token fallback below is the original behaviour, so this tier still
+   runs when S1 found nothing; but the name is worth threading three signatures
+   for, because the token is what was breaking the search. Measured over the
+   25-domain set (LYR-221): `"gowlingwlg"` returned a German packaging company
+   four times and `"farrer"` returned six unrelated US firms, both scoring zero
+   usable hits. `"Gowling WLG"` and `"Farrer & Co"` scored four each. Search
+   engines match how people write a name, and nobody writes a hostname. */
+export function discoveryQuery(
+  domain: string,
+  vertical?: string,
+  companyName?: string,
+): string {
+  const subject = usableName(companyName) ?? subjectFromDomain(domain)
+  return `"${subject}" careers current vacancies job openings${vertical ? ` ${vertical}` : ''}`
+}
+
+function usableName(companyName?: string): string | null {
+  if (typeof companyName !== 'string') return null
+  const trimmed = companyName.trim().replace(/\s+/g, ' ')
+  /* Quoted into the query, so a stray quote would break the phrase match. */
+  return trimmed.length >= 2 && trimmed.length <= 70 && !trimmed.includes('"')
+    ? trimmed
+    : null
+}
+
+function subjectFromDomain(domain: string): string {
   const name = companyToken(domain).replace(/([a-z])([A-Z])/g, '$1 $2')
   const pretty = hostOf(domain).split('.')[0].replace(/-/g, ' ')
-  const subject = pretty.length >= name.length ? pretty : name
-  return `"${subject}" careers current vacancies job openings${vertical ? ` ${vertical}` : ''}`
+  return pretty.length >= name.length ? pretty : name
 }
 
 /* Job-detail links on a page we already fetched.
