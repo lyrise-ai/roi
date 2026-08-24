@@ -61,6 +61,7 @@ import { jsonSchema, streamObject } from 'ai'
 import { getAnalystModel } from '@/src/lib/roi/llm'
 import type { Coverage, ConfidenceTier } from './aggregate'
 import {
+  type SourceType,
   type SourceUrl,
   type ScoutId,
   type ScoutResult,
@@ -80,7 +81,25 @@ export type ResearchFinding = {
   /* Verbatim from the source where one exists, so a writer can quote rather
      than paraphrase. */
   excerpt?: string
+  /* Carried through from the cited fact's own provenance, never from the
+     model — neither field is in the schema and the agent never sees them.
+     Enrichment data is a monthly-refreshed cache, so the panel dates those
+     rows: a six-month-old headcount presented as current is precisely the
+     credibility damage this product exists to avoid (LYR-199). */
+  sourceType?: SourceType
+  retrievedAt?: string
 }
+
+/* What a cited URL is allowed to carry into the finding that cites it. Absent
+   for a job posting, which is its own source and has no separate provenance
+   record; present for anything that arrived as a `Fact`. */
+type FindingProvenance = { sourceType?: SourceType; retrievedAt?: string }
+
+/* Every URL the research actually retrieved, which is both the grounding
+   whitelist and the provenance lookup. It used to be a bare `Set` of URLs;
+   making it a Map is what lets a verified finding inherit the age of the fact
+   it cites without the model ever being asked for a date. */
+type SourceIndex = Map<string, FindingProvenance>
 
 export type ResearchAssessment = {
   findings: ResearchFinding[]
@@ -203,9 +222,20 @@ const ANALYST_SYSTEM = [
 function renderResearch(
   domain: string,
   results: Partial<Record<ScoutId, ScoutResult<unknown>>>,
-): { prompt: string; allowedUrls: Set<string> } {
-  const allowedUrls = new Set<string>()
+): { prompt: string; sources: SourceIndex } {
+  const sources: SourceIndex = new Map()
   const lines: string[] = [`Company domain: ${domain}`, '']
+
+  /* First writer wins, unless the later one actually carries provenance: one
+     URL can back both a posting (which has none of its own) and an S1 fact
+     (which does), and only the latter can date the row. */
+  const addSource = (url: string, provenance?: FindingProvenance) => {
+    if (!url) return
+    const existing = sources.get(url)
+    if (!existing || (!existing.sourceType && provenance?.sourceType)) {
+      sources.set(url, provenance ?? {})
+    }
+  }
 
   const entries = Object.entries(results) as [ScoutId, ScoutResult<unknown>][]
 
@@ -219,7 +249,7 @@ function renderResearch(
     const postings = (facts?.postings ?? []) as Record<string, unknown>[]
     for (const posting of postings) {
       const url = String(posting?.sourceUrl ?? '')
-      if (url) allowedUrls.add(url)
+      addSource(url)
       const shape =
         posting?.kind === 'page' ? 'LISTING PAGE (not a role)' : 'role'
       const verbs = Array.isArray(posting?.taskVerbs)
@@ -249,11 +279,19 @@ function renderResearch(
     for (const [field, value] of Object.entries(facts ?? {})) {
       const fact = value as {
         value?: unknown
-        provenance?: { sourceUrl?: string; excerpt?: string }
+        provenance?: {
+          sourceUrl?: string
+          excerpt?: string
+          sourceType?: SourceType
+          retrievedAt?: string
+        }
       }
       const src = fact?.provenance?.sourceUrl
       if (src) {
-        allowedUrls.add(src)
+        addSource(src, {
+          sourceType: fact.provenance?.sourceType,
+          retrievedAt: fact.provenance?.retrievedAt,
+        })
         lines.push(
           `- ${field}: ${JSON.stringify(fact.value)}\n  source: ${src}` +
             (fact.provenance?.excerpt
@@ -274,10 +312,10 @@ function renderResearch(
     lines.push('')
   }
 
-  if (allowedUrls.size === 0) {
+  if (sources.size === 0) {
     lines.push('No sources were retrieved for this company.')
   }
-  return { prompt: lines.join('\n'), allowedUrls }
+  return { prompt: lines.join('\n'), sources }
 }
 
 /* Verifies one finding, or returns null. A citation the fact store does not
@@ -289,10 +327,11 @@ function renderResearch(
    emitted, whether it arrives in a stream or all at once. */
 function verifyFinding(
   item: Record<string, unknown>,
-  allowedUrls: Set<string>,
+  sources: SourceIndex,
 ): ResearchFinding | null {
   const claimed = String(item?.sourceUrl ?? '')
-  const verified = allowedUrls.has(claimed) ? sourceUrl(claimed) : null
+  const provenance = sources.get(claimed)
+  const verified = provenance ? sourceUrl(claimed) : null
   const headline = String(item?.headline ?? '').trim()
   if (!verified || headline === '') return null
 
@@ -306,6 +345,7 @@ function verifyFinding(
     kind: String(item?.kind ?? 'finding'),
     sourceUrl: verified,
     ...(excerpt ? { excerpt } : {}),
+    ...provenance,
   }
 }
 
@@ -418,9 +458,9 @@ export async function assessResearch(
   results: Partial<Record<ScoutId, ScoutResult<unknown>>>,
   options: AssessOptions = {},
 ): Promise<ResearchAssessment> {
-  const { prompt: research, allowedUrls } = renderResearch(domain, results)
+  const { prompt: research, sources } = renderResearch(domain, results)
 
-  if (allowedUrls.size === 0) {
+  if (sources.size === 0) {
     /* Nothing was retrieved, so nothing can be cited, so there is nothing to
        reason about. Skipping the call is both cheaper and more honest than
        asking a model to find meaning in an empty page. */
@@ -478,7 +518,7 @@ export async function assessResearch(
 
     const flushTo = (raw: Record<string, unknown>[], upTo: number) => {
       while (emitted < upTo) {
-        const finding = verifyFinding(raw[emitted] ?? {}, allowedUrls)
+        const finding = verifyFinding(raw[emitted] ?? {}, sources)
         emitted += 1
         if (finding) {
           findings.push(finding)

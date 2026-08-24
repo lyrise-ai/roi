@@ -368,6 +368,89 @@ test('a failed assessment is not cached', async () => {
   assert.equal(out.findings[0].headline, 'recovered')
 })
 
+// ── freshness ────────────────────────────────────────────────────────────────
+// The panel dates enrichment-sourced rows (LYR-199). The model is never asked
+// for a date — neither field is in its schema — so this is entirely about the
+// finding inheriting the provenance of the fact it cites.
+
+const ENRICHED_URL = 'https://docs.peopledatalabs.com/docs/company-enrichment-api'
+
+const s1Enriched = {
+  S1: {
+    scout: 'S1',
+    status: 'FULL',
+    facts: {
+      headcount: {
+        value: 38,
+        provenance: {
+          sourceUrl: ENRICHED_URL,
+          sourceType: 'enrichment',
+          retrievedAt: '2026-03-01T00:00:00.000Z',
+        },
+      },
+    },
+    sourcesAttempted: [],
+    durationMs: 5,
+    costUsd: 0,
+  },
+}
+
+test('a finding inherits the provenance of the fact it cites', async () => {
+  globalThis.__stream = stream({
+    findings: [finding(ENRICHED_URL, 'You are about 38 people')],
+    manualWorkSignals: [],
+    confidenceTier: 'MODERATE',
+    reasoning: '',
+    gaps: [],
+  })
+
+  const out = await assessResearch('acme.example', s1Enriched)
+
+  assert.equal(out.findings.length, 1)
+  assert.equal(out.findings[0].sourceType, 'enrichment')
+  assert.equal(out.findings[0].retrievedAt, '2026-03-01T00:00:00.000Z')
+})
+
+test('a posting carries no age, because it was read during this run', async () => {
+  globalThis.__stream = stream({
+    findings: [finding(POSTING_URL, 'You are hiring a paralegal')],
+    manualWorkSignals: [],
+    confidenceTier: 'RICH',
+    reasoning: '',
+    gaps: [],
+  })
+
+  const out = await assessResearch('acme.example', s2Result())
+
+  assert.equal(out.findings[0].sourceType, undefined)
+  assert.equal(out.findings[0].retrievedAt, undefined)
+})
+
+test('the model cannot mint provenance the fact store does not have', async () => {
+  /* Grounding covers the URL; this covers the date beside it. A model that
+     volunteers a `retrievedAt` is ignored — the panel would otherwise be
+     showing a fabricated freshness claim next to a real fact, which is the
+     precise failure the age line exists to prevent. */
+  globalThis.__stream = stream({
+    findings: [
+      {
+        ...finding(POSTING_URL, 'You are hiring a paralegal'),
+        sourceType: 'enrichment',
+        retrievedAt: '2019-01-01T00:00:00.000Z',
+      },
+    ],
+    manualWorkSignals: [],
+    confidenceTier: 'RICH',
+    reasoning: '',
+    gaps: [],
+  })
+
+  const out = await assessResearch('acme.example', s2Result())
+
+  assert.equal(out.findings[0].sourceType, undefined)
+  assert.equal(out.findings[0].retrievedAt, undefined)
+})
+
 // ── the incremental analyst ──────────────────────────────────────────────────
 
 test('the analyst assesses as scouts land, not once at the end', async () => {
