@@ -1,18 +1,36 @@
 /**
  * /v2 POC route (LYR-182, screens: LYR-183, interview: LYR-184, scan panel:
- * LYR-185) — runs in the `anon` project.
+ * LYR-185, reveal: LYR-188) — runs in the `anon` project.
  *
- * Five guarantees: the route is reachable without auth, flow state survives
+ * Six guarantees: the route is reachable without auth, flow state survives
  * all four steps (landing → company → interview → reveal) and going back,
- * submitting the company form does not wait on the canned scan, every
- * interview answer — across more than one pain point — reaches the end, and
- * the scan panel resolves sourced facts with working sources while rendering
- * nothing at all when there was no scan.
+ * submitting the company form does not wait on the canned scan, a fully
+ * answered pain point reaches the reveal as real figures, the return figure
+ * can be traced back to the calculator's own arithmetic, and the scan panel
+ * resolves sourced facts with working sources while rendering nothing at all
+ * when there was no scan.
+ *
+ * The reveal shows an observation sentence and two figures — it does NOT
+ * echo the pain point text, the team, or the raw answers, so what "reached
+ * the end" is asserted through the numbers rather than through the words.
  *
  * The whole flow is also walkable with no keyboard at all, which is how the
  * demo is given.
  */
-import { test, expect } from '@playwright/test'
+import { test, expect, type Page } from '@playwright/test'
+
+/* The four numbers the calculator needs, typed as bare digits because that is
+   what the parser actually accepts. The pay and "still needs a person" fields
+   suggest "$70k a year" and "about a third", but parseNumeric rejects a
+   trailing word, so those formats leave the field missing and the return
+   figure withheld — a separate known bug, deliberately not exercised here.
+   Placeholders are harbourfield.com's, so both callers scan that company. */
+async function answerTheNumbers(page: Page) {
+  await page.getByPlaceholder('4', { exact: true }).fill('4')
+  await page.getByPlaceholder('12', { exact: true }).fill('12')
+  await page.getByPlaceholder('$70k a year', { exact: true }).fill('70000')
+  await page.getByPlaceholder('about a third', { exact: true }).fill('30')
+}
 
 test.describe('/v2', () => {
   test('@smoke walks all four steps and carries state', async ({ page }) => {
@@ -56,7 +74,9 @@ test.describe('/v2', () => {
     ).toHaveAttribute('aria-checked', 'true')
     await expect(open).not.toHaveValue(/Contract review/)
 
-    await page.getByPlaceholder('4', { exact: true }).fill('6')
+    // Answered in full, so this pain point reaches the reveal as real figures
+    // rather than the "not enough here yet" path.
+    await answerTheNumbers(page)
 
     // One pain point is fewer than the analyst wants, and it says so — but
     // leaving is never blocked on it.
@@ -85,21 +105,33 @@ test.describe('/v2', () => {
 
     await expect(page.getByText('Step 4 of 4')).toBeVisible()
     await expect(page.getByText('Harbourfield Legal')).toBeVisible()
-    // Both pain points, and the numbers typed against the first one, survive.
-    await expect(page.getByText(/Re-keying intake forms/)).toContainText(
-      'Paralegals',
-    )
-    await expect(page.getByText(/Re-keying intake forms/)).toContainText('6')
-    await expect(page.getByText(/Rebuilding the Friday report/)).toBeVisible()
-    await expect(page.getByRole('listitem')).toHaveCount(3)
-    // The filled-in one says whose words they are.
-    await expect(page.getByText(/Chasing missing documents/)).toContainText(
-      'our guess, not yours',
-    )
-    // And an untouched number resolves to the estimate, carrying its tag.
-    await expect(page.getByText(/Chasing missing documents/)).toContainText(
-      'about 12 hours (benchmarked)',
-    )
+
+    // The "we heard you" moment: the user's own numbers read back as a
+    // sentence, before any figure. Composed deterministically from the
+    // answers above — 4 people × 12 hours × 50 working weeks.
+    await expect(
+      page.getByText(
+        'Four people spending twelve hours a week each adds up to about 2,400 hours a year.',
+      ),
+    ).toBeVisible()
+
+    // The typed answers survive the whole flow as figures. Scoped to each
+    // figure's own block, because the same digits also appear in the
+    // observation sentence above.
+    const spent = page.getByText('Hours currently spent').locator('..')
+    await expect(spent).toContainText('2,400')
+    await expect(spent).toContainText('hrs / year')
+
+    // The complete path: the return figure only exists once pay and
+    // "still needs a person" both parsed.
+    const returned = page
+      .getByText(/Hours returned, and what that’s worth/)
+      .locator('..')
+    await expect(returned).toContainText('941')
+    await expect(returned).toContainText('$98,477')
+    await expect(
+      page.getByText(/don’t have enough here yet to put a return number/),
+    ).toHaveCount(0)
   })
 
   test('fills the scan panel while the interview is being answered', async ({
@@ -160,10 +192,78 @@ test.describe('/v2', () => {
     await page.getByRole('button', { name: 'That’s all for now' }).click()
 
     await expect(page.getByText('Step 4 of 4')).toBeVisible()
-    await expect(page.getByRole('listitem')).toHaveCount(1)
-    const only = page.getByRole('listitem').first()
-    await expect(only).toContainText('our guess, not yours')
-    await expect(only).toContainText('about 2,600 a month (benchmarked)')
+    // Nothing was typed, so there is no number to stand on: the reveal says
+    // so in both places rather than inventing one or printing a bare dash.
+    await expect(
+      page.getByText("We don't have numbers for this one yet."),
+    ).toBeVisible()
+    await expect(
+      page.getByText(/Not enough here yet to put a number on it/),
+    ).toBeVisible()
+    // No figures, and nothing to trace — so no mark to open.
+    await expect(page.getByText('Hours currently spent')).toHaveCount(0)
+    await expect(
+      page.getByRole('button', { name: /includes assumptions/ }),
+    ).toHaveCount(0)
+  })
+
+  test('traces the return figure back to the calculator’s own arithmetic', async ({
+    page,
+  }) => {
+    await page.goto('/v2')
+    await page.getByRole('button', { name: 'Start with my company' }).click()
+    await page.getByLabel('Company name').fill('Harbourfield Legal')
+    await page.getByLabel('Website').fill('harbourfield.com')
+    await page.getByRole('button', { name: 'Next', exact: true }).click()
+
+    await page
+      .getByRole('textbox', { name: /Where do your teams lose/ })
+      .fill('Re-keying intake forms')
+    await answerTheNumbers(page)
+    await page.getByRole('button', { name: 'That’s all for now' }).click()
+
+    await expect(page.getByText('Step 4 of 4')).toBeVisible()
+
+    // Nothing is open until it is asked for.
+    await expect(page.getByRole('dialog')).toHaveCount(0)
+
+    // Only the dollar figure is marked. The hours-spent figure carries no
+    // assumption beyond what was typed, so it gets no mark and no popover.
+    const mark = page.getByRole('button', { name: /includes assumptions/ })
+    await expect(mark).toHaveCount(1)
+    await mark.click()
+
+    const dialog = page.getByRole('dialog', {
+      name: 'How this number was calculated',
+    })
+    await expect(dialog).toBeVisible()
+
+    // Every line is a string the calculator emitted, not arithmetic rebuilt
+    // in the component — so the popover cannot drift from the figure.
+    await expect(dialog).toContainText(
+      '2,400 × 70% × 0.7 × 0.8 = 941 hours/year returned',
+    )
+    await expect(dialog).toContainText(
+      '($70,000 ÷ (50 × 40)) × 1.3 = $45.50/hour',
+    )
+    await expect(dialog).toContainText('941 × $45.50 = $42,816')
+    await expect(dialog).toContainText('$42,816 × 1.3 = $55,661')
+    // Lands on the figure printed on the screen behind it.
+    await expect(dialog).toContainText('$42,816 + $55,661 = $98,477')
+
+    // The lead figure's own formula stays out: it belongs to the unmarked
+    // number, not to the assumptions behind this one.
+    await expect(dialog).not.toContainText('hours/year spent today')
+
+    // Dismissable by the close button…
+    await dialog.getByRole('button', { name: 'Close' }).click()
+    await expect(page.getByRole('dialog')).toHaveCount(0)
+
+    // …and by Escape, which the reveal adds on top of the Dialog primitive.
+    await mark.click()
+    await expect(dialog).toBeVisible()
+    await page.keyboard.press('Escape')
+    await expect(page.getByRole('dialog')).toHaveCount(0)
   })
 
   test('renders no scan panel at all when nothing was found', async ({
