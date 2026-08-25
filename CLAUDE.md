@@ -29,11 +29,8 @@ The most actively developed area. `pages/api/roi-agent.js` handles generation
 lives under `evals/roi/` (see `evals/roi/README.md`) — run it after changing
 prompts or scoring logic.
 
-Two rules specific to this directory:
+One rule specific to this directory:
 
-- **The LLM never does arithmetic.** Research, workflow modeling, and narrative
-  copy are LLM work; every number comes from `pipeline/roiCalculator.ts` and
-  `pipeline/assembleReport.ts`, which are pure and deterministic. Keep that line.
 - **`ReportState` has single sources of truth** (`company`, `globals`,
   `workflows`, `copy`) and derived fields (`calcOutput`, `assembled`,
   `renderedHtml`, `renderedFullHtml`) that must be recomputed, never cached as

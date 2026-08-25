@@ -8,8 +8,7 @@
 // to show as a stub.
 //
 // Deterministic string composition ONLY — no LLM call, no research call, no
-// API. CLAUDE.md is explicit that the LLM never does arithmetic in this
-// pipeline; this file is arithmetic-adjacent (it reads numbers someone else
+// API. This file is arithmetic-adjacent (it reads numbers someone else
 // already computed and phrases them), so it stays a pure template, same as
 // miniCalculator.ts and answerBridge.ts. Pure: no I/O, only a type-only
 // import from answerBridge.ts, safe to call from the browser or from Node.
