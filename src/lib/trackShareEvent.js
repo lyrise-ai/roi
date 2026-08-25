@@ -1,12 +1,14 @@
 // ─────────────────────────────────────────────────────────────────────────────
-// trackShareEvent — client-side helper to log share-link recipient behaviour.
+// trackShareEvent — records what someone on a share link did. Runs in the
+// browser.
 //
-// Fire-and-forget; never throws into the UI. Posts to /api/track/share-event,
-// which validates the share token before writing to the `events` table.
+// We start it and move on; it never throws into the interface. It posts to
+// /api/track/share-event, which checks the share token before writing anything.
 //
-// For session-end we prefer navigator.sendBeacon: it survives the page being
-// closed/navigated away, which a normal fetch does not. That's what lets us
-// reliably capture how long the recipient spent in the chat panel.
+// When a session ends we use the browser's "send this even if I'm leaving"
+// method instead of a normal request. A normal request dies when the page
+// closes; that one survives. It is what lets us reliably capture how long
+// someone spent in the chat panel.
 // ─────────────────────────────────────────────────────────────────────────────
 
 export function trackShareEvent({ reportId, shareToken, type, durationMs }) {

@@ -1,5 +1,5 @@
 // ─────────────────────────────────────────────────────────────────────────────
-// linear — creates issues in the team's Triage state.
+// linear — creates issues in the team's Triage column.
 //
 // Env:
 //   LINEAR_API_KEY            personal or workspace API key
@@ -7,8 +7,8 @@
 //   LINEAR_TRIAGE_STATE_ID    optional; the Triage workflow state on that team
 //   LINEAR_BUG_LABEL_ID       optional; label applied to automated error issues
 //
-// Returns `{ skipped: true }` rather than throwing when the keys are absent, so
-// an unconfigured environment degrades to silence instead of 500s.
+// When the keys are missing it reports that it skipped, rather than throwing.
+// An environment with nothing set up goes quiet instead of returning errors.
 // ─────────────────────────────────────────────────────────────────────────────
 
 const LINEAR_API = 'https://api.linear.app/graphql'

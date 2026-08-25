@@ -1,42 +1,43 @@
-/* One gate in front of every outbound email.
+/* One check in front of every email this app sends.
  *
- * There are four independent `fetch('https://api.resend.com/emails')` call
- * sites in this repo (report delivery, report-access alerts, usage alerts,
- * alpha-tour notifications). Nothing stopped them firing from a test run: the
- * e2e suite drives the real report-access and share flows against the real
- * Supabase project, and both `npm run dev` and a local `npm start` read
- * `.env.local` — which has a working RESEND_API_KEY. That put alerts about
- * fixture companies in real inboxes.
+ * Four separate places in this repo call Resend directly: report delivery,
+ * report-access alerts, usage alerts, and alpha-tour notifications. Nothing
+ * stopped any of them firing during a test run. The browser test suite drives
+ * the real access and sharing flows against the real database, and both
+ * `npm run dev` and a local `npm start` read `.env.local`, which holds a
+ * working Resend key. So alerts about made-up test companies were landing in
+ * real inboxes.
  *
- * The gate is deliberately written so it can only ever *add* a block, never
- * remove one that production depends on: sending requires
- * `NODE_ENV === 'production'` (so no dev server ever sends) and an
- * environment that is not explicitly a test one.
+ * This check is written so it can only ever ADD a reason not to send, never
+ * remove one production depends on. Sending requires that we are running in
+ * production, so no dev server ever sends, and that the environment is not
+ * explicitly a test one.
  *
- * On Vercel the decision comes from `VERCEL_ENV`, which the platform sets and
- * nobody can typo, rather than from `NEXT_PUBLIC_ENV`, which is ours. The
- * original version trusted `NEXT_PUBLIC_ENV` everywhere on the assumption that
- * production either left it unset or set it to `production`. It was set to a
- * test value there, so from 2026-08-12 the gate silently suppressed every
- * production email — a 28-report bulk batch generated on 2026-08-17 reached
- * Resend zero times. Preview deployments are now blocked too, which is the
- * direction this gate is allowed to move in.
+ * On Vercel we decide from the platform's own environment variable, which
+ * Vercel sets and nobody can mistype, rather than from ours. The first version
+ * trusted ours everywhere, assuming production either left it unset or set it
+ * to "production". It was actually set to a test value there — so from
+ * 2026-08-12 this check silently blocked every production email, and a
+ * 28-report batch generated on 2026-08-17 never reached Resend at all.
+ * Preview deployments are now blocked too, which is the direction this check is
+ * allowed to move in.
  *
- * To send for real from a local machine, set ALLOW_OUTBOUND_EMAIL=1.
+ * To really send from your own machine, set ALLOW_OUTBOUND_EMAIL=1.
  */
 
-// `ci` is what .github/workflows/e2e.yml sets; `development` is what a
-// developer's .env.local sets. Neither should ever reach a real inbox.
+// "ci" is what our GitHub workflow sets; "development" is what a developer's
+// .env.local sets. Neither should ever reach a real inbox.
 const TEST_ENVS = new Set(['ci', 'development', 'test'])
 
 /**
- * Returns null when it is safe to send, or a short human-readable reason when
- * the send must be skipped. Callers log the reason and return without
- * throwing — a suppressed email is never an error.
+ * Returns nothing when it is safe to send, or a short readable reason when the
+ * email must be skipped. Callers log the reason and carry on. A blocked email is
+ * never an error.
  */
 export function outboundEmailBlockedReason(): string | null {
   if (process.env.ALLOW_OUTBOUND_EMAIL === '1') return null
-  // Platform-owned, so it cannot drift from what the deployment actually is.
+  // Vercel sets this itself, so it can never disagree with what the deployment
+  // actually is.
   if (process.env.VERCEL_ENV) {
     return process.env.VERCEL_ENV === 'production'
       ? null
