@@ -1,17 +1,15 @@
-// Contract tests for the research artifact cache and the fact/scout types
-// (LYR-187 R1 / LYR-194).
+// Tests for the page cache and the fact and scout types (LYR-187 R1 / LYR-194).
 //
-// What's locked in here is the behaviour the rest of the research system is
-// allowed to assume: a cache hit is a cache hit, a failed fetch is null rather
-// than an exception or an empty string, a stale entry is refetched, and a fact
-// cannot carry a source we didn't verify.
+// These pin down what the rest of the research system is allowed to rely on: a
+// cached page really is served from the cache, a failed download comes back as
+// nothing rather than as an exception or an empty string, an old entry is
+// fetched again, and a fact cannot carry a source we never checked.
 //
-// No test-runner dependency: Node's built-in `node:test` + `node:assert`.
-// The modules are bundled with esbuild the same way
-// src/lib/roi/v2/__tests__/miniCalculator.test.mjs does, with node_modules left
-// external so the lazy Supabase import stays unresolved — it never fires here,
-// because these tests run with no Supabase env and the cache degrades to
-// memory-only, which is also how CI runs.
+// No test framework needed: Node's own `node:test` and `node:assert`. esbuild
+// bundles the modules the same way miniCalculator.test.mjs does, leaving
+// node_modules alone so the optional Supabase import is never pulled in. It
+// never runs here anyway: these tests have no database settings, so the cache
+// falls back to memory only — which is also how CI runs.
 //
 //   Run:  node --test src/lib/roi/research/__tests__/artifactCache.test.mjs
 //
@@ -31,9 +29,10 @@ let tmpDir
 const realFetch = globalThis.fetch
 
 before(async () => {
-  /* Inside node_modules/.cache rather than os.tmpdir: the bundle keeps its
-     bare imports external, so it has to sit somewhere Node can still resolve
-     node_modules from. Gitignored, and removed again in `after`. */
+  /* We put the bundle inside node_modules/.cache rather than the system temp
+     folder. The bundle leaves its imports unresolved, so it has to sit
+     somewhere Node can still find node_modules from. It is gitignored, and
+     deleted again when the tests finish. */
   const cacheRoot = path.resolve(here, '../../../../..', 'node_modules/.cache')
   fs.mkdirSync(cacheRoot, { recursive: true })
   tmpDir = fs.mkdtempSync(path.join(cacheRoot, 'research-r1-test-'))
@@ -59,9 +58,9 @@ after(() => {
   if (tmpDir) fs.rmSync(tmpDir, { recursive: true, force: true })
 })
 
-/* Every test drives the cache through a stubbed global fetch and a clean
-   memory layer, so nothing here touches the network or the shared Supabase
-   project. `calls` is the assertion surface for "did it refetch?". */
+/* Every test runs the cache with a fake fetch and an empty memory layer, so
+   nothing here touches the network or the shared database. The `calls` list is
+   how we check whether it fetched again. */
 let calls
 function stubFetch(handler) {
   calls = []

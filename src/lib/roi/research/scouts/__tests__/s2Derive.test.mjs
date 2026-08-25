@@ -1,9 +1,9 @@
-// Unit tests for S2's deterministic core (LYR-187 R3 / LYR-196).
+// Tests for S2's counting half (LYR-187 R3 / LYR-196).
 //
-// The extraction model reads a posting; everything counted ACROSS postings is
-// arithmetic and lives here. An LLM computing "three of their last five" is
-// untestable and drifts between runs, which is why these are pure functions
-// with fixed inputs.
+// The model reads one posting. Everything counted ACROSS postings is arithmetic
+// and lives here. A model working out "three of their last five" cannot be
+// tested and changes between runs, which is why these are plain functions with
+// fixed inputs.
 //
 //   Run:  node --test src/lib/roi/research/scouts/__tests__/s2Derive.test.mjs
 //
@@ -65,8 +65,8 @@ test('baseLabel returns null for what is not a domain', () => {
 })
 
 test('slugCandidates generates multiple guesses, most likely first', () => {
-  /* Real ATS slugs vary — the same firm might be `acme-law` or `acmelaw` —
-     and every wrong guess is one 404 against a free public endpoint. */
+  /* Real board names vary: the same firm might be `acme-law` or `acmelaw`. Each
+     wrong guess costs one failed request against a free public endpoint. */
   const hyphenated = d.slugCandidates('acme-law.com')
   assert.equal(hyphenated[0], 'acme-law')
   assert.ok(hyphenated.includes('acmelaw'))

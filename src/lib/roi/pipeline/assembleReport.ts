@@ -1,7 +1,8 @@
 // ─────────────────────────────────────────────────────────────────────────────
-// assembleReport — builds all display strings and HTML blobs for the template
-// Pure TypeScript, fully deterministic — no LLM calls
-// Single input: ReportState (reads company, globals, workflows, copy, calcOutput)
+// assembleReport — builds every piece of text and HTML the template needs.
+// Plain code, same answer every time, no model calls.
+// It takes one thing: the report object. It reads the company, the money
+// settings, the workflows, the written copy and the calculated figures.
 // ─────────────────────────────────────────────────────────────────────────────
 
 import { roiLog } from '@/src/lib/roi/debug'
@@ -28,7 +29,7 @@ import type {
   WorkflowCalc,
 } from '@/src/lib/roi/types'
 
-// ── Formatters ────────────────────────────────────────────────────────────────
+// -- Turning values into display text ----------------------------------------
 
 function esc(s: string | null | undefined): string {
   return String(s ?? '')
@@ -38,7 +39,7 @@ function esc(s: string | null | undefined): string {
     .replace(/"/g, '&quot;')
 }
 
-// ── Case studies ──────────────────────────────────────────────────────────────
+// -- The case studies we show at the end -------------------------------------
 
 export const CASE_STUDIES = [
   {
@@ -106,7 +107,7 @@ function buildCaseStudiesHTML(): string {
   return `<table style="width:100%;border-collapse:separate;border-spacing:5px;margin-bottom:0"><tr>${cols}</tr></table>`
 }
 
-// ── HTML builders ─────────────────────────────────────────────────────────────
+// -- Building the HTML blocks ------------------------------------------------
 
 function buildCompanySnapshotTableBody(rows: SnapshotRow[]): string {
   return rows
@@ -322,7 +323,7 @@ function buildRoadmapTableBody(pilotWfName: string): string {
     .join('')
 }
 
-// ── Main function ─────────────────────────────────────────────────────────────
+// -- The main function -------------------------------------------------------
 
 export function assembleReport(state: ReportState): AssembleReportOutput {
   const {
@@ -339,8 +340,9 @@ export function assembleReport(state: ReportState): AssembleReportOutput {
     throw new Error('assembleReport: missing required state fields')
   }
 
-  // Per-workflow rate provenance summary — confirms whether the renderer is
-  // about to show evidence-backed sources or the "Benchmarked" fallback label.
+  // A quick count of where each workflow's hourly rate came from, so we know
+  // whether the page is about to show real sources or the "Benchmarked"
+  // fallback label.
   const evidenceCount = workflows.filter(
     (w) =>
       w.rateSource &&
@@ -396,16 +398,17 @@ export function assembleReport(state: ReportState): AssembleReportOutput {
     MONTHS[now.getMonth()]
   } ${now.getDate()}, ${now.getFullYear()}`
 
-  // Tables
+  // The tables
   const caseStudiesHTML = buildCaseStudiesHTML()
   const scopeListHTML = merged.map((w) => `<li>${esc(w.name)}</li>`).join('')
 
   const levers = model.levers
-  // Per-lever arithmetic is computed deterministically from the matched
-  // workflow (see reportModel.ts) so every rendered "X hrs × $Y × Z
-  // redirected = $W/mo" line reconciles with the calculator's PU total — the
-  // modeler is told to omit rationale_with_arithmetic (it's overwritten
-  // below); only fall back to the LLM's text if there's truly no match.
+  // The sum on each profit lever line is worked out here in code, from the
+  // workflow it was matched to (see reportModel.ts). That way every "X hrs x $Y
+  // x Z redirected = $W a month" line adds up to the calculator's own total.
+  // The modeller is told not to write that sentence at all, because we overwrite
+  // it below. We only fall back to its text when there is genuinely no matching
+  // workflow.
   const redirectionPct = Math.max(0, globals.profitMultiplier - 1)
   const leverArithmetic: string[] = levers.map((l) => {
     const wf = l.matchedWorkflow
@@ -438,8 +441,9 @@ export function assembleReport(state: ReportState): AssembleReportOutput {
       s.profitUplift12mo,
     )}</strong></td></tr>`
 
-  // Master workflow table — consolidates As-Is + Before/After + Deploy
-  // (each workflow appears once with all relevant columns).
+  // The main workflow table. It merges what used to be three tables — today,
+  // before and after, and rollout — so each workflow appears once with all its
+  // columns.
   const workflowMasterTableBody =
     merged
       .map((wf) => {
@@ -522,7 +526,7 @@ export function assembleReport(state: ReportState): AssembleReportOutput {
     buildProvenanceTableBody(model.sources) +
     `</tbody></table>`
 
-  // Revenue context statement
+  // The sentence that puts the total in context against revenue
   const revenueContextStatement =
     model.revenueContext.base > 0 && model.revenueContext.pct <= 500
       ? `This represents approximately ${model.revenueContext.pct}% of your estimated annual revenue returned through operational efficiency — without adding headcount.`
@@ -580,7 +584,8 @@ export function assembleReport(state: ReportState): AssembleReportOutput {
     ? buildRoadmapTableBody(model.topWorkflow.name)
     : ''
 
-  // BLUF paragraph — use coreThesis from research agent when available
+  // The opening paragraph. We use the research agent's core point when it
+  // produced one.
   const profileParts: string[] = []
   if (company.employees)
     profileParts.push(`${company.employees.toLocaleString()}-person`)
@@ -598,7 +603,7 @@ export function assembleReport(state: ReportState): AssembleReportOutput {
       tf12,
     )} in Total Financial Gain available through targeted AI deployment — without adding headcount.`
 
-  // BVA compact table (exec template)
+  // The compact value table used in the short executive template
   const bvaTableBodyCompact =
     merged
       .map((wf) => {
@@ -645,9 +650,9 @@ export function assembleReport(state: ReportState): AssembleReportOutput {
     )} / yr · value of hours recaptured</td>` +
     `</tr>`
 
-  // Profit uplift logic table (exec template) — arithmetic comes from the
-  // shared deterministic helper above so this table stays reconciled with the
-  // calculator's PU total even when the writer LLM authored stale numbers.
+  // The profit uplift table in the short executive template. Its sums come from
+  // the shared code above, so it still agrees with the calculator's total even
+  // when the writing model used out-of-date numbers.
   const profitUpliftLogicBody =
     levers
       .map(

@@ -197,8 +197,9 @@ function getAliasMatches(headers: string[]): Record<BulkFieldKey, string[]> {
     {} as Record<BulkFieldKey, string[]>,
   )
 
-  // Map normalizedHeader → the transformed key PapaParse uses as the row key
-  // (transformHeader applies normalizeCell, so row keys === normalizeCell(csvHeader))
+  // Links our tidied-up column name to the key the CSV parser actually uses for
+  // that column. The parser tidies headers the same way we do, so the two
+  // always line up.
   const headerMap = new Map<string, string>()
 
   headers.forEach((header) => {

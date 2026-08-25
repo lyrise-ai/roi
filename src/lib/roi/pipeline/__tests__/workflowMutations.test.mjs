@@ -1,11 +1,11 @@
-// Tests for findWorkflowIndex's fuzzy fallback (added alongside LYR-146) —
-// exact match always wins; a substring/prefix match is only trusted when it
-// resolves to exactly one workflow, so an ambiguous partial name never
-// silently edits the wrong workflow.
+// Tests for the loose name matching in findWorkflowIndex, added with LYR-146.
+// An exact match always wins. A partial match is only trusted when it points at
+// exactly one workflow, so an ambiguous name can never quietly edit the wrong
+// one.
 //
-// No test-runner dependency: uses Node's built-in `node:test` + `node:assert`.
-// The TypeScript source (with `@/` path aliases) is bundled on the fly by
-// esbuild into a temp ESM module, which we then import.
+// No test framework needed: this uses Node's own `node:test` and `node:assert`.
+// The TypeScript source uses `@/` path shortcuts, so esbuild bundles it into a
+// temporary module first, and we import that.
 //
 //   Run:  node --test src/lib/roi/pipeline/__tests__/workflowMutations.test.mjs
 //

@@ -1,15 +1,16 @@
 // Tests for the research analyst (LYR-216).
 //
-// Nothing here calls a model. The `ai` SDK and the repo's llm module are
-// aliased to stubs at bundle time, the same way `scouts/__tests__/s2.test.mjs`
-// does it, so what is under test is the machinery around the model rather than
-// its judgement — which is the only part that can be pinned down at all, since
-// the whole point of this card is that the output is no longer reproducible.
+// Nothing here calls a model. The AI library and our own model config are
+// swapped for fakes when the test bundle is built, the same way
+// `scouts/__tests__/s2.test.mjs` does it. So what is tested is the machinery
+// around the model, not its judgement — and that is the only part that CAN be
+// pinned down, since the whole point of this card is that the output is no
+// longer the same every run.
 //
-// The load-bearing property is GROUNDING: a finding whose sourceUrl is not in
-// the fact store never reaches a prospect. Streaming is where that rule is
-// easiest to lose, so it is asserted on the streaming path specifically, not
-// just on the returned object.
+// The rule that carries the weight is SOURCING: a finding that cites a URL we
+// never fetched must never reach a prospect. That rule is easiest to lose on
+// the path where findings are sent out one at a time, so we check it there
+// specifically, not only on the final returned object.
 //
 //   Run:  node --test src/lib/roi/research/__tests__/researchAnalyst.test.mjs
 //
@@ -28,9 +29,9 @@ let createResearchAnalyst
 let clearAssessmentCache
 
 before(async () => {
-  /* The persistent cache layer is best-effort and must stay out of these
-     tests; a developer with a populated .env would otherwise hit the real
-     project. Memory-only is also how a bare `node --test` runs in CI. */
+  /* The saved-to-database layer is optional and must stay out of these tests.
+     Otherwise a developer with a filled-in .env would hit the real project.
+     Memory only is also how a plain `node --test` runs in CI. */
   delete process.env.NEXT_PUBLIC_SUPABASE_URL
   delete process.env.SUPABASE_SERVICE_ROLE_KEY
 
@@ -38,8 +39,8 @@ before(async () => {
   fs.mkdirSync(cacheRoot, { recursive: true })
   const tmpDir = fs.mkdtempSync(path.join(cacheRoot, 'analyst-test-'))
 
-  /* `streamObject` is driven by a global the tests set. It returns whatever
-     shape the test wants, including a stream that throws partway. */
+  /* The fake model call is controlled by a value the tests set. It returns
+     whatever the test wants, including a stream that breaks halfway. */
   fs.writeFileSync(
     path.join(tmpDir, 'ai-stub.mjs'),
     `export const jsonSchema = (s) => s
@@ -82,8 +83,8 @@ beforeEach(() => {
 const POSTING_URL = 'https://acme.example/jobs/paralegal'
 const OTHER_URL = 'https://acme.example/jobs/bookkeeper'
 
-/* An S2 result carrying two real postings, so the fact store contains exactly
-   two citable URLs and nothing else. */
+/* An S2 result with two real job postings in it, so the store holds exactly two
+   URLs that may be cited, and nothing else. */
 const s2Result = (postings = [POSTING_URL, OTHER_URL]) => ({
   S2: {
     scout: 'S2',
@@ -137,12 +138,14 @@ const stream = (objectOrFn, onTick) => (args) => ({
 })
 
 /* A stream that yields whatever `steps` contains and then throws. */
-const failingStream = (steps = []) => () => ({
-  partialObjectStream: (async function* gen() {
-    for (const step of steps) yield step
-    throw new Error('upstream 500')
-  })(),
-})
+const failingStream =
+  (steps = []) =>
+  () => ({
+    partialObjectStream: (async function* gen() {
+      for (const step of steps) yield step
+      throw new Error('upstream 500')
+    })(),
+  })
 
 // ── grounding ────────────────────────────────────────────────────────────────
 
@@ -373,7 +376,8 @@ test('a failed assessment is not cached', async () => {
 // for a date — neither field is in its schema — so this is entirely about the
 // finding inheriting the provenance of the fact it cites.
 
-const ENRICHED_URL = 'https://docs.peopledatalabs.com/docs/company-enrichment-api'
+const ENRICHED_URL =
+  'https://docs.peopledatalabs.com/docs/company-enrichment-api'
 
 const s1Enriched = {
   S1: {

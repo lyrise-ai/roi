@@ -1,5 +1,5 @@
-// Score a contact by seniority. Used by dedupRows to pick the best
-// representative per company. Higher = more senior.
+// Scores a contact by how senior their job title sounds. dedupRows uses it to
+// pick the best person to keep per company. Higher means more senior.
 
 const TITLE_PATTERNS: Array<{ score: number; re: RegExp }> = [
   {

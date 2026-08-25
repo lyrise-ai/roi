@@ -1,15 +1,16 @@
-// Unit tests for the confidence model (LYR-187 R5 / LYR-198).
+// Tests for how we score what we know (LYR-187 R5 / LYR-198).
 //
-// This is the honesty mechanism. The previous system had no notion of how much
-// it knew, so it wrote with the same confidence whether it had three dated job
-// postings or nothing at all. These tests pin down the two properties that
-// make "we don't know enough to say something specific" enforceable rather
-// than hoped for: NONE and ERROR score differently, and THIN is reachable.
+// This is the honesty mechanism. The old system had no idea how much it knew,
+// so it wrote with the same confidence whether it had three dated job postings
+// or nothing at all. These tests pin down the two things that make "we do not
+// know enough to say anything specific" a rule rather than a hope: "found
+// nothing" and "error" score differently, and the thin level is actually
+// reachable.
 //
-// What used to be tested here and no longer is: `manualWorkIndicators`, the
-// verb-set intersection. It was deleted with the set (LYR-216) — judging
-// whether a verb means manual work needs the posting it came from, so it moved
-// to `researchAnalyst.ts` and is covered by that file's tests.
+// What used to be tested here and no longer is: the old verb-list comparison.
+// It was deleted along with the list (LYR-216). Judging whether a verb means
+// manual work needs the posting it came from, so it moved to
+// `researchAnalyst.ts` and is covered by that file's tests.
 //
 //   Run:  node --test src/lib/roi/research/__tests__/aggregate.test.mjs
 //
@@ -57,12 +58,12 @@ const result = (scout, status, facts = {}, notes) => ({
   ...(notes ? { notes } : {}),
 })
 
-// ── NONE and ERROR must never be collapsed ───────────────────────────────────
+// -- "found nothing" and "error" must never be treated as the same -----------
 
 test('NONE scores higher than ERROR', () => {
-  /* "They are not hiring" is information a writer may build on. "We could not
-     reach the ATS" supports no sentence at all. Scoring them the same is how
-     the old system lost the distinction and started inventing. */
+  /* "They are not hiring" is information the report can build on. "We could
+     not reach the job board" supports no sentence at all. Scoring them the same
+     is how the old system lost the difference and started inventing. */
   const none = a.coverageScore({ S1: 'FULL', S2: 'NONE' })
   const error = a.coverageScore({ S1: 'FULL', S2: 'ERROR' })
 

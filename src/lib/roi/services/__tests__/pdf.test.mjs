@@ -1,8 +1,8 @@
-// Chromium is inflated to a single /tmp path and executablePath() hands that
-// path out before the write completes, so two overlapping renders make the
-// second one exec a half-written binary (`spawn ETXTBSY`). One bulk batch lost
-// all 28 of its emails to this. What is worth locking in is only that renders
-// never overlap.
+// The bundled Chromium unpacks to one file in /tmp, and the function that says
+// where it is hands out that path before writing has finished. So two PDFs
+// rendering at once meant the second one tried to run a half-written program and
+// died. One bulk batch lost all 28 of its emails to this. The only thing worth
+// pinning down is that two renders never overlap.
 import assert from 'node:assert/strict'
 import { test } from 'node:test'
 

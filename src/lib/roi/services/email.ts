@@ -1,4 +1,4 @@
-// email - sends transactional ROI emails via Resend
+// email — sends the ROI emails to users, through Resend.
 
 import { outboundEmailBlockedReason } from '@/src/lib/outboundEmail'
 

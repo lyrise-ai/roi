@@ -1,9 +1,9 @@
-// Contract tests for the research fact store (LYR-187 R1 / LYR-194).
+// Tests for the research fact store (LYR-187 R1 / LYR-194).
 //
-// The property that matters most here is that the store is readable while
-// scouts are still writing to it: the scan panel renders off S1 at ~500ms
-// while S2 is still crawling, so a store that only answers once every scout
-// has settled would break the streaming behaviour the whole panel depends on.
+// The thing that matters most here: you can read the store while scouts are
+// still writing to it. The side panel starts drawing S1's results after about
+// half a second, while S2 is still working. A store that only answered once
+// every scout had finished would break that entirely.
 //
 //   Run:  node --test src/lib/roi/research/__tests__/factStore.test.mjs
 //
@@ -21,8 +21,8 @@ let createFactStore
 let tmpDir
 
 before(async () => {
-  /* See artifactCache.test.mjs — the bundle keeps bare imports external, so it
-     has to sit where Node can still resolve node_modules from. */
+  /* See artifactCache.test.mjs: the bundle leaves its imports unresolved, so it
+     has to sit where Node can still find node_modules from. */
   const cacheRoot = path.resolve(here, '../../../../..', 'node_modules/.cache')
   fs.mkdirSync(cacheRoot, { recursive: true })
   tmpDir = fs.mkdtempSync(path.join(cacheRoot, 'fact-store-test-'))
@@ -71,9 +71,9 @@ test('put then get round-trips the result', async () => {
 test('facts are readable while other scouts are still running', async () => {
   const store = createFactStore()
 
-  /* S1 lands fast and gates the others; S2 is deliberately slow. The panel
-     must be able to read S1 before S2 resolves — that is the whole point of
-     streaming results into the store rather than batching at the end. */
+  /* S1 finishes fast and everything else waits on it; S2 is slow on purpose.
+     The panel has to be able to read S1 before S2 finishes — that is the whole
+     point of writing results in as they land instead of all at the end. */
   const slowS2 = (async () => {
     await new Promise((resolve) => setTimeout(resolve, 30))
     await store.put('S2', result('S2', 'FULL', { postings: [1, 2, 3] }))
@@ -105,9 +105,10 @@ test('all() returns only the scouts that have reported', async () => {
 test('coverage reports NONE and ERROR distinctly', async () => {
   const store = createFactStore()
 
-  /* Not hiring (a finding a writer may state) vs. we could not reach the ATS
-     (a gap a writer must stay quiet about). Collapsing these is how the old
-     system talked itself into inventing postings. */
+  /* "Not hiring", which the report may say out loud, against "we could not
+     reach the job board", which the report must stay quiet about. Treating
+     these as the same thing is how the old system talked itself into inventing
+     job postings. */
   await store.put('S2', result('S2', 'NONE'))
   await store.put('S3', result('S3', 'ERROR'))
 

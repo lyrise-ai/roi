@@ -1,10 +1,10 @@
-// Cascade and contract tests for S1 (LYR-187 R2 / LYR-195).
+// Tests for S1's steps and its promises (LYR-187 R2 / LYR-195).
 //
-// Everything here runs against a stubbed global fetch, so no test touches PDL,
-// the network, or the shared Supabase project. What's pinned down is the
-// behaviour the rest of the system depends on: the cascade stops at the first
-// hit, every attempt is logged, all-sources-failed is ERROR and never NONE,
-// and revenue cannot reach a rendering path.
+// Everything here runs against a fake fetch, so no test touches PDL, the
+// network or the shared database. What is pinned down is what the rest of the
+// system relies on: we stop at the first step that works, every attempt is
+// recorded, "every source failed" is an error and never "found nothing", and
+// revenue can never reach anything that displays.
 //
 //   Run:  node --test src/lib/roi/research/scouts/__tests__/s1.test.mjs
 //
@@ -32,11 +32,11 @@ before(async () => {
   fs.mkdirSync(cacheRoot, { recursive: true })
   tmpDir = fs.mkdtempSync(path.join(cacheRoot, 's1-test-'))
 
-  /* One bundle, not two. The artifact cache holds module-level state, so
-     bundling s1.ts and artifactCache.ts separately would give the test a
-     `clearArtifactCache` that clears a different Map than the one S1 reads —
-     and a page cached by an earlier test would leak into the next. A single
-     re-exporting entry keeps it to one module graph. */
+  /* One bundle, not two. The page cache keeps its data inside the module
+     itself, so bundling s1.ts and artifactCache.ts separately would give the
+     test a clear-the-cache function that empties a DIFFERENT copy than the one
+     S1 reads — and a page cached in one test would leak into the next. One
+     entry file that re-exports both keeps everything in a single copy. */
   const entry = path.join(tmpDir, 'entry.ts')
   fs.writeFileSync(
     entry,
@@ -73,7 +73,7 @@ function stubFetch(handler) {
 const json = (body) => ({ ok: true, status: 200, json: async () => body })
 const html = (body) => ({ ok: true, status: 200, text: async () => body })
 
-/* A minimal PDL company-enrich response, in PDL's own shape: `size` as a band,
+/* The smallest realistic PDL response, in PDL's own shape: size as a band,
    country as a lowercase name, revenue under `inferred_revenue`. */
 const PDL_HIT = {
   name: 'acme law',
