@@ -14,6 +14,42 @@ app on the Pages Router**, not the App Router.
 The numbers in these reports are shown to prospects' finance directors. Treat
 everything on the generation path as money.
 
+## Two versions live here, and they do not mix
+
+This is the most important thing on this page. Read it before you change
+anything, and before you "tidy up" anything that looks duplicated.
+
+**Version 1 is production. It is finished. Do not touch it.**
+
+```
+pages/api/roi-agent.js      builds and chat-edits the report
+src/lib/roi/agent.ts        the report agent, with its own research tools
+src/lib/roi/pipeline/       the calculation and rendering
+src/components/ROIGenerator/
+```
+
+**Version 2 is where all new work goes. It is being built alongside.**
+
+```
+pages/v2/                   the interview
+pages/api/v2/               its server side
+src/lib/roi/research/       one agent with tools
+src/lib/roi/v2/
+```
+
+So yes, there really are two agents that research a company, and they follow
+different rules. `src/lib/roi/research/agent.ts` is grounded, logged, and says
+why a fetch failed. `src/lib/roi/agent.ts` has none of that. **This is on
+purpose.** V1 works and is in front of customers; the cost of changing it is a
+broken report for a real prospect, and the benefit is tidiness. That is a bad
+trade.
+
+Do not unify them. Do not port the new rules backwards. Do not refactor V1
+because V2 taught you a better way. When V2 is ready it replaces V1 whole, and
+V1 gets deleted in one go.
+
+The only V1 changes allowed are ones a customer is waiting on.
+
 ## Stack notes
 
 Read `package.json` for versions. Three things it will not tell you:
