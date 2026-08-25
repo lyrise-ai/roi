@@ -1,11 +1,11 @@
-// Regression test for the interview→calculator answer bridge (LYR-188 /
-// POC 10). Locks in the SegmentedInput → BridgedField conversion rules and
-// the calculator-input assembler so a future tweak can't silently start
-// passing a 0 or a NaN into miniCalculator for a field the user never gave.
+// Tests for answerBridge.ts, which turns typed answers into numbers the
+// calculator can use (LYR-188 / POC 10). It pins down the conversion rules and
+// the packing step, so that a later change cannot quietly start passing a 0 or
+// a NaN into the calculator for a question the user never answered.
 //
-// No test-runner dependency: uses Node's built-in `node:test` + `node:assert`.
-// answerBridge.ts has no path aliases, so it's bundled with esbuild the same
-// way miniCalculator.test.mjs does.
+// No test framework needed: this uses Node's own `node:test` and
+// `node:assert`. answerBridge.ts uses no path shortcuts, so esbuild bundles it
+// here the same way miniCalculator.test.mjs does.
 //
 //   Run:  node --test src/lib/roi/v2/__tests__/answerBridge.test.mjs
 //
