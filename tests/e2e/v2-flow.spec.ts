@@ -192,19 +192,50 @@ test.describe('/v2', () => {
     await page.getByRole('button', { name: 'That’s all for now' }).click()
 
     await expect(page.getByText('Step 4 of 4')).toBeVisible()
-    // Nothing was typed, so there is no number to stand on: the reveal says
-    // so in both places rather than inventing one or printing a bare dash.
+    // Nothing was typed, so every number is the estimate the interview
+    // already showed for Dr. Job Pro — 7 people × 18 hours × 50 weeks, a
+    // quarter of it still needing a person. The demo has to show figures;
+    // what it must not do is pass them off as the prospect's own.
+    await expect(
+      page.getByText(/Seven people spending eighteen hours a week each/),
+    ).toBeVisible()
+    const spent = page
+      .locator('div')
+      .filter({ hasText: /^Hours currently spent/ })
+      .last()
+    await expect(spent).toContainText('6,300')
+    await expect(page.getByText('2,646')).toBeVisible()
+    await expect(page.getByText('$71,203')).toBeVisible()
+    // And it says so in words once, not only in the marks.
+    await expect(
+      page.getByText(/You left the numbers to me, so these are my guesses/),
+    ).toBeVisible()
+    // Both figures are marked as ours: the returned figure always is, and
+    // hours-spent is too here because its inputs were our estimates, not
+    // typed answers. That second mark is the whole point of the fallback.
+    await expect(
+      page.getByRole('button', { name: /includes assumptions/ }),
+    ).toHaveCount(2)
+  })
+
+  test('reveals nothing to feature without crashing', async ({ page }) => {
+    // No scan, so no guess to fall back on for a pain point nobody named —
+    // the reveal is handed an empty list. Regression: it used to blow up on
+    // the featured pain point being undefined (PR #56 review).
+    await page.goto('/v2?scan=none')
+    await page.getByRole('button', { name: 'Start with my company' }).click()
+    await page.getByRole('button', { name: 'Next', exact: true }).click()
+    await page.getByRole('button', { name: 'That’s all for now' }).click()
+
+    await expect(page.getByText('Step 4 of 4')).toBeVisible()
     await expect(
       page.getByText("We don't have numbers for this one yet."),
     ).toBeVisible()
     await expect(
       page.getByText(/Not enough here yet to put a number on it/),
     ).toBeVisible()
-    // No figures, and nothing to trace — so no mark to open.
     await expect(page.getByText('Hours currently spent')).toHaveCount(0)
-    await expect(
-      page.getByRole('button', { name: /includes assumptions/ }),
-    ).toHaveCount(0)
+    await expect(page.getByRole('button', { name: 'Start over' })).toBeVisible()
   })
 
   test('traces the return figure back to the calculator’s own arithmetic', async ({

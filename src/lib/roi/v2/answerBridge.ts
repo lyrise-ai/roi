@@ -26,20 +26,30 @@ export type SegmentedAnswer =
 export interface BridgedField {
   value: number | null
   isEstimated: boolean
-  // 'user' is the only non-null source today. There is no research-inference
-  // fallback yet (POC 9 / LYR-187 area, Yousef) — when it lands, an
-  // 'estimate' answer can resolve to a real source instead of staying null.
-  source: 'user' | null
+  // 'user' is what the prospect typed. 'estimate' is the canned figure the
+  // interview already showed them for that question (DEMOS[].quant[].estimate
+  // in pages/v2/index.jsx) standing in for a blank — POC-only, see
+  // parseEstimateText below. There is still no research-inference fallback
+  // (POC 9 / LYR-187 area, Yousef); when it lands it replaces the canned
+  // source, not the flag.
+  source: 'user' | 'estimate' | null
 }
 
 const MISSING: BridgedField = { value: null, isEstimated: false, source: null }
 
-// Strips the formatting these free-text fields actually see in practice
-// (currency signs, thousands commas, a percent sign, a k/m suffix) and reads
-// the rest as a plain number. It does not parse words ("a third", "half") —
-// QUANT's placeholders show that style for the automatable question, so a
-// user who types words rather than a number or a "%" is read as missing
-// here, same as an empty field.
+// TODO(agent) — LYR-XXX, the rule for every free-text answer in this flow:
+// anything we ask the prospect to TYPE has to be read by an agent, not a
+// regex. We control the question, never the answer: "70k", "$70,000 a year",
+// "about a third", "seventy thousand EGP", "1.5 days a week" are all things
+// people write into these boxes, and the same pass is where we'd learn the
+// report's currency (EGP vs $) instead of assuming dollars. Every regex in
+// this file is the static stand-in until that agent exists — it is why the
+// reveal keeps withholding numbers the user actually gave us. Everywhere the
+// user types prose, this comment applies; grep TODO(agent) for the sites.
+//
+// Until then: strips the formatting these fields see in practice (currency
+// signs, thousands commas, a percent sign, a k/m suffix) and reads the rest
+// as a plain number. Words are read as missing, same as an empty field.
 function parseNumeric(raw: string | undefined): number | null {
   if (raw == null) return null
   const trimmed = raw.trim()
@@ -54,6 +64,42 @@ function parseNumeric(raw: string | undefined): number | null {
   if (suffix === 'k') return n * 1_000
   if (suffix === 'm') return n * 1_000_000
   return n // '%' is left as-is: toFraction() in miniCalculator already treats anything above 1 as percentage points
+}
+
+// Reads one of OUR OWN canned estimate strings — the "about 4 people" /
+// "about $72k a year" / "about a third" copy in DEMOS — back into a number.
+// Deliberately not the same job as parseNumeric: this input is copy we wrote
+// and can grep, so a small reader over the shapes we actually use is enough
+// and no agent is needed here. The moment an estimate comes from research
+// rather than from DEMOS, it should arrive as a number and this goes away.
+const WORD_FRACTIONS: Record<string, number> = {
+  'a quarter': 0.25,
+  'a third': 1 / 3,
+  half: 0.5,
+}
+
+export function parseEstimateText(raw: string | undefined): number | null {
+  if (raw == null) return null
+  const text = raw.toLowerCase()
+  for (const phrase of Object.keys(WORD_FRACTIONS)) {
+    if (text.includes(phrase)) return WORD_FRACTIONS[phrase]
+  }
+  const token = text.replace(/,/g, '').match(/-?\$?\d*\.?\d+\s*[km%]?/)
+  return token ? parseNumeric(token[0]) : null
+}
+
+// POC-only fallback (LYR-188): a field the user left blank falls back to the
+// estimate the interview already showed them for that question, flagged
+// `isEstimated` with source 'estimate' so the reveal can mark it as ours.
+// This is what makes the Next-Next-Next demo walk show figures at all.
+// It never overrides a number the user gave, and an estimate with nothing
+// numeric in it ("Nothing to base one on", the no-scan copy) stays missing.
+function orEstimate(field: BridgedField, estimate?: string): BridgedField {
+  if (field.value !== null) return field
+  const value = parseEstimateText(estimate)
+  return value === null
+    ? field
+    : { value, isEstimated: true, source: 'estimate' }
 }
 
 // Converts one SegmentedInput answer into a flagged, calculator-ready field.
@@ -98,15 +144,14 @@ export function bridgeAnswer(
 // points (miniCalculator's own >1-means-points convention) is inverted the
 // same way (100 − x), so the result can be handed to the calculator as-is.
 //
-// TODO: CONFIRM WITH YOUSEF — inverting per Q4's wording ("how much still
-// needs a person"), but the interview file's own header comment (line ~414)
-// says this field "becomes automatable% downstream" with no inversion
-// mentioned. This feeds every dollar figure the reveal shows; get this
-// confirmed before POC 10 ships.
+// CONFIRMED (Yousef, review of PR #56): the inversion is correct — Q4 asks
+// for the leftover, so automatablePct = 1 − answer. QUANT's own comment in
+// pages/v2/index.jsx was updated to say so; don't "fix" this back.
 export function bridgeAutomatable(
   answer: SegmentedAnswer | undefined,
+  estimate?: string,
 ): BridgedField {
-  const field = bridgeAnswer(answer)
+  const field = orEstimate(bridgeAnswer(answer), estimate)
   if (field.value === null) return field
   const inverted =
     field.value <= 1 ? 1 - field.value : Math.max(0, 100 - field.value)
@@ -122,14 +167,20 @@ export interface BridgedPainFields {
 
 // quant[0] (volume/month) is intentionally not in the return value —
 // miniCalculator's MiniCalculatorInput has no field for it.
+//
+// `estimates` is positionally the same five-slot array, holding the estimate
+// copy the interview showed for each question (quantFor(demo, i).estimate).
+// Passing it in keeps this file free of DEMOS: the caller decides which
+// estimates the user was actually shown, this file only reads them.
 export function bridgePainQuant(
   quant: SegmentedAnswer[] = [],
+  estimates: (string | undefined)[] = [],
 ): BridgedPainFields {
   return {
-    people: bridgeAnswer(quant[1]),
-    hoursPerWeek: bridgeAnswer(quant[2]),
-    annualPay: bridgeAnswer(quant[3]),
-    automatablePct: bridgeAutomatable(quant[4]),
+    people: orEstimate(bridgeAnswer(quant[1]), estimates[1]),
+    hoursPerWeek: orEstimate(bridgeAnswer(quant[2]), estimates[2]),
+    annualPay: orEstimate(bridgeAnswer(quant[3]), estimates[3]),
+    automatablePct: bridgeAutomatable(quant[4], estimates[4]),
   }
 }
 

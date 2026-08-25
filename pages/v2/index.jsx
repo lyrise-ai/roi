@@ -349,6 +349,12 @@ function Company({ value, onChange, onBack, onSubmit }) {
         nothing I ask is something I could have looked up myself.
       </p>
 
+      {/* TODO(agent) — both fields are free text and are read by regex today
+          (demoFor() normalises the domain, the name is used verbatim). An
+          agent should read them instead: "Dr Job Pro, Cairo" carries the
+          country and therefore the report's currency and working-weeks
+          constant, which we currently assume are US dollars and 50. See the
+          TODO(agent) block in src/lib/roi/v2/answerBridge.ts for the rule. */}
       <form onSubmit={submit}>
         <div
           style={{
@@ -457,8 +463,16 @@ const EXTRA_PAIN = {
 }
 
 /* The five number questions, asked the same way for every pain point.
-   The last one becomes `automatable%` downstream — it is the single largest
-   guess in the whole model, which is why it is asked rather than assumed.
+
+   TODO(agent) — every one of these is answered by typing into a box, and the
+   placeholders here ("$70k a year", "about a third") teach a style the static
+   parser in answerBridge.ts cannot read back. Route these answers through an
+   agent; the rule and the reasoning live in that file's TODO(agent) block.
+
+   The last one asks for the LEFTOVER — how much still needs a person — and is
+   INVERTED downstream into `automatable%` by bridgeAutomatable() in
+   answerBridge.ts (confirmed, PR #56). It is the single largest guess in the
+   whole model, which is why it is asked rather than assumed.
 
    The estimate here is the one we give when we know nothing about the company,
    and it is deliberately not a number. An estimate with no evidence under it is
@@ -1227,6 +1241,11 @@ function Interview({
           </Divider>
         ))}
 
+        {/* TODO(agent) — the pain point text above, plus these two, are pure
+            prose and nothing reads them today beyond echoing them back. They
+            are where the workflow's shape, the team's size and the tone of the
+            eventual narrative come from. Same rule as the numbers: an agent
+            reads them, not us. */}
         <Divider>
           <Input
             label="Which team or department handles this?"
@@ -1305,17 +1324,30 @@ function Interview({
   )
 }
 
+/* Said once, above the figures, whenever a blank answer fell back to the
+   estimate the interview showed. The marks on the numbers are traceability;
+   this is the admission — and it deliberately doesn't promise an edit control
+   the reveal doesn't have yet. */
+const OURS_NOT_YOURS =
+  'You left the numbers to me, so these are my guesses standing in — marked as mine, and worth replacing with your own before this goes in front of anyone.'
+
 const comma = (n) => Math.round(n).toLocaleString('en-US')
 const money = (n) => `$${comma(n)}`
 
 /* One pain point's quant answers, run through the bridge and the calculator.
+   `estimates` is the five-slot array of estimate copy the interview showed for
+   this company (quantFor(demo, i).estimate) — the bridge falls back to it for
+   any question left blank, which is what makes the Next-Next-Next demo walk
+   show real figures instead of "not enough here yet". Anything sourced that
+   way is flagged isEstimated and gets marked on screen as ours, never passed
+   off as the user's own number.
    annualHours never reads annualPay or automatablePct (it's just
    people × hoursPerWeek × the calculator's own working-weeks constant), so a
    pain point missing only pay or automatable can still show hours spent —
    the dollar side is what gets held back, never a fabricated number. A pain
    point missing people or hours/week has nothing to show at all. */
-function figuresFor(pain) {
-  const fields = bridgePainQuant(pain.quant)
+function figuresFor(pain, estimates) {
+  const fields = bridgePainQuant(pain.quant, estimates)
   const assembled = assembleCalculatorInput(fields, pain.team || undefined)
 
   if (!assembled.incomplete) {
@@ -1340,9 +1372,13 @@ function figuresFor(pain) {
    figures are incomplete always ranks below one that isn't, regardless of
    what its partial hours-spent number happens to be: an unbacked figure
    should never outrank a backed one just because it looks bigger. */
-function selectFeatured(pains) {
+function selectFeatured(pains, estimates) {
   return pains
-    .map((pain, index) => ({ pain, index, figures: figuresFor(pain) }))
+    .map((pain, index) => ({
+      pain,
+      index,
+      figures: figuresFor(pain, estimates),
+    }))
     .sort((a, b) => {
       if (a.figures.complete !== b.figures.complete)
         return a.figures.complete ? -1 : 1
@@ -1365,16 +1401,30 @@ function selectFeatured(pains) {
    Piece 2 (LYR-188 / POC 10): real figures for the featured pain point.
    Piece 3: the observation sentence above them — the "we heard you" moment,
    built by buildObservationSentence() from the same bridged fields figures
-   came from, never from an LLM (CLAUDE.md: the LLM never does arithmetic).
+   came from, never from an LLM.
    The formula popovers and the final pitch styling are later pieces. */
 function Reveal({ flow, demo, onRestart }) {
-  const { pain, figures } = selectFeatured(flow.pains)
-  const fields = bridgePainQuant(pain.quant)
+  // Every pain point can still be dropped on the way in (blank, and no guess
+  // to fall back on — /v2?scan=none, name nothing, finish), so there may be
+  // nothing to feature. Degrading to the same empty-handed state a pain point
+  // with no numbers reaches, rather than destructuring undefined.
+  const estimates = QUANT.map((_, i) => quantFor(demo, i).estimate)
+  const featured = selectFeatured(flow.pains, estimates)
+  const pain = featured ? featured.pain : null
+  const figures = featured ? featured.figures : { complete: false, calc: null }
+  const fields = bridgePainQuant(pain?.quant, estimates)
   const observation = buildObservationSentence(
     fields.people,
     fields.hoursPerWeek,
     figures.calc ? figures.calc.annualHours : null,
   )
+  // Hours spent is unmarked only while it is the user's own arithmetic. Once
+  // either input behind it fell back to our estimate, it carries an assumption
+  // and says so — the mark is what keeps "never invent a number" true when the
+  // fallback is doing the talking.
+  const hoursAreOurs =
+    fields.people.source === 'estimate' ||
+    fields.hoursPerWeek.source === 'estimate'
 
   // Piece 4: the return figure's formula popover. Local to Reveal — the
   // Dialog primitive itself has no Escape handling (neither does its one
@@ -1409,6 +1459,8 @@ function Reveal({ flow, demo, onRestart }) {
         {observation}
       </p>
 
+      {hoursAreOurs && <p style={LEAD}>{OURS_NOT_YOURS}</p>}
+
       {!figures.calc && (
         <p style={LEAD}>
           Not enough here yet to put a number on it — go back and answer at
@@ -1434,6 +1486,16 @@ function Reveal({ flow, demo, onRestart }) {
             <p style={FIGURE_VALUE}>
               {comma(figures.calc.annualHours)}
               <span style={FIGURE_UNIT}>hrs / year</span>
+              {/* Only when there's a formula popover to open — the mark is
+                  traceability, and a mark that opens nothing is decoration.
+                  Every estimate-backed walk is complete, so this is the same
+                  condition in practice. */}
+              {hoursAreOurs && figures.complete && (
+                <ProvenanceMark
+                  kind="estimated"
+                  onClick={() => setFormulaOpen(true)}
+                />
+              )}
             </p>
           </div>
 

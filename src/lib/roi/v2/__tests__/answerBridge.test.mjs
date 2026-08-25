@@ -24,6 +24,7 @@ let bridgeAnswer
 let bridgeAutomatable
 let bridgePainQuant
 let assembleCalculatorInput
+let parseEstimateText
 let tmpDir
 
 before(async () => {
@@ -42,6 +43,7 @@ before(async () => {
     bridgeAutomatable,
     bridgePainQuant,
     assembleCalculatorInput,
+    parseEstimateText,
   } = await import(pathToFileURL(outfile).href))
 })
 
@@ -214,4 +216,85 @@ test('assembleCalculatorInput: reports every missing field', () => {
     'annualPay',
     'automatablePct',
   ])
+})
+
+// ── The POC's estimate fallback (LYR-188, PR #56 review) ──────────────────
+// Blank answers fall back to the estimate copy the interview already showed,
+// so the Next-Next-Next demo walk shows figures instead of an empty state.
+
+test('parseEstimateText: reads the shapes DEMOS actually uses', () => {
+  assert.equal(parseEstimateText('about 4 people'), 4)
+  assert.equal(parseEstimateText('about 12 hours'), 12)
+  assert.equal(parseEstimateText('about $72k a year'), 72_000)
+  assert.equal(parseEstimateText('about 2,600 a month'), 2_600)
+  assert.equal(parseEstimateText('about a quarter'), 0.25)
+  assert.equal(parseEstimateText('about a third'), 1 / 3)
+  assert.equal(parseEstimateText('about half'), 0.5)
+})
+
+test('parseEstimateText: the no-scan copy stays missing', () => {
+  assert.equal(parseEstimateText('Nothing to base one on'), null)
+  assert.equal(parseEstimateText(undefined), null)
+})
+
+test('estimates fill blanks, flagged as ours', () => {
+  const fields = bridgePainQuant(
+    [],
+    [
+      'about 2,600 a month',
+      'about 7 people',
+      'about 18 hours',
+      'about $18k a year',
+      'about a quarter',
+    ],
+  )
+  assert.deepEqual(fields.people, {
+    value: 7,
+    isEstimated: true,
+    source: 'estimate',
+  })
+  assert.deepEqual(fields.annualPay, {
+    value: 18_000,
+    isEstimated: true,
+    source: 'estimate',
+  })
+  // Still inverted: a quarter still needs a person, so 75% is automatable.
+  assert.equal(fields.automatablePct.value, 0.75)
+  assert.deepEqual(assembleCalculatorInput(fields), {
+    people: 7,
+    hoursPerWeek: 18,
+    annualPay: 18_000,
+    automatablePct: 0.75,
+  })
+})
+
+test('a typed answer always beats the estimate', () => {
+  const fields = bridgePainQuant(
+    [
+      { mode: 'exact' },
+      { mode: 'exact', exact: '4' },
+      { mode: 'estimate' },
+      { mode: 'exact' },
+      { mode: 'exact' },
+    ],
+    [
+      'about 2,600 a month',
+      'about 7 people',
+      'about 18 hours',
+      'about $18k a year',
+      'about a quarter',
+    ],
+  )
+  assert.deepEqual(fields.people, {
+    value: 4,
+    isEstimated: false,
+    source: 'user',
+  })
+  // "Let AI estimate" is a blank, so it takes the fallback like any other.
+  assert.equal(fields.hoursPerWeek.value, 18)
+})
+
+test('no estimates passed: blanks stay missing, as before', () => {
+  const out = assembleCalculatorInput(bridgePainQuant([]))
+  assert.equal(out.incomplete, true)
 })
