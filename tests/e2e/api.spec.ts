@@ -1,20 +1,22 @@
 /**
- * API contract tests — runs in the `anon` project.
+ * Tests for how our API endpoints behave. Runs signed out.
  *
- * Three guarantees:
- *   1. Method guards  — POST-only routes return 405 for GET (not 404/500)
- *   2. Auth guards    — protected routes return 401 (not 500) when unauthenticated
- *   3. Validation     — routes return 400 for missing required fields
+ * Three promises:
+ *   1. A route that only accepts POST answers a GET with "method not allowed",
+ *      not "not found" or an error.
+ *   2. A protected route answers "not signed in", never an error.
+ *   3. A route with a missing required field answers "bad request".
  *
- * None of these tests make real AI or email calls.
+ * None of these tests make a real model or email call.
  */
 import { test, expect } from '@playwright/test'
 
 // ── 1. Method guards ─────────────────────────────────────────────────────────
 
 test.describe('method guards (GET on POST-only endpoints → 405)', () => {
-  // Note: /api/roi-agent handles both GET (SSE chat) and POST (generate),
-  // both require auth — so GET unauthenticated returns 401, not 405.
+  // Note: /api/roi-agent accepts both GET, for chat, and POST, for generating.
+  // Both need you signed in, so a signed-out GET answers "not signed in" rather
+  // than "method not allowed".
   const postOnlyRoutes = [
     '/api/roi-pdf',
     '/api/roi-share-email',

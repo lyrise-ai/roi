@@ -1,14 +1,14 @@
 /**
- * Dashboard tests — runs in the `authenticated` project with a saved session.
- * Verifies that the dashboard loads correctly for a logged-in user and that
- * the auth session is truly active (not silently logged out).
+ * Dashboard tests. Runs with a saved signed-in session.
+ * Checks that the dashboard loads properly for a signed-in user, and that the
+ * session really is active rather than quietly expired.
  */
 import { test, expect } from '@playwright/test'
 
 test.describe('dashboard (authenticated)', () => {
   test.beforeEach(async ({ page }) => {
     await page.goto('/dashboard')
-    // Confirm we're actually on the dashboard, not redirected to login
+    // Make sure we really are on the dashboard, not bounced to the login page
     await expect(page).toHaveURL(/dashboard/, { timeout: 15_000 })
   })
 
@@ -48,7 +48,7 @@ test.describe('api with valid session', () => {
     request,
   }) => {
     const res = await request.get('/api/usage/summary')
-    // 200 for employees, 403 for regular users — both are correct auth behaviour
+    // Staff get the data, everyone else is refused. Both are correct.
     expect(res.status()).not.toBe(401)
     expect(res.status()).not.toBe(500)
   })
@@ -59,7 +59,7 @@ test.describe('api with valid session', () => {
     const res = await request.post('/api/roi-agent', { data: {} })
     expect(res.status()).not.toBe(401)
     expect(res.status()).not.toBe(500)
-    // Missing required input fields → 400
+    // A missing required field should answer "bad request"
     expect(res.status()).toBe(400)
   })
 
