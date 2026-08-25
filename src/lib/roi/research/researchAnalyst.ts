@@ -1,57 +1,63 @@
 // ─────────────────────────────────────────────────────────────────────────────
 // researchAnalyst — the agent that reads everything the scouts found and works
-// out what it means, WHILE the interview is still happening (LYR-187).
+// out what it means, WHILE the user is still answering questions (LYR-187).
 //
-// There are two agents in this product and they are easy to confuse:
+// ("Scouts" are the small workers that go and fetch things about a company:
+// job postings, company size, and so on. They are in ./scouts/.)
 //
-//   researchAnalyst (this file)  runs during the interview, ~3-20s
-//                                input:  research only
-//                                output: human-readable findings for the
-//                                        sidebar, as they are found
+// There are two agents in this product and they are easy to mix up:
 //
-//   the report writer            runs after the interview
-//                                input:  this agent's output PLUS every
-//                                        interview answer
-//                                output: the observation and the report
+//   researchAnalyst (this file)  runs while the user answers, takes 3-20s
+//                                gets:  the research only
+//                                gives: short readable findings for the side
+//                                       panel, one at a time as it finds them
 //
-// They cannot be one agent: when the sidebar paints, the interview answers do
-// not exist yet. This one's output becomes the writer's input.
+//   the report writer            runs after the questions are done
+//                                gets:  this agent's findings PLUS every
+//                                       answer the user gave
+//                                gives: the report
 //
-// This replaces a hardcoded `MANUAL_WORK_VERBS` set that used to decide which
-// task verbs implied automatable work. That approach was wrong on its face and
-// wrong in measurement: written a priori from a back-office picture —
-// reconcile, re-key, chase invoices — it matched NOTHING across 22 real
-// professional-services firms, and widening it until the number moved is
-// tuning a knob, not taking a measurement.
+// They cannot be one agent, because when the side panel first draws, the user
+// has not answered anything yet. What this agent produces becomes the writer's
+// input.
 //
-// The deeper problem is that the question is not lexical. `review` is document
-// review at a law firm and performance review at a consultancy. `liaise` is
-// chasing missing paperwork at one firm and stakeholder management at another.
-// A bare verb, stripped of the posting it came from, cannot carry that — so no
-// list of verbs can ever be right.
+// ── Why an agent and not a word list ─────────────────────────────────────────
 //
-// So the judgement moves to an agent with the whole picture in front of it:
-// every posting, its excerpt, its named systems, what each scout attempted and
-// what it failed to reach. It reasons the way a person would — read the
-// research, then say what it means — rather than pattern-matching strings.
+// This replaced a fixed list of verbs (`MANUAL_WORK_VERBS`) that decided which
+// job duties meant "done by hand". That idea was wrong twice over. It was
+// written from imagination — reconcile, re-key, chase invoices — and when we
+// measured it against 22 real professional-services firms it matched NOTHING.
+// Widening the list until the number improves is fiddling with a dial, not
+// measuring anything.
+//
+// The real problem is that a single word cannot answer the question. "Review"
+// is document review at a law firm and performance review at a consultancy.
+// "Liaise" is chasing missing paperwork at one company and managing
+// stakeholders at another. Pull the verb out of the job posting it came from
+// and the meaning is gone with it. No list of verbs can ever be right.
+//
+// So the judgement goes to an agent that sees the whole picture: every job
+// posting, the quoted text, the systems named in it, what each scout tried and
+// what it failed to reach. It works the way a person would — read the
+// research, then say what it means — instead of matching strings.
 //
 // ── What keeps it honest ─────────────────────────────────────────────────────
 //
-// Reasoning freely is the point; inventing is still not allowed. Two rules,
-// both enforced in code after the model returns rather than requested in the
-// prompt:
+// Free reasoning is the point. Making things up is still not allowed. Two
+// rules, both enforced in our own code AFTER the model answers, not merely
+// asked for in the prompt:
 //
-//   1. Every finding must cite a `sourceUrl` that appears in the fact store.
-//      A citation the store does not contain is dropped, not published. This is
-//      what makes a human-readable sidebar safe to put in front of a prospect —
-//      every line on it can be clicked and checked.
+//   1. Every finding must name a source URL that we actually fetched during
+//      this run. If we did not fetch it, the finding is thrown away rather
+//      than shown. That is what makes the side panel safe to put in front of a
+//      prospect: every line on it can be clicked and checked.
 //
-//   2. A claim about a company we could not reach is unreachable by
-//      construction, because there are no sources to cite.
+//   2. A claim about a company we could not reach is impossible to make,
+//      because there are no sources to point at.
 //
-// Numbers from this file are NOT reproducible run to run. That is a deliberate,
-// accepted trade: an agent that reasons about what the research means is worth
-// more than a constant that produces the same wrong answer every time.
+// The output of this file is NOT the same on every run. That is a trade we
+// chose on purpose: an agent that actually reasons about the research is worth
+// more than a fixed rule that gives the same wrong answer every time.
 // ─────────────────────────────────────────────────────────────────────────────
 
 import crypto from 'crypto'
@@ -70,48 +76,53 @@ import {
 } from './types'
 
 /* One thing we can tell the prospect, in words, with a link they can open.
-   This is what the scan panel renders — not a URL dump. */
+   This is what the side panel shows — not a list of URLs. */
 export type ResearchFinding = {
-  /* A short human sentence. "You're hiring a paralegal whose first listed duty
-     is chasing outstanding client documents" — not "job_posting: paralegal". */
+  /* A short sentence a person would say. "You're hiring a paralegal whose
+     first listed duty is chasing outstanding client documents" — never
+     "job_posting: paralegal". */
   headline: string
-  /* Which scout's territory this came from, for panel grouping and dedupe. */
+  /* Which scout's area this came from. Used to group rows in the panel and to
+     spot duplicates. */
   kind: string
   sourceUrl: SourceUrl
-  /* Verbatim from the source where one exists, so a writer can quote rather
-     than paraphrase. */
+  /* The exact words from the source, when there are any, so the report can
+     quote instead of rephrase. */
   excerpt?: string
-  /* Carried through from the cited fact's own provenance, never from the
-     model — neither field is in the schema and the agent never sees them.
-     Enrichment data is a monthly-refreshed cache, so the panel dates those
-     rows: a six-month-old headcount presented as current is precisely the
-     credibility damage this product exists to avoid (LYR-199). */
+  /* Copied from the record of where we got the fact, never from the model —
+     we do not ask the agent for these and it never sees them.
+     Some facts come from a bought data set that is only refreshed monthly, so
+     the panel shows a date next to those. Telling a prospect a staff count as
+     if it were current when it is six months old is exactly the kind of thing
+     that destroys trust (LYR-199). */
   sourceType?: SourceType
   retrievedAt?: string
 }
 
-/* What a cited URL is allowed to carry into the finding that cites it. Absent
-   for a job posting, which is its own source and has no separate provenance
-   record; present for anything that arrived as a `Fact`. */
+/* What a source URL is allowed to pass on to the finding that cites it.
+   A job posting has none of this, because the posting IS the source. Anything
+   that came in as a `Fact` does have it. */
 type FindingProvenance = { sourceType?: SourceType; retrievedAt?: string }
 
-/* Every URL the research actually retrieved, which is both the grounding
-   whitelist and the provenance lookup. It used to be a bare `Set` of URLs;
-   making it a Map is what lets a verified finding inherit the age of the fact
-   it cites without the model ever being asked for a date. */
+/* Every URL this run actually fetched. It does two jobs: it is the list of
+   sources a finding is allowed to cite, and it is where we look up how old
+   each source is. It used to be a plain set of URLs. Making it a lookup table
+   is what lets a checked finding pick up the date of the fact it cites,
+   without ever asking the model for a date. */
 type SourceIndex = Map<string, FindingProvenance>
 
 export type ResearchAssessment = {
   findings: ResearchFinding[]
-  /* What this specific company appears to do by hand, in the agent's words and
-     grounded in its own postings — the replacement for the verb set. */
+  /* What this particular company seems to do by hand, in the agent's own
+     words, based on their own job postings. This is what replaced the fixed
+     verb list. */
   manualWorkSignals: string[]
   confidenceTier: ConfidenceTier
-  /* Why it landed on that tier. Not shown to a prospect; it is what makes a
-     surprising coverage result debuggable. */
+  /* Why it judged the research this rich or this thin. Never shown to a
+     prospect. It is there so a surprising result can be traced. */
   reasoning: string
-  /* What we could not establish. Stated so a thin result reads as a gap in our
-     looking rather than as an empty company. */
+  /* What we could not find out. Saying it out loud means a thin result reads
+     as "we did not manage to look here", not as "this company does nothing". */
   gaps: string[]
 }
 
@@ -215,10 +226,10 @@ const ANALYST_SYSTEM = [
   'we could not reach is a gap, and you must not describe it as if we had.',
 ].join('\n')
 
-/* Everything the agent is allowed to reason over, flattened to text. Passing
-   the raw scout objects would spend most of the context on machinery; this
-   keeps the postings, their excerpts and the coverage picture, which is what
-   the judgement actually turns on. */
+/* Turns everything the agent is allowed to look at into plain text. Handing
+   over the raw scout objects would fill most of the model's reading budget
+   with plumbing. This keeps the job postings, the quoted text and the picture
+   of what we did and did not reach — which is what the judgement rests on. */
 function renderResearch(
   domain: string,
   results: Partial<Record<ScoutId, ScoutResult<unknown>>>,
@@ -226,9 +237,10 @@ function renderResearch(
   const sources: SourceIndex = new Map()
   const lines: string[] = [`Company domain: ${domain}`, '']
 
-  /* First writer wins, unless the later one actually carries provenance: one
-     URL can back both a posting (which has none of its own) and an S1 fact
-     (which does), and only the latter can date the row. */
+  /* The first entry wins, unless a later one actually knows where it came
+     from. The same URL can back both a job posting (which carries no separate
+     record) and an S1 fact (which does), and only the second can give the row
+     a date. */
   const addSource = (url: string, provenance?: FindingProvenance) => {
     if (!url) return
     const existing = sources.get(url)
@@ -245,7 +257,8 @@ function renderResearch(
 
     const facts = result.facts as Record<string, unknown> | null
 
-    /* S2 postings — the richest material, and the only dated testimony. */
+    /* Job postings from scout S2 — the richest material we get, and the only
+       thing that comes with a date on it. */
     const postings = (facts?.postings ?? []) as Record<string, unknown>[]
     for (const posting of postings) {
       const url = String(posting?.sourceUrl ?? '')
@@ -274,8 +287,9 @@ function renderResearch(
       )
     }
 
-    /* Everything else that arrived as a Fact — S1's firmographics today, S3+
-       later — without this file needing to know each scout's shape. */
+    /* Everything else that arrived as a Fact — today that is S1's company
+       details, later it will include more scouts — without this file having to
+       know the shape of each scout's output. */
     for (const [field, value] of Object.entries(facts ?? {})) {
       const fact = value as {
         value?: unknown
@@ -301,8 +315,9 @@ function renderResearch(
       }
     }
 
-    /* Stated so the agent can tell "this company has nothing" apart from "we
-       could not reach it" — the distinction the whole subsystem turns on. */
+    /* We say this out loud so the agent can tell "this company has nothing"
+       apart from "we could not get to it". That difference is what this whole
+       subsystem turns on. */
     const failed = (result.sourcesAttempted ?? []).filter(
       (a) => a.outcome === 'error' || a.outcome === 'blocked',
     )
@@ -318,13 +333,14 @@ function renderResearch(
   return { prompt: lines.join('\n'), sources }
 }
 
-/* Verifies one finding, or returns null. A citation the fact store does not
-   contain is dropped, not published — enforced here rather than asked for in
-   the prompt, because a prompt can be talked past and a filter cannot.
+/* Checks one finding and returns it, or returns null. If it cites a URL we did
+   not fetch, we drop it instead of showing it. This check lives in our code,
+   not in the prompt, because a model can be talked past a prompt but not past
+   an if statement.
 
-   Per-finding rather than per-batch specifically so the streaming path cannot
-   become a hole in the grounding rule: a finding is checked before it is
-   emitted, whether it arrives in a stream or all at once. */
+   We check one finding at a time, not the whole batch at the end, so that
+   sending findings out as they arrive cannot become a hole in the rule. Every
+   finding is checked before it leaves this file, whichever way it arrived. */
 function verifyFinding(
   item: Record<string, unknown>,
   sources: SourceIndex,
@@ -349,20 +365,24 @@ function verifyFinding(
   }
 }
 
-// ── Assessment cache ─────────────────────────────────────────────────────────
-// Keyed on a hash of the rendered research rather than on the domain, so a
-// cached assessment is only reused when the research behind it is byte-for-byte
-// the same. Keying on domain would serve stale reasoning after the scouts found
-// something new, and would collapse the partial assessment made when only S1
-// has landed with the full one made after S2.
+// -- Saving past assessments ------------------------------------------------
+// We file each saved assessment under a fingerprint of the research text
+// itself, not under the company's domain. So we only reuse a saved answer when
+// the research behind it is identical, character for character.
 //
-// It also does double duty on the incremental path: a scout that lands without
-// adding a single new source renders the same prompt, so the re-assessment it
-// triggers is a cache hit rather than a second bill.
+// Filing by domain would be wrong twice: it would hand back old reasoning
+// after the scouts found something new, and it would mix up the early
+// assessment made when only S1 had landed with the fuller one made after S2.
 //
-// Two layers and both best-effort, mirroring `artifactCache`: memory collapses
-// repeats inside one lambda, Supabase carries across invocations, and an
-// unreachable database degrades to no cache rather than to a failed run.
+// It pays off a second time while a run is still going. A scout that finishes
+// without adding a single new source produces the same research text, so the
+// re-assessment it triggers costs nothing instead of paying for the model
+// twice.
+//
+// Two layers, both allowed to fail, the same way `artifactCache` works. Memory
+// catches repeats inside one server run. Supabase carries answers between
+// runs. If the database cannot be reached we simply do not save — we never
+// fail the run over it.
 
 export const ASSESSMENT_TTL_MS = 24 * 60 * 60 * 1000
 
@@ -371,7 +391,7 @@ const memory = new Map<
   { assessment: ResearchAssessment; expiresAt: number }
 >()
 
-/* For tests, and for `npm run dev` where a stale assessment would otherwise
+/* For tests, and for `npm run dev`, where an old assessment would otherwise
    survive a hot reload. Does not touch Supabase. */
 export function clearAssessmentCache(): void {
   memory.clear()
@@ -440,16 +460,15 @@ async function writeAssessment(
 }
 
 export type AssessOptions = {
-  /* The deterministic coverage snapshot. Given to the agent as evidence rather
-     than as an instruction — it is a cheap, already-tested summary of which
-     scouts got anywhere, and the agent is free to disagree with what it
-     implies. */
+  /* A plain summary of which scouts got anywhere, worked out by ordinary code.
+     We hand it to the agent as evidence, not as an order. It is cheap, it is
+     already tested, and the agent is free to disagree with what it suggests. */
   coverage?: Coverage
-  /* Called once per finding, the moment it has streamed in and its citation has
-     been checked — NOT at the end. The sidebar paints while the prospect is
-     still typing, so a finding that arrives at second 4 must be renderable at
-     second 4. A cache hit replays through this too, so a cached run paints the
-     same way a live one does. */
+  /* Called once per finding, the moment it arrives and its source has been
+     checked — NOT at the end. The side panel is drawing while the prospect is
+     still typing, so a finding that arrives at second 4 has to be on screen at
+     second 4. A saved assessment is replayed through this too, so a reused run
+     looks exactly like a fresh one. */
   onFinding?: (finding: ResearchFinding) => void
 }
 
@@ -461,9 +480,9 @@ export async function assessResearch(
   const { prompt: research, sources } = renderResearch(domain, results)
 
   if (sources.size === 0) {
-    /* Nothing was retrieved, so nothing can be cited, so there is nothing to
-       reason about. Skipping the call is both cheaper and more honest than
-       asking a model to find meaning in an empty page. */
+    /* We fetched nothing, so nothing can be cited, so there is nothing to
+       reason about. Skipping the model call is cheaper and more honest than
+       asking it to find meaning in an empty page. */
     return {
       ...EMPTY_ASSESSMENT,
       reasoning: 'No sources were retrieved, so no external claim is possible.',
@@ -487,11 +506,11 @@ export async function assessResearch(
   const findings: ResearchFinding[] = []
 
   try {
-    /* `partialObjectStream` is documented as unvalidated, and an error that
-       stops the stream does not necessarily surface as a rejection there — the
-       loop can simply end early. Without this flag a truncated assessment
-       would look like a complete one and get CACHED for a day, which is the
-       silent-failure shape this codebase is explicitly built against. */
+    /* The library's own docs say the partial stream is not checked, and an
+       error that kills the stream does not always come back as a thrown error
+       — the loop can just stop early. Without this flag, a half-finished
+       assessment would look finished and get SAVED for a day. That is exactly
+       the kind of quiet failure this codebase is built to avoid. */
     let streamFailed: Error | null = null
 
     const stream = streamObject({
@@ -504,15 +523,15 @@ export async function assessResearch(
       },
     })
 
-    /* Emit each finding as it completes rather than after the whole object
-       parses. A finding is only structurally complete once a LATER one has
-       started — until then the JSON parser is still filling it in, and its
-       `excerpt` (last in the schema) may not have arrived. So everything
-       before the tail is safe to emit, and the tail is flushed from the final
-       object below.
+    /* Send each finding out as soon as it is finished, rather than waiting for
+       the whole answer. A finding is only definitely finished once a LATER one
+       has started — before that the parser is still filling it in, and its
+       quoted text (the last field) may not have arrived. So everything except
+       the last one is safe to send, and the last one is sent from the finished
+       answer below.
 
-       The citation check runs here, per finding, before anything is emitted.
-       Streaming must not become a hole in the grounding rule. */
+       The source check runs here, per finding, before anything goes out.
+       Sending early must not become a hole in the rule. */
     let emitted = 0
     let last: Record<string, unknown> = {}
 
@@ -535,9 +554,10 @@ export async function assessResearch(
       flushTo(raw, raw.length - 1)
     }
 
-    /* Before the tail is flushed, not after: the tail is the one element the
-       parser had not finished, so on a broken stream its headline may be half
-       a sentence. Everything before it was already emitted and stays. */
+    /* This runs before the last finding is sent, not after. The last one is
+       the one the parser had not finished, so if the stream broke, its
+       sentence may be cut in half. Everything before it already went out and
+       stays. */
     if (streamFailed) throw streamFailed
 
     flushTo(
@@ -547,9 +567,9 @@ export async function assessResearch(
       Array.isArray(last.findings) ? (last.findings as unknown[]).length : 0,
     )
 
-    /* If every finding was dropped for a bad citation, the tier cannot be RICH
-       whatever the model said — there is, by then, nothing to be specific
-       about. */
+    /* If every finding was thrown away for citing a source we never fetched,
+       the research cannot be called rich, whatever the model claimed. By that
+       point there is nothing left to be specific about. */
     const claimedTier = String(last?.confidenceTier ?? 'THIN')
     const tier: ConfidenceTier =
       findings.length === 0
@@ -573,15 +593,16 @@ export async function assessResearch(
     await writeAssessment(key, domain, assessment)
     return assessment
   } catch (error) {
-    /* Never throws. Research that cannot be assessed degrades to "we know
-       nothing", which is the safe direction — it makes downstream writers
-       quieter, not louder.
+    /* This never throws. If the research cannot be assessed we fall back to
+       "we know nothing", which is the safe direction: it makes everything
+       downstream quieter, not louder.
 
-       Deliberately NOT cached: a failure is a fact about this moment, not about
-       this research, and caching it would keep a company thin for a day over a
-       transient error. Findings that already streamed are kept — they were
-       verified individually, and a stream that died halfway still told the
-       truth about the part that arrived. */
+       We deliberately do NOT save this failure. A failure says something about
+       this moment, not about the research, and saving it would keep the
+       company looking thin for a whole day because of one bad minute. Findings
+       that already went out are kept — each was checked on its own, and a
+       stream that died halfway still told the truth about the part that
+       arrived. */
     if (process.env.ROI_DEBUG) {
       console.error(`[analyst] assessment failed: ${(error as Error)?.message}`)
     }
@@ -594,15 +615,16 @@ export async function assessResearch(
   }
 }
 
-// ── The incremental analyst ──────────────────────────────────────────────────
-// The sidebar has about three seconds to first paint, and the research run it
-// sits on takes 5-20s. S1 lands in ~1s; there is no reason the panel is empty
-// until S2 finishes. So the analyst assesses what has landed SO FAR each time a
-// scout resolves, rather than once at the end.
+// -- Assessing as the research arrives ---------------------------------------
+// The side panel has about three seconds before it should show something, and
+// the research run under it takes 5 to 20 seconds. Scout S1 lands in about a
+// second, so there is no reason for the panel to sit empty until S2 finishes.
+// So the analyst assesses whatever has landed SO FAR each time a scout
+// finishes, instead of assessing once at the end.
 //
-// This does not orchestrate the run — the orchestrator stays free of any LLM
-// import, and its tests stay free of a model stub. The caller wires the two
-// together:
+// This does not drive the research run. The part that drives it (the
+// orchestrator) imports no model code at all, and its tests need no fake
+// model. The caller joins the two together:
 //
 //   const analyst = createResearchAnalyst(domain, { onFinding: send })
 //   const run = await runResearch(domain, {
@@ -610,18 +632,18 @@ export async function assessResearch(
 //   })
 //   const assessment = await analyst.settled()
 //
-// Re-assessment is cheap when it is pointless: a scout that lands without
-// contributing a single new source renders an identical prompt, so the
-// re-assessment it triggers is a cache hit rather than a second bill. Nothing
-// here needs to reason about which scouts "matter".
+// Re-assessing costs nothing when there is nothing new: a scout that finishes
+// without adding a single source produces identical research text, so we reuse
+// the saved answer instead of paying for the model again. Nothing here has to
+// work out which scouts "matter".
 
 export type ResearchAnalyst = {
-  /* Pass straight to `runResearch`. Fire-and-forget — it returns immediately
-     and queues the work, because the orchestrator must not wait on a model
-     call to land the next scout. */
+  /* Hand this straight to `runResearch`. It returns immediately and queues the
+     work in the background, because the research run must never wait on a
+     model call before starting the next scout. */
   onScoutResolved: (result: ScoutResult<unknown>) => void
-  /* Resolves once every queued assessment has finished, with the union of
-     everything that was emitted. */
+  /* Finishes once every queued assessment is done, and gives back everything
+     that was found across all of them. */
   settled: () => Promise<ResearchAssessment>
 }
 
@@ -630,17 +652,18 @@ export function createResearchAnalyst(
   options: { onFinding?: (finding: ResearchFinding) => void } = {},
 ): ResearchAnalyst {
   const results: Partial<Record<ScoutId, ScoutResult<unknown>>> = {}
-  /* Findings survive across assessments, so a finding the S1-only pass already
-     showed the prospect does not appear a second time when S2 lands. Keyed on
-     source plus headline: the same URL supports more than one finding. */
+  /* We remember findings between passes, so something the prospect already saw
+     from the S1 pass does not appear again when S2 lands. We remember them by
+     source plus sentence, because one URL can back more than one finding. */
   const seen = new Set<string>()
   const findings: ResearchFinding[] = []
   let latest: ResearchAssessment = EMPTY_ASSESSMENT
 
-  /* One assessment at a time. Two concurrent calls over overlapping research
-     would duplicate work and interleave findings into the panel out of order,
-     and serialising costs nothing — the queued run reads the fact store at the
-     moment it STARTS, so it sees everything that landed while it waited. */
+  /* One assessment at a time. Two running at once over overlapping research
+     would repeat work and drop findings into the panel out of order. Making
+     them wait costs nothing, because a queued assessment reads the research at
+     the moment it STARTS, so it picks up everything that landed while it was
+     waiting. */
   let chain: Promise<void> = Promise.resolve()
 
   const emit = (finding: ResearchFinding) => {
@@ -651,8 +674,8 @@ export function createResearchAnalyst(
     try {
       options.onFinding?.(finding)
     } catch {
-      /* A consumer's callback throwing is the consumer's problem, not a reason
-         to fail the assessment. Same contract as `onScoutResolved`. */
+      /* If the caller's own callback throws, that is the caller's problem, not
+         a reason to fail the assessment. Same deal as `onScoutResolved`. */
     }
   }
 
@@ -661,9 +684,9 @@ export function createResearchAnalyst(
       if (!result?.scout) return
       results[result.scout] = result
       chain = chain.then(async () => {
-        /* Snapshot at execution time, not at schedule time: if S2 landed while
-           the S1 pass was in flight, this run should see both rather than
-           re-running the assessment we just did. */
+        /* We take the copy when this actually runs, not when it was queued. If
+           S2 landed while the S1 pass was still going, this run should see
+           both, rather than repeating the assessment we just did. */
         const snapshot = { ...results }
         const coverage: Coverage = {}
         for (const [scout, landed] of Object.entries(snapshot) as [
@@ -684,9 +707,9 @@ export function createResearchAnalyst(
       return {
         ...latest,
         findings,
-        /* The union can only be empty if every pass produced nothing citable,
-           and nothing citable cannot support an external claim whatever the
-           last pass reported. */
+        /* This list can only be empty if every pass produced nothing we could
+           cite. And with nothing to cite we cannot claim anything about the
+           company, whatever the last pass said. */
         confidenceTier: findings.length === 0 ? 'THIN' : latest.confidenceTier,
       }
     },

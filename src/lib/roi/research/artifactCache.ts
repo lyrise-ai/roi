@@ -1,32 +1,37 @@
 // ─────────────────────────────────────────────────────────────────────────────
-// research/artifactCache — the only thing in the research system that touches
-// the network for page content (LYR-187 R1 / LYR-194).
+// research/artifactCache — the only place in the research system that goes out
+// to the network for web pages (LYR-187 R1 / LYR-194).
 //
-// Scouts request artifacts, they do not fetch. The careers page is wanted by
-// the job-postings scout, the services scout and the tech scout; without a
-// shared cache that is three round trips for identical bytes. It also means a
-// second Profit Map for the same company is nearly free.
+// Scouts ask this file for a page; they never fetch one themselves. The
+// careers page is wanted by the job-postings scout, the services scout and the
+// tech scout. Without something in the middle that would be three separate
+// downloads of identical bytes. It also means running a second report for the
+// same company costs almost nothing.
 //
-// Two layers, deliberately:
-//   memory   — one lambda invocation. Collapses the fan-out inside a single
-//              run, where several scouts ask for the same URL at once.
-//   Supabase — across invocations. Vercel lambdas are ephemeral, so the memory
-//              layer alone would buy nothing on a repeat visit; this is the
-//              layer that actually makes the second run cheap.
-// Supabase is best-effort. If it is unreachable or unconfigured the cache
-// degrades to memory-only rather than failing the run, which is also how a
-// bare `node --test` process (no Supabase env) behaves.
+// Two layers, on purpose:
+//   memory   — lasts one server run. Stops several scouts asking for the same
+//              URL at the same moment from each fetching it.
+//   Supabase — lasts between server runs. Vercel throws the server away
+//              between requests, so the memory layer alone would buy nothing on
+//              a repeat visit. This is the layer that makes the second run
+//              cheap.
 //
-// Fetch strategy — plain fetch first, Firecrawl only as a fallback. Small law
-// and accountancy firms, which is the ICP, mostly run static sites: a plain
-// request returns their careers page in full. Firecrawl earns its call on the
-// minority that block a normal request or render with JS — altamimi.com, a UAE
-// firm, 403s a plain fetch. Using it as tier 2 rather than the default is what
-// keeps the free 1k credits/month far ahead of POC volume.
+// The Supabase layer is allowed to fail. If the database is unreachable or not
+// set up, we fall back to memory only rather than failing the run. That is also
+// how a plain `node --test` run behaves, since it has no database settings.
 //
-// NEVER throws, and never returns '' as success. A caller gets an Artifact or
-// null, and null unambiguously means "we could not read this page" — which
-// downstream is an ERROR (a gap), never a NONE (a finding).
+// How we fetch: a plain request first, Firecrawl only as a fallback. Small law
+// and accountancy firms — our target customers — mostly run simple sites, and a
+// plain request gets their careers page in full. Firecrawl earns its cost on
+// the minority that block ordinary requests or build the page with JavaScript:
+// altamimi.com, a UAE firm, refuses a plain fetch outright. Keeping Firecrawl
+// as the second choice rather than the default is what keeps us well inside its
+// free 1,000 credits a month.
+//
+// This file NEVER throws, and never treats an empty page as success. A caller
+// gets either a page or null, and null means one thing only: we could not read
+// this page. Downstream that is a gap in our looking, never a finding about the
+// company.
 // ─────────────────────────────────────────────────────────────────────────────
 
 import { providerKey } from './env'
@@ -36,10 +41,10 @@ export const ARTIFACT_TTL_MS = 7 * 24 * 60 * 60 * 1000
 
 const FETCH_TIMEOUT_MS = 15_000
 
-/* Sent on the plain-fetch tier. A default Node user-agent is refused by a
-   noticeable share of professional-services sites sitting behind WAFs; this is
-   an ordinary browser string, not an attempt to defeat bot detection. Sites
-   that still refuse fall through to Firecrawl or to null. */
+/* Sent with the plain request. Node's default identifier is refused by a fair
+   number of professional-services sites sitting behind a firewall. This is an
+   ordinary browser identifier, not an attempt to get around bot detection.
+   Sites that still refuse fall through to Firecrawl, or to nothing. */
 const USER_AGENT =
   'Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 ' +
   '(KHTML, like Gecko) Chrome/126.0.0.0 Safari/537.36'
@@ -48,15 +53,16 @@ type MemoryEntry = { artifact: Artifact; expiresAt: number }
 
 const memory = new Map<string, MemoryEntry>()
 
-/* Collapses concurrent requests for the same URL within one invocation. Two
-   scouts asking for /careers at the same moment share one fetch instead of
-   racing to fill the same cache slot. */
+/* Joins up requests for the same URL happening at the same moment. Two scouts
+   asking for /careers at once share a single fetch, rather than both racing to
+   fill the same slot. */
 const inflight = new Map<string, Promise<Artifact | null>>()
 
-/* Cache key. Two spellings of the same page must not become two fetches and
-   two rows, so host case, the fragment, a trailing slash and the tracking
-   params that get pasted in from analytics links are all normalised away.
-   Returns null for anything that isn't an http(s) URL. */
+/* Works out the key we file a page under. Two spellings of the same page must
+   not become two fetches and two rows, so we strip out capitalisation in the
+   domain, anything after a #, a trailing slash, and the tracking parameters
+   that come attached to links from analytics tools. Returns null for anything
+   that is not an http or https URL. */
 export function normalizeUrl(raw: string): string | null {
   if (typeof raw !== 'string' || raw.trim() === '') return null
   let url: URL
@@ -80,8 +86,8 @@ export function normalizeUrl(raw: string): string | null {
   return url.toString()
 }
 
-/* Clears the in-process layer. For tests and for `npm run dev`, where a stale
-   page otherwise survives a hot reload. Does not touch Supabase. */
+/* Empties the memory layer. For tests, and for `npm run dev`, where an old page
+   would otherwise survive a hot reload. Does not touch Supabase. */
 export function clearArtifactCache(): void {
   memory.clear()
   inflight.clear()
@@ -94,9 +100,9 @@ function supabaseConfigured(): boolean {
   )
 }
 
-/* Both Supabase helpers swallow everything. The persistent layer is an
-   optimisation; a cache miss caused by a database problem is a slower run, not
-   a failed one, and must never surface as a scout ERROR. */
+/* Both Supabase helpers swallow every error. This layer only makes things
+   faster. A miss caused by a database problem means a slower run, not a failed
+   one, and must never show up as a scout error. */
 async function readPersisted(key: string): Promise<Artifact | null> {
   if (!supabaseConfigured()) return null
   try {
@@ -109,10 +115,10 @@ async function readPersisted(key: string): Promise<Artifact | null> {
     if (error || !data) return null
     if (new Date(data.expires_at).getTime() <= Date.now()) return null
     if (typeof data.content !== 'string' || data.content === '') return null
-    /* Postgres renders a timestamptz as "+00:00" where toISOString() renders
-       "Z". Both are valid ISO 8601 and the same instant, but this value becomes
-       Provenance.retrievedAt and gets displayed, so a cache hit and a fresh
-       fetch must not look different to anything downstream. */
+    /* Postgres writes a timestamp ending in "+00:00" where JavaScript writes
+       "Z". Both are correct and mean the same moment, but this value ends up
+       displayed as when we fetched the page. So a page served from the cache
+       and one fetched fresh must not look different downstream. */
     return {
       content: data.content,
       fetchedAt: new Date(data.fetched_at).toISOString(),
@@ -144,21 +150,21 @@ async function writePersisted(key: string, artifact: Artifact): Promise<void> {
   }
 }
 
-/* Tier 1, and the tier that decides whether tier 2 is even worth paying for.
-   "We were refused" and "there is no such page" look identical if you only
-   return null, and conflating them is expensive in both directions: escalating
-   a clean 404 to Firecrawl spends a credit to be told again that the page
-   doesn't exist, and it spends the wall time too. S2 probes five candidate
-   careers paths per company, most of which legitimately 404, so this is the
-   difference between one credit and five. */
+/* The plain request, and the step that decides whether paying for Firecrawl is
+   worth it at all. "We were refused" and "there is no such page" look identical
+   if all you return is null, and mixing them up costs us both ways. Sending a
+   clean 404 on to Firecrawl spends a credit, and the waiting time, to be told
+   again that the page does not exist. S2 tries five possible careers paths per
+   company and most of them genuinely do not exist, so this is the difference
+   between one credit and five. */
 type PlainFetch =
   | { content: string; blocked: false }
   | { content: null; blocked: boolean }
 
-/* A refusal, not an answer: auth walls, bot blocks, rate limits and server
-   faults are all states where the page probably exists and a headless browser
-   may well get it. 404 and 410 are answers, and Firecrawl cannot improve on
-   them. */
+/* Tells a refusal apart from an answer. Login walls, bot blocks, rate limits
+   and server faults all mean the page probably exists and a real browser might
+   well get it. A 404 or 410 is an answer, and Firecrawl cannot do better than
+   that. */
 function isBlockingStatus(status: number): boolean {
   return (
     status === 401 ||
@@ -184,8 +190,8 @@ async function plainFetch(url: string): Promise<PlainFetch> {
     }
     const body = await response.text()
     if (body && body.trim() !== '') return { content: body, blocked: false }
-    /* 200 with nothing in it is the signature of a JS-rendered shell, which is
-       precisely what a headless browser fixes. */
+    /* A success response with nothing in it is the mark of a page that builds
+       itself with JavaScript — exactly what a real browser fixes. */
     return { content: null, blocked: true }
   } catch {
     /* Timeout or transport error — the page may be fine and we were not. */
@@ -193,24 +199,24 @@ async function plainFetch(url: string): Promise<PlainFetch> {
   }
 }
 
-// ── Firecrawl budget ─────────────────────────────────────────────────────────
-// We are on the free tier: 1,000 credits a month and 10 scrapes a minute. Both
-// are shared across every Profit Map the app runs, so the cache spends them
-// rather than any one scout — and it spends them defensively.
+// -- The Firecrawl budget ----------------------------------------------------
+// We are on the free plan: 1,000 credits a month and 10 page reads a minute.
+// Both are shared by every report the app runs, so this file spends them rather
+// than any single scout — and it spends them carefully.
 //
-// The throttle is preventative, not reactive. Staying under 10/min means we
-// mostly never see a 429 in the first place, which matters because the
-// alternative — discovering the limit by being refused — costs a round trip
-// and a degraded row every time. A blocked scrape is never an exception: it
-// returns null, the artifact is unavailable, and downstream records a gap.
+// The rate limit here is there to stop us hitting theirs, not to react after we
+// do. Staying under 10 a minute means we mostly never get refused in the first
+// place. That matters, because finding the limit by being refused costs a round
+// trip and a worse result every time. Being refused is never an exception here:
+// we return nothing, the page is unavailable, and the scout records a gap.
 
 const FIRECRAWL_MAX_PER_MINUTE = 10
 const FIRECRAWL_WINDOW_MS = 60_000
 
-/* Out of credits is a billing state, not a transient one — retrying every
-   request for the rest of the month would burn latency for a guaranteed 402.
-   An hour's cooldown means a warm lambda notices a top-up or the monthly reset
-   without us tracking either. */
+/* Running out of credits is a billing state, not a passing glitch. Retrying
+   every request for the rest of the month would waste time on a guaranteed
+   refusal. Waiting an hour before trying again means a running server picks up
+   a top-up or the monthly reset on its own, without us tracking either. */
 const FIRECRAWL_QUOTA_COOLDOWN_MS = 60 * 60 * 1000
 
 /* Timestamps of recent calls, pruned to the rolling window. */
@@ -218,10 +224,11 @@ let firecrawlCalls: number[] = []
 let firecrawlDisabledUntil = 0
 let firecrawlDisabledReason: string | null = null
 
-/* For the coverage test and for logging: it matters whether a thin result came
-   from a company with nothing to find or from us running out of credits
-   halfway through the run. Distinguishing those is the whole point of R5 of
-   the parent card — coverage is declared, never hidden. */
+/* For the coverage test and for the logs. It matters a great deal whether a
+   thin result came from a company with nothing to find, or from us running out
+   of credits halfway through. Telling those apart is the whole point of R5 on
+   the parent card: what we managed to look at is always declared, never
+   hidden. */
 export function firecrawlBudget(): {
   available: boolean
   reason: string | null
@@ -256,10 +263,10 @@ function disableFirecrawl(ms: number, reason: string): void {
   firecrawlDisabledReason = reason
 }
 
-/* Tier 2. No key configured is a normal, supported state — it returns null and
-   the artifact is simply unavailable, which is the honest answer. So is being
-   out of budget: we decline to call rather than spending a request to be told
-   no. */
+/* The Firecrawl step. Having no API key set is a normal, supported state: we
+   return nothing and the page is simply unavailable, which is the honest
+   answer. Being out of budget is the same — we decline to call rather than
+   spending a request to be told no. */
 async function firecrawlFetch(url: string): Promise<string | null> {
   const key = providerKey('FIRECRAWL_API_KEY')
   if (!key) return null
@@ -274,16 +281,17 @@ async function firecrawlFetch(url: string): Promise<string | null> {
         authorization: `Bearer ${key}`,
         'content-type': 'application/json',
       },
-      /* Markdown, not rawHtml. Firecrawl bills one credit either way — verified
-         against /v2/team/credit-usage — and rawHtml carries strictly more
-         signal, notably the schema.org markup S1 reads for `addressCountry`.
-         Markdown still wins on size: 25KB against 546KB for the same page, and
-         every consumer of this content either strips tags or feeds it to an
-         extraction model that charges by the token.
-         ponytail: the Firecrawl path therefore has no structured-data signal,
-         so a blocked site on a generic TLD falls back to footer prose for its
-         country. Switch to ['markdown','rawHtml'] and prefer rawHtml if R8
-         shows blocked sites losing country resolution because of it. */
+      /* We ask for markdown, not raw HTML. Firecrawl charges one credit either
+         way — checked against their own credit-usage endpoint — and raw HTML
+         genuinely tells us more, in particular the machine-readable address
+         block S1 reads the country out of.
+         Markdown still wins on size: 25KB against 546KB for the same page. And
+         everything that uses this content either strips the tags anyway or
+         feeds it to a model that charges by the word.
+         ponytail: so pages fetched this way have no machine-readable data, and
+         a blocked site on a .com has to fall back to reading its footer for the
+         country. If R8 shows blocked sites losing their country because of
+         this, ask for both and prefer the raw HTML. */
       body: JSON.stringify({ url, formats: ['markdown'] }),
       signal: AbortSignal.timeout(FETCH_TIMEOUT_MS * 2),
     })
@@ -294,11 +302,11 @@ async function firecrawlFetch(url: string): Promise<string | null> {
     }
 
     if (response.status === 429) {
-      /* Honour Retry-After when Firecrawl sends one; it also returns 429 for
-         concurrent-browser limits, which clear faster than the per-minute
-         quota. We never sleep and retry inside the request — a scout waiting
-         30s to fill one row is worse than the row being absent — so this only
-         parks the tier and lets the run continue. */
+      /* If Firecrawl tells us how long to wait, we listen. It also refuses when
+         too many browsers are open at once, which clears faster than the
+         per-minute limit. We never sit and wait inside a request — a scout
+         waiting 30 seconds to fill one row is worse than the row being missing
+         — so this just parks Firecrawl and lets the run carry on. */
       const retryAfter = Number(response.headers?.get?.('retry-after'))
       const cooldown =
         Number.isFinite(retryAfter) && retryAfter > 0
@@ -320,8 +328,9 @@ async function firecrawlFetch(url: string): Promise<string | null> {
   }
 }
 
-/* The scouts' single entry point for page content.
-   Returns null on failure — never throws, never reports '' as a success. */
+/* The one function scouts call to get a web page.
+   Returns null when it fails. It never throws, and never reports an empty page
+   as a success. */
 export async function getArtifact(url: string): Promise<Artifact | null> {
   const key = normalizeUrl(url)
   if (!key) return null

@@ -1,50 +1,55 @@
 // ─────────────────────────────────────────────────────────────────────────────
-// research/search — find where a company's job postings actually live
+// research/search — finds where a company's job postings actually live
 // (LYR-187 R9 / LYR-212).
 //
-// S2 used to guess: guess the ATS board slug from the domain, then guess
-// careers paths. Measured against 22 real professional-services firms, that
-// produced usable postings for 1 of them. The careers pages of most law and
-// accountancy firms are recruitment-*marketing* pages — no vacancy list, no
-// links to job detail pages, and every plausible deeper path 404s.
+// S2 used to guess. It guessed the company's board name from its domain, then
+// guessed careers page paths. Measured against 22 real professional-services
+// firms, that found usable postings for exactly ONE of them. Most law and
+// accountancy careers pages are recruitment *marketing* pages: no list of
+// vacancies, no links to individual jobs, and every deeper path we could think
+// of returns "not found".
 //
-// Searching first finds a vacancy URL for 20 of the same 22. The postings were
-// always there; we were looking in the wrong place with the wrong method.
+// Searching first finds a real vacancy URL for 20 of those same 22. The
+// postings were always there. We were looking in the wrong place, the wrong
+// way.
 //
-// This module does the finding. It does not fetch — discovered URLs go through
-// the shared artifact cache like everything else.
+// This file does the finding only. It never downloads anything — found URLs go
+// through the shared page cache like everything else.
 //
-// ── The rule that matters most in this file ──────────────────────────────────
+// -- The rule that matters most in this file ---------------------------------
 //
-// A search result is a GUESS about identity, and acting on the wrong guess is
-// worse than finding nothing: it would attach another company's job postings to
-// this prospect and state them as fact. Real examples from the measurement run:
+// A search result is a GUESS about who a page belongs to, and acting on a wrong
+// guess is worse than finding nothing. It would attach another company's job
+// postings to this prospect and present them as fact. Real examples from the
+// measurement run:
 //
-//   stalawfirm.com  →  stblaw.wd1.myworkdayjobs.com   (Simpson Thacher, not STA)
-//   tamimi.com      →  tamimicontracting.com          (a contractor, not the law firm)
-//   farrer.co.uk    →  farrercapital.com              (Farrer Capital, not Farrer & Co)
-//   bakertilly.com  →  bakertilly.ca                  (a different member firm)
+//   stalawfirm.com  ->  stblaw.wd1.myworkdayjobs.com  (Simpson Thacher, not STA)
+//   tamimi.com      ->  tamimicontracting.com         (a contractor, not the law firm)
+//   farrer.co.uk    ->  farrercapital.com             (Farrer Capital, not Farrer & Co)
+//   bakertilly.com  ->  bakertilly.ca                 (a different member firm)
 //
-// So identity is checked structurally, and anything that does not clearly
-// belong to this company is dropped. We would rather return nothing.
+// So we check ownership by the shape of the address, and drop anything that
+// does not clearly belong to this company. We would rather come back with
+// nothing.
 // ─────────────────────────────────────────────────────────────────────────────
 
 import { webSearch as providerSearch } from '@/src/lib/roi/tools/webSearch'
 
 export type SearchHit = { url: string; title: string }
 
-/* How a discovered URL relates to the company we were asked about.
-     own     — the company's own domain, or a subdomain of it
-     ats     — a known applicant-tracking host whose board slug matches
-     blocked — LinkedIn, or a scraped-content aggregator
-     other   — cannot be tied to this company; dropped */
+/* How a URL we found relates to the company we were asked about.
+     own     — the company's own domain, or something under it
+     ats     — a hiring platform we know, with a board name that matches
+     blocked — LinkedIn, or a site that republishes other people's listings
+     other   — we cannot tie it to this company, so we drop it */
 export type HostClass = 'own' | 'ats' | 'blocked' | 'other'
 
-/* Applicant-tracking hosts worth trusting as first-party. Workday leads this
-   list on merit: it appeared for 5 of 22 firms in the measurement run, more
-   than every other platform combined, and S2's direct-probe tier does not try
-   it because its board URLs are unguessable (`{tenant}.wd{N}.myworkdayjobs.com`).
-   Search finds them; guessing never could. */
+/* Hiring platforms we trust as if they were the company's own site. Workday is
+   first on merit: it turned up for 5 of the 22 firms we measured, more than
+   every other platform put together, and S2's guessing step never tries it
+   because its addresses cannot be guessed
+   (`{tenant}.wd{N}.myworkdayjobs.com`). Search finds them; guessing never
+   could. */
 const ATS_HOSTS = [
   'myworkdayjobs.com',
   'talentera.com',
@@ -64,17 +69,19 @@ const ATS_HOSTS = [
   'breezy.hr',
 ]
 
-/* Never fetched, from any path, for any reason.
+/* Never fetched, by any route, for any reason.
 
-   LinkedIn is a legal decision, not a quality one: Proxycurl was shut down in
-   July 2025 after LinkedIn's federal lawsuit over unauthorised scraping, and we
-   sell to law firms. It dominated organic results in testing, so this list is
-   load-bearing rather than theoretical — and it is a filter rather than a
-   prompt instruction precisely because a filter cannot be talked past.
+   LinkedIn is a legal decision, not a quality one. Proxycurl was shut down in
+   July 2025 after LinkedIn sued them in federal court over scraping, and we
+   sell to law firms. LinkedIn dominated the search results in testing, so this
+   list does real work rather than sitting there for show — and it is a filter
+   in code, not an instruction in a prompt, because a filter cannot be talked
+   past.
 
-   The rest are scraped-content aggregators: undated, frequently stale, and
-   often wrong about which company a posting belongs to. A fact whose sourceUrl
-   points at one of these is worse than no fact, because it looks citable. */
+   The rest are sites that republish other people's job listings. They carry no
+   dates, they are often out of date, and they are often wrong about which
+   company a posting belongs to. A fact pointing at one of those is worse than
+   no fact at all, because it looks checkable. */
 const BLOCKED_HOSTS = [
   'linkedin.com',
   'lnkd.in',
@@ -96,15 +103,16 @@ const BLOCKED_HOSTS = [
   'jobrapido.com',
 ]
 
-/* Paths that look like a vacancy listing or a job detail page, as opposed to a
-   company's About page that merely mentions hiring. */
+/* Address paths that look like a vacancy list or an individual job page, as
+   opposed to an About page that just happens to mention hiring. */
 const VACANCY_PATH =
   /\/(jobs?|vacanc|career|opportunit|position|opening|apply|job-application|recruit)/i
 
-/* Accepts both a full URL and a bare domain, because callers pass both — the
-   discovered result is a URL, the company is a domain. Returning '' for a bare
-   domain (which is what `new URL()` alone does, since it throws without a
-   scheme) silently disabled the own-domain check entirely. */
+/* Takes either a full URL or a bare domain, because callers pass both: a search
+   result is a URL, the company is a domain. Returning nothing for a bare domain
+   — which is what the built-in URL parser does, since it throws without an
+   http:// on the front — quietly switched off the whole "is this their own
+   domain" check. */
 export function hostOf(input: string): string {
   if (typeof input !== 'string' || input.trim() === '') return ''
   const raw = input.trim()
@@ -117,10 +125,11 @@ export function hostOf(input: string): string {
       .split('/')[0]
       .split('?')[0]
       .replace(/^www\./, '')
-    /* Must still look like a hostname, so junk from a search result cannot be
-       mistaken for one. Validated label by label rather than with one regex:
-       the natural pattern is a quantified group of quantified groups, which
-       backtracks catastrophically, and this input comes from a search API. */
+    /* It still has to look like a domain, so rubbish from a search result
+       cannot be mistaken for one. We check it piece by piece rather than with a
+       single pattern: the pattern you would naturally write can take
+       exponentially long on certain input, and this input comes from an outside
+       search service. */
     const labels = host.split('.')
     if (labels.length < 2) return ''
     const ok = labels.every(
@@ -137,8 +146,8 @@ export function hostOf(input: string): string {
   }
 }
 
-/* The registrable-ish label a board slug should resemble. `acmelaw.co.uk` and
-   `acmelaw.com` both reduce to `acmelaw`. */
+/* The core name a board should look like. `acmelaw.co.uk` and `acmelaw.com`
+   both come down to `acmelaw`. */
 export function companyToken(domain: string): string {
   const host = hostOf(domain) || String(domain ?? '').toLowerCase()
   const labels = host.split('.').filter(Boolean)
@@ -152,19 +161,20 @@ export function companyToken(domain: string): string {
   return (labels[index] ?? labels[0]).replace(/[^a-z0-9]/g, '')
 }
 
-/* Does this ATS board plausibly belong to this company?
+/* Could this hiring board plausibly belong to this company?
 
-   Prefix matching with a tight length tolerance, not substring matching.
-   Substring would accept `stblaw` for `stalawfirm` on the shared "law", which
-   is how you end up publishing Simpson Thacher's vacancies to an STA Law Firm
-   prospect. Requiring one to be a PREFIX of the other, within a few
-   characters, accepts the real pairs seen in measurement — bakertilly/
-   bakertilly, morganlewis/morganlewis, rsm/rsmus, tamimi/tamimi — and rejects
+   We require one name to START with the other, within a few characters. We do
+   NOT accept one merely appearing inside the other. "Appears inside" would
+   accept `stblaw` for `stalawfirm` on the shared "law" — which is how you end
+   up showing Simpson Thacher's vacancies to an STA Law Firm prospect.
+
+   Starts-with accepts the real pairs we measured — bakertilly/bakertilly,
+   morganlewis/morganlewis, rsm/rsmus, tamimi/tamimi — and rejects
    stblaw/stalawfirm and pkfsmithcooper/pkfuae.
 
-   ponytail: a shared global brand across member firms (bdo/bdoau) can still
-   pass. Tighten only if the coverage re-run shows it attaching the wrong
-   country's postings. */
+   ponytail: a brand shared by member firms in different countries (bdo/bdoau)
+   can still slip through. Only tighten this if a coverage re-run shows it
+   attaching the wrong country's postings. */
 export function slugMatchesCompany(slug: string, token: string): boolean {
   const a = String(slug ?? '')
     .toLowerCase()
@@ -182,9 +192,9 @@ export function slugMatchesCompany(slug: string, token: string): boolean {
 export function classifyHost(
   url: string,
   domain: string,
-  /* Hosts the company itself declared equivalent to `domain` — see
-     `canonicalDomainFromHtml`. Never inferred here: this function is given
-     them or it does without. */
+  /* Other domains the company itself says are the same as this one — see
+     `canonicalDomainFromHtml`. We never work these out here: they are either
+     handed in or we manage without them. */
   aliases: string[] = [],
 ): HostClass {
   const host = hostOf(url)
@@ -194,17 +204,19 @@ export function classifyHost(
     return 'blocked'
   }
 
-  /* The company's own domain, or a subdomain of it. `careers.osborneclarke.com`
-     and `jobs.rsmus.com` are the company; `bakertilly.ca` is not, and a plain
-     brand-name match would have accepted it.
+  /* The company's own domain, or anything under it.
+     `careers.osborneclarke.com` and `jobs.rsmus.com` are the company.
+     `bakertilly.ca` is not — and a simple brand-name match would have let it
+     through.
 
-     Aliases extend this to a domain the company REDIRECTS to and names in its
-     own `rel=canonical` — `kingsleynapley.com` serves `kingsleynapley.co.uk`,
-     so its real careers page was scoring `other` and being dropped. This stays
-     safe precisely because the alias is read off the company's own markup
-     rather than derived from the brand token: `bakertilly.com` declares no
-     canonical, so `bakertilly.ca` is still rejected, which is the wrong-firm
-     case this module exists to prevent. */
+     Aliases extend this to a domain the company REDIRECTS to and names on its
+     own pages: `kingsleynapley.com` serves `kingsleynapley.co.uk`, so its real
+     careers page was being classed as someone else's and dropped.
+
+     This stays safe precisely because an alias is read off the company's own
+     page, not worked out from the brand name. `bakertilly.com` names no alias,
+     so `bakertilly.ca` is still rejected — and that is the wrong-firm case this
+     whole file exists to prevent. */
   const own = hostOf(domain)
   const owned = [own, ...aliases.map(hostOf)].filter((h) => h !== '')
   if (owned.some((o) => host === o || host.endsWith(`.${o}`))) return 'own'
@@ -218,10 +230,11 @@ export function classifyHost(
   return 'other'
 }
 
-/* A vacancy page names itself in the PATH (`/careers`) or in the SUBDOMAIN
-   (`careers.bdo.co.uk`). Checking only the path dropped `careers.bdo.co.uk` —
-   classified `own`, exactly the right page — because its pathname is bare `/`.
-   That was one of the six zero-yield domains in the LYR-221 measurement. */
+/* A vacancy page says so either in the path (`/careers`) or in the domain
+   itself (`careers.bdo.co.uk`). Checking only the path threw away
+   `careers.bdo.co.uk` — correctly identified as theirs, and exactly the right
+   page — because its path is just `/`. That was one of the six domains that
+   produced nothing in the LYR-221 measurement. */
 export function isVacancyUrl(url: string): boolean {
   try {
     const parsed = new URL(url)
@@ -236,11 +249,12 @@ export function isVacancyUrl(url: string): boolean {
   }
 }
 
-/* Ranked, filtered, deduped. An ATS board outranks the company's own site
-   because it is where dated, individual postings live; the company's own
-   careers page is usually prose. Everything unattributable is gone by here —
-   `blocked` and `other` never survive, so no caller can accidentally fetch
-   LinkedIn or another company's board. */
+/* Sorts the results, filters them, and removes duplicates. A hiring board beats
+   the company's own site, because that is where dated, individual postings
+   live; their own careers page is usually just prose. Anything we cannot
+   attribute is already gone by this point — blocked and unknown results never
+   survive — so no caller can accidentally fetch LinkedIn or another company's
+   board. */
 export function rankHits(
   hits: SearchHit[],
   domain: string,
@@ -254,8 +268,9 @@ export function rankHits(
   for (const hit of hits) {
     const url = typeof hit?.url === 'string' ? hit.url : ''
     const cls = url === '' ? 'other' : classifyHost(url, domain, aliases)
-    /* A non-vacancy page on the company's own domain is usually the About page
-       and carries no postings; on an ATS host the root IS the board. */
+    /* On the company's own domain, a page that is not about vacancies is
+       usually the About page and holds no jobs. On a hiring platform, the front
+       page IS the board. */
     const keep =
       url !== '' &&
       !seen.has(url) &&
@@ -276,17 +291,18 @@ export function rankHits(
     .map((s) => s.hit)
 }
 
-/* Tight because S2 runs inside a 20s budget and the cascade may try two
-   engines. The provider layer's own default is 15s, for the older ROI agent
-   which has no such ceiling. */
+/* Short, because S2 has a 20-second budget in total and may try two search
+   engines. The shared search code defaults to 15 seconds, which suits the older
+   ROI agent, where there is no such limit. */
 const SEARCH_TIMEOUT_MS = 6_000
 
-/* The engines, their keys, their failover and their error handling all live in
-   `tools/webSearch` — this is the only place that used to carry a second copy
-   of them, and the two drifted (LYR-221). All this does is narrow the rich
-   provider shape to the {url, title} pairs the scouts rank on; the snippet and
-   the generated answer are deliberately dropped, because a scout must read the
-   page itself rather than trust a search engine's summary of it. */
+/* The search engines, their API keys, the order we fall back through and the
+   error handling all live in `tools/webSearch`. This file used to keep a second
+   copy of all that, and the two drifted apart (LYR-221).
+   All this function does now is cut the rich result down to the {url, title}
+   pairs the scouts sort on. We deliberately throw away the snippet and the
+   engine's own summary, because a scout has to read the page itself rather
+   than trust a search engine's description of it. */
 export async function webSearch(
   query: string,
   limit = 8,
@@ -305,16 +321,18 @@ export async function webSearch(
   }
 }
 
-/* The query that found `tamimi.talentera.com` on the first attempt.
+/* The search wording that found `tamimi.talentera.com` on the first try.
 
-   `companyName` is S1's — the firm's name as it writes it. It is optional and
-   the domain-token fallback below is the original behaviour, so this tier still
-   runs when S1 found nothing; but the name is worth threading three signatures
-   for, because the token is what was breaking the search. Measured over the
-   25-domain set (LYR-221): `"gowlingwlg"` returned a German packaging company
-   four times and `"farrer"` returned six unrelated US firms, both scoring zero
-   usable hits. `"Gowling WLG"` and `"Farrer & Co"` scored four each. Search
-   engines match how people write a name, and nobody writes a hostname. */
+   `companyName` comes from S1 — the firm's name as the firm writes it. It is
+   optional, and without it we fall back to the domain name, which is the old
+   behaviour, so this step still works when S1 found nothing.
+
+   But the real name was worth passing through three function signatures,
+   because the domain name is what was breaking the search. Measured over 25
+   domains (LYR-221): searching "gowlingwlg" returned a German packaging company
+   four times, and "farrer" returned six unrelated US firms. Both scored zero
+   usable results. "Gowling WLG" and "Farrer & Co" scored four each. Search
+   engines match how people write a name, and nobody writes a domain. */
 export function discoveryQuery(
   domain: string,
   vertical?: string,
@@ -339,21 +357,21 @@ function subjectFromDomain(domain: string): string {
   return pretty.length >= name.length ? pretty : name
 }
 
-/* Job-detail links on a page we already fetched.
+/* Finds links to individual jobs on a page we already downloaded.
 
-   A discovered URL is usually a LISTING — a board index or a careers page that
-   links to the roles rather than describing them. Measured across 22 firms, 10
-   returned exactly one "posting" that was really a listing, and 8 of those
-   yielded no task verbs at all: we were fetching the page that names the jobs
-   and never opening the jobs. This closes that gap.
+   A URL we found is usually a LIST — a board index or a careers page that links
+   to the jobs rather than describing them. Measured across 22 firms, 10 came
+   back with exactly one "posting" that was really a list page, and 8 of those
+   described no tasks at all. We were downloading the page that names the jobs
+   and never opening the jobs themselves. This closes that gap.
 
-   Reads both HTML (`href="..."`) and markdown (`](...)`), because the artifact
-   cache returns HTML from a plain fetch and markdown from Firecrawl, and a
-   caller should not have to know which tier produced the bytes.
+   It reads links in both HTML and markdown form, because the page cache returns
+   HTML from a plain fetch and markdown from Firecrawl, and a caller should not
+   have to know which one produced it.
 
-   Same host only. A careers page links to LinkedIn, to the ATS, to the press
-   page and to a cookie policy; following off-host would walk straight into the
-   sources this module exists to exclude. */
+   Same domain only. A careers page also links to LinkedIn, to the hiring
+   platform, to the press page and to a cookie policy. Following links off the
+   domain would walk straight into the sources this file exists to keep out. */
 export function jobLinksFrom(
   content: string,
   baseUrl: string,
@@ -390,9 +408,9 @@ export function jobLinksFrom(
       return
     if (!isVacancyUrl(resolved.toString())) return
 
-    /* A detail page has a slug: a last segment long enough to be a role name or
-       an id, not just `/careers` or `/jobs`. This is what separates
-       `/en/uae/jobs/legal-assistant-1100020087` from `/jobs`. */
+    /* An individual job page has a long last piece in its address — long enough
+       to be a job title or an id, not just `/careers` or `/jobs`. That is what
+       separates `/en/uae/jobs/legal-assistant-1100020087` from `/jobs`. */
     const last = resolved.pathname.split('/').filter(Boolean).pop() ?? ''
     if (last.length < 8 || !/[-_0-9]/.test(last)) return
 
