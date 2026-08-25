@@ -905,18 +905,6 @@ function sourceLabel(url) {
     : label
 }
 
-/* Some facts come from a bought data set that is only refreshed monthly, not
-   read live. So we show the date next to them. Telling a prospect their staff
-   count as if it were current when it is six months old is exactly the kind of
-   thing that destroys trust — and they are the one person who will spot it
-   straight away. Everything else was fetched during this run, so it needs no
-   date. */
-function findingAge(finding) {
-  if (finding.sourceType !== 'enrichment' || !finding.retrievedAt) return null
-  const shown = fmtDate(finding.retrievedAt)
-  return shown === '—' ? null : `as of ${shown}`
-}
-
 /* What the research found, shown beside the questions rather than in front of
    them. It only ever shows things it can point at, and it never fills in an
    answer for the user.
@@ -927,12 +915,12 @@ function findingAge(finding) {
    broken, and a panel that promises a scan it cannot deliver is worse than no
    panel (LYR-185).
 
-   No sorting, no limit, no "show a mix of types" rule. The analyst already
-   decided what is worth saying and wrote each line (LYR-216). A second round of
-   picking here would quietly throw away that thinking, and cutting the list
-   short would drop findings for no reason the prospect can see. We print the
-   headline exactly as written and use sourceUrl as the link. This component
-   calls no model and makes no decisions of its own (LYR-199). */
+   No sorting, no limit, no "show a mix of types" rule. The agent already decided
+   what is worth saying and wrote each line. A second round of picking here would
+   quietly throw away that thinking, and cutting the list short would drop
+   findings for no reason the prospect can see. We print `says` exactly as
+   written and use `link` as the link. This component calls no model and makes no
+   decisions of its own (LYR-199). */
 function ScanPanel({ company, findings, looking }) {
   /* Nothing found means nothing on screen, not an empty box. Once the search
      is finished and found nothing, the panel disappears — the questions are
@@ -974,39 +962,19 @@ function ScanPanel({ company, findings, looking }) {
       >
         {`What we could verify about ${company || 'you'} — each with a source.`}
       </p>
-      {findings.map((f, i) => {
-        const age = findingAge(f)
-        return (
-          <ScanFactRow
-            /* The analyst may say more than one thing about one source, so the
-               URL alone is not a key. */
-            key={`${f.sourceUrl}\n${f.headline}`}
-            stacked
-            fact={f.kind}
-            value={
-              age ? (
-                <>
-                  {f.headline}{' '}
-                  <span
-                    style={{
-                      font: 'var(--weight-regular) var(--text-xs)/1.4 var(--font-body)',
-                      color: 'var(--text-muted)',
-                      whiteSpace: 'nowrap',
-                    }}
-                  >
-                    ({age})
-                  </span>
-                </>
-              ) : (
-                f.headline
-              )
-            }
-            source={sourceLabel(f.sourceUrl)}
-            sourceUrl={f.sourceUrl}
-            last={!looking && i === findings.length - 1}
-          />
-        )
-      })}
+      {findings.map((f, i) => (
+        <ScanFactRow
+          /* The agent may say more than one thing about one page, so the link
+             alone is not a key. */
+          key={`${f.link}\n${f.says}`}
+          stacked
+          fact={f.about}
+          value={f.says}
+          source={sourceLabel(f.link)}
+          sourceUrl={f.link}
+          last={!looking && i === findings.length - 1}
+        />
+      ))}
       {looking && (
         <div
           style={{
@@ -1563,12 +1531,13 @@ function useScan(website) {
         stop()
         return
       }
-      /* The analyst on the server already throws away any finding whose
-         source it cannot verify, so a missing sourceUrl should be impossible.
-         We check again anyway, because if it ever did happen we would print a
-         line with no source under it — the exact thing the panel's own footer
-         promises never to do. So: no source, no row. */
-      if (event.type !== 'finding' || !event.finding?.sourceUrl) return
+      /* The server already throws away any finding pointing at a page it did
+         not open, so a missing link should be impossible. We check again
+         anyway: if it ever did happen we would print a line with no source
+         under it, which is the exact thing this panel promises never to do.
+         No link, no row.
+         Other event types — `step` and `gaps` — are ignored here for now. */
+      if (event.type !== 'finding' || !event.finding?.link) return
       setScan((current) => ({
         ...current,
         findings: [...current.findings, event.finding],

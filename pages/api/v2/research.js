@@ -5,17 +5,17 @@
 
    It keeps the connection open and pushes findings down it, rather than
    answering once, because the research takes 5 to 20 seconds and the panel has
-   to fill while the prospect answers their next question. S1 lands in about a
-   second; waiting for S2 to finish before showing anything would turn a panel
-   that fills up into a spinner.
+   to fill while the prospect answers their next question. Waiting for the whole
+   run before showing anything would turn a panel that fills up into a spinner.
 
-   Two agents, one connection: the research run tells the analyst the moment a
-   scout finishes, the analyst re-reads everything found so far, and each checked
-   finding is written out as it comes off the model.
+   One agent behind it. It picks what to fetch, writes each finding down the
+   moment it has one, and that is what comes down this connection. There used to
+   be two model calls here — one to collect, one to work out what it meant. Now
+   there is one.
 
-   The only model call on this path is the analyst's, and it happens upstream.
-   This route makes none of its own, and does no picking, sorting or rewording of
-   what it passes on. The sentences are already written and already sourced.
+   This route makes no model calls of its own and does no picking, sorting or
+   rewording of what it passes on. The sentences are already written and already
+   pointed at a page we really read.
 
    It is a GET on purpose: the browser's own reader for this kind of stream only
    speaks GET. The alternative is writing our own stream parser for a request
@@ -25,9 +25,8 @@
    as the stop signal — copy pages/api/roi-agent.js, which has been carrying
    real generations for months. Nothing here invents its own way of
    cancelling. */
-import { normalizeDomain } from '@/src/lib/roi/research/scouts/s1Derive'
-import { runResearch } from '@/src/lib/roi/research/orchestrator'
-import { createResearchAnalyst } from '@/src/lib/roi/research/researchAnalyst'
+import { research } from '@/src/lib/roi/research/agent'
+import { cleanDomain } from '@/src/lib/roi/research/search'
 
 export const config = {
   maxDuration: 300,
@@ -48,11 +47,10 @@ export default async function handler(req, res) {
   }
 
   /* Cuts whatever the prospect typed in the Website field down to a plain
-     domain. This is where outside input enters, and `normalizeDomain` is the
-     same check the scouts already run their own input through. A typo is
-     rejected here rather than turning into a request for a nonsense
-     address. */
-  const domain = normalizeDomain(String(req.query.domain ?? ''))
+     domain. This is where outside input enters, and `cleanDomain` is the same
+     check the agent runs its own input through. A typo is rejected here
+     rather than turning into a request for a nonsense address. */
+  const domain = cleanDomain(String(req.query.domain ?? ''))
   if (!domain) {
     res.status(400).json({ error: 'invalid_domain' })
     return
@@ -64,24 +62,36 @@ export default async function handler(req, res) {
   res.setHeader('X-Accel-Buffering', 'no')
 
   /* The client hanging up is how we know to stop. A prospect who closes the tab
-     or goes back to the company screen should not leave scouts crawling and an
-     analyst running up a bill for a panel nobody is looking at. The research run
-     has its own 30-second limit, so this caps the spend rather than the run
-     itself. */
+     or goes back to the company screen should not leave an agent fetching pages
+     and running up a bill for a panel nobody is looking at. The run has its own
+     cap of 20 turns, so this limits the spend rather than the run itself. */
   let gone = false
   res.on('close', () => {
     if (!res.writableEnded) gone = true
   })
 
   try {
-    const analyst = createResearchAnalyst(domain, {
+    const found = await research(domain, {
       onFinding: (finding) => {
         if (gone) return
         send(res, { type: 'finding', finding })
       },
+      /* What it is doing right now. "Reading their careers page" is a better
+         thing to look at than a spinner, and it costs nothing — the agent tells
+         us after every turn anyway. */
+      onStep: (step) => {
+        if (gone || step.using.length === 0) return
+        send(res, { type: 'step', using: step.using })
+      },
     })
-    await runResearch(domain, { onScoutResolved: analyst.onScoutResolved })
-    await analyst.settled()
+
+    /* Why we could not find more, in their words. Sent at the end because it is
+       only true at the end. This is the part that stops a quiet panel reading as
+       "this company does nothing" when it really means "we could not reach their
+       site". */
+    if (!gone && found.gaps.length > 0) {
+      send(res, { type: 'gaps', gaps: found.gaps })
+    }
   } catch (error) {
     /* Nothing on this path may throw at the client. The right response to a
        failed run is no panel at all, and that is exactly what saying "done"

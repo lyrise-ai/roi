@@ -32,6 +32,27 @@ connection, with a 5-minute limit.
 There is a scoring harness under `evals/roi/` (see `evals/roi/README.md`). Run it
 after changing a prompt or any scoring logic.
 
+**`src/lib/roi/research/` is one agent with tools**, not a fixed run of steps.
+`agent.ts` holds the loop and the instructions; `tools.ts` is what it can do.
+Two rules there that are not negotiable:
+
+- **A finding must point at a page we really opened.** `noteFinding` refuses any
+  other link and says so, and `Link` in `types.ts` is a type only `link()` can
+  make, so a made-up URL will not compile. This is why the old agent's invented
+  workflows cannot come back.
+- **A failure always says why.** `readPage` never returns `null` — a timeout, a
+  404 and a refusal are different answers, and the agent acts on the difference.
+  It then reaches the person through `gaps`. "We could not reach your site" and
+  "you have no public jobs" must never look the same.
+- **`log.ts` is the only file in there allowed to touch `console`.** Everything
+  else goes through the logger it exports, which is why `.eslintrc.js` can turn
+  `no-console` off for that one file. Widen that override and the rule is gone.
+  A failed fetch is logged at **warn**, never error: here a missing page is the
+  ordinary result of looking, and error level is for a real fault. Three events
+  go to PostHog — see `RESEARCH_*` in `src/lib/analytics.ts`. Added up,
+  `research_call_failed` measures retrieval against every real prospect, which
+  is what the deleted 25-domain coverage harness used to sample.
+
 One rule that belongs to this directory:
 
 - **Four fields on `ReportState` hold the truth**: `company`, `globals`,
@@ -111,16 +132,17 @@ npm run dev:test       # Dev server on :3777 — the port the Playwright config 
 npm run build          # Lint errors are IGNORED during build; `npm run lint` is the gate
 npm run test:e2e:smoke # @smoke subset (~1 min) vs. the full suite
 npm run eval:roi       # ROI report eval harness
-npm run eval:research  # Research coverage harness — costs real API spend
+npm run research -- <domain>  # Run the research agent on one company and
+                       # print what it found — costs real API spend
 npm run deadcode       # knip; clean today, keep it that way
 ```
 
 `knip.json` lists `src/lib/roi/research/**` and `src/lib/roi/v2/*` as **entry
-points**. Not because anything imports them — because nothing imports them in a
-way a tool can see. The research tests and the coverage harness reach them by
-bundling at run time. Remove those two lines and knip declares the whole research
-subsystem dead code. knip refuses unknown settings, so this note cannot live
-inside the config file.
+points**. Not because nothing imports them — but because the tests and
+`evals/research/look.mjs` reach them by bundling at run time, which no tool can
+see. `types.typecheck.ts` is nobody's import at all: it exists only to be
+compiled. Remove those two lines and knip calls the research code dead. knip
+refuses unknown settings, so this note cannot live inside the config file.
 
 ## Environment variables
 
