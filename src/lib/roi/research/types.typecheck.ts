@@ -1,18 +1,20 @@
 // ─────────────────────────────────────────────────────────────────────────────
-// research/types.typecheck — a test that runs in the compiler, not the runner.
+// research/types.typecheck — a test that runs in the type checker, not in the
+// test runner.
 //
-// R1's headline acceptance criterion is "a Fact cannot be constructed without a
-// sourceUrl — verify by trying, it should be a type error". That guarantee
-// can't be asserted from `node --test`, because the code under test is the type
-// system. So it's asserted here instead.
+// R1's main requirement is "a fact cannot be built without a source URL —
+// check by trying, it should be a type error". You cannot check that from
+// `node --test`, because the thing being tested is the type system itself. So
+// it is checked here.
 //
-// Every `@ts-expect-error` below is an assertion: if the line it precedes ever
-// STOPS being an error, tsc fails with "unused '@ts-expect-error' directive".
-// That is what makes this a regression guard rather than a comment — weaken the
-// `SourceUrl` brand or make `sourceUrl` optional and `next build` breaks.
+// Every `@ts-expect-error` below is a claim that the next line is an error. If
+// that line ever STOPS being an error, the compiler fails with "unused
+// '@ts-expect-error' directive". That is what makes this file a real guard
+// rather than a comment: weaken the source-URL type, or make the field
+// optional, and `next build` breaks.
 //
-// Nothing here is imported at runtime; the file exists to be compiled.
-// Everything is exported only so no-unused-vars stays quiet.
+// Nothing here runs. The file exists only to be compiled. Everything is
+// exported purely to keep the unused-variable rule quiet.
 // ─────────────────────────────────────────────────────────────────────────────
 
 import {
@@ -25,11 +27,11 @@ import {
 
 const NOW = '2026-03-03T00:00:00.000Z'
 
-/* 1. A source cannot be omitted. This is the "everything else is inferred"
-      shape the old research agent produced. */
-/* The directive sits above the declaration rather than inside the literal: a
-   missing required property is reported against the object as a whole, not
-   against any one line within it. */
+/* 1. You cannot leave the source out. This is the shape the old research agent
+      produced, where everything was inferred and nothing was sourced. */
+/* The marker sits above the whole declaration, not inside the object. A missing
+   required field is reported against the object as a whole, not against any one
+   line inside it. */
 // @ts-expect-error — sourceUrl is required
 export const missingSource: Provenance = {
   sourceType: 'site',
@@ -37,9 +39,10 @@ export const missingSource: Provenance = {
   confidence: 'high',
 }
 
-/* 2. A source cannot be hand-written. A raw string is not a SourceUrl, so a
-      model-supplied or invented URL cannot be dropped straight into a fact —
-      it has to go through `sourceUrl()`, which validates. */
+/* 2. You cannot write a source by hand. A plain string is not a checked source
+      URL, so a URL from a model, or one someone made up, cannot be dropped
+      straight into a fact. It has to go through `sourceUrl()`, which checks
+      it. */
 export const handWrittenSource: Provenance = {
   // @ts-expect-error — string is not assignable to SourceUrl
   sourceUrl: 'https://acmelaw.com/careers',
@@ -70,9 +73,9 @@ export const factWithRawString = fact(1, {
   confidence: 'high',
 })
 
-/* 6. A scout cannot invent a status outside the four. In particular there is no
-      way to spell a single value meaning "nothing here" that blurs NONE
-      (we looked, there's nothing) into ERROR (we couldn't look). */
+/* 6. A scout cannot invent a fifth answer. In particular there is no way to
+      write one value meaning "nothing here" that blurs "we looked and there is
+      nothing" together with "we could not look". */
 export const badStatus: ScoutResult<null> = {
   scout: 'S2',
   // @ts-expect-error — 'EMPTY' is not a ScoutStatus
@@ -83,9 +86,9 @@ export const badStatus: ScoutResult<null> = {
   costUsd: 0,
 }
 
-/* 7. The sanctioned path. This one must COMPILE — if it ever fails, the
-      contract has been tightened into something no scout can satisfy, which is
-      its own kind of breakage. */
+/* 7. The proper way to do it. This one must COMPILE. If it ever fails, the
+      rules have been tightened into something no scout can satisfy, which is
+      its own kind of broken. */
 export function sanctioned(): Fact<number> | null {
   const url = sourceUrl('https://acmelaw.com/careers')
   if (!url) return null

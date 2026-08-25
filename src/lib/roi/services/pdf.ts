@@ -1,18 +1,20 @@
 // ─────────────────────────────────────────────────────────────────────────────
-// pdf — converts rendered HTML to PDF using Puppeteer + @sparticuz/chromium
-// Works locally (uses locally-installed Chrome) and on Vercel serverless
-// (uses the pre-built Chromium binary from @sparticuz/chromium).
-// No external API or credentials required.
+// pdf — turns the rendered HTML into a PDF, using Puppeteer with a bundled copy
+// of Chromium. It works locally, where it uses the Chrome you already have
+// installed, and on Vercel, where it uses the bundled build. No outside service
+// and no credentials needed.
 //
-// Renders are serialised per process. @sparticuz/chromium inflates its binary
-// to /tmp/chromium, and executablePath() returns that path as soon as it
-// exists — which is the moment the write stream is created, not the moment the
-// write finishes. Two overlapping renders in one instance therefore had the
-// second one exec a half-written binary and die with `spawn ETXTBSY`. Fluid
-// Compute reuses an instance across concurrent requests, and bulk upload
-// starts a row every 60s while a run takes minutes, so overlap is the norm
-// there, not the exception: it cost a 28-report batch its PDFs and, because
-// the email is sent from the same try block, every one of its emails.
+// PDFs are rendered one at a time per server process. Here is why. The bundled
+// Chromium unpacks itself to a file in /tmp, and the function that tells us
+// where it is returns that path as soon as the file EXISTS — which is when
+// writing starts, not when it finishes. So two PDFs rendering at once in the
+// same server meant the second one tried to run a half-written program and died
+// with `spawn ETXTBSY`.
+//
+// Vercel reuses one server for several requests at once, and bulk upload starts
+// a new report every 60 seconds while each takes minutes. So overlapping is
+// normal there, not rare. It cost one 28-report batch all of its PDFs — and,
+// because the email is sent inside the same block, all of its emails too.
 // ─────────────────────────────────────────────────────────────────────────────
 
 export interface PdfResult {
@@ -20,9 +22,10 @@ export interface PdfResult {
   filename: string
 }
 
-// ponytail: one lock per process, so renders queue instead of overlapping.
-// The ceiling is throughput — a batch's PDFs render one at a time within an
-// instance. If that ever matters, inflate Chromium to a per-call path instead.
+// ponytail: one queue per server process, so renders line up instead of
+// overlapping. The limit is speed: a batch's PDFs render one after another
+// inside one server. If that ever matters, unpack Chromium to its own path per
+// call instead.
 let queue: Promise<unknown> = Promise.resolve()
 
 /** Runs `task` after every task already queued in this process. */
@@ -46,12 +49,12 @@ async function renderPdf(html: string, filename: string): Promise<PdfResult> {
   let args: string[]
 
   if (process.env.AWS_EXECUTION_ENV || process.env.VERCEL) {
-    // Serverless — use the pre-built Chromium binary
+    // On Vercel: use the bundled Chromium
     const chromium = (await import('@sparticuz/chromium')).default
     executablePath = await chromium.executablePath()
     args = chromium.args
   } else {
-    // Local development — use the system Chrome / Chromium
+    // On a laptop: use the Chrome that is already installed
     const localPaths = [
       '/Applications/Google Chrome.app/Contents/MacOS/Google Chrome', // macOS
       '/usr/bin/google-chrome', // Linux
@@ -79,12 +82,13 @@ async function renderPdf(html: string, filename: string): Promise<PdfResult> {
   try {
     const page = await browser.newPage()
 
-    // Load the HTML directly — base64 encode to avoid any URL length limits
+    // Hand the HTML straight to the page, rather than through a URL, so page
+    // length can never hit a URL limit
     await page.setContent(html, { waitUntil: 'networkidle0' })
 
-    // Ensure web fonts (Inter via Google Fonts) are fully loaded before
-    // rendering, so the PDF matches the browser preview byte-for-byte
-    // instead of falling back to a generic sans-serif mid-render.
+    // Wait for the web fonts to finish loading before rendering, so the PDF
+    // looks exactly like the preview in the browser instead of falling back to
+    // a plain system font halfway through.
     await page.evaluate(() => document.fonts.ready)
 
     const pdfBuffer = await page.pdf({

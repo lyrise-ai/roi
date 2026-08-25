@@ -1,49 +1,53 @@
 // ─────────────────────────────────────────────────────────────────────────────
-// research/types — the contracts every scout in the Profit Map research system
-// implements (LYR-187 R1 / LYR-194).
+// research/types — the shapes every scout in the research system has to follow
+// (LYR-187 R1 / LYR-194).
 //
-// The whole subsystem exists because the previous research agent fabricated.
-// Its prompt required exactly four workflows and a monthly volume whether or
-// not evidence existed, so "we found nothing" was not a legal answer and it
-// invented one. Two properties of this file make that failure structural
-// rather than something a prompt politely discourages:
+// This whole subsystem exists because the old research agent made things up.
+// Its prompt demanded exactly four workflows and a monthly volume whether or
+// not any evidence existed, so "we found nothing" was not an allowed answer and
+// it invented one instead.
 //
-//   1. A fact cannot exist without a source. `Provenance.sourceUrl` is not a
-//      `string` — it is a branded `SourceUrl` that only `sourceUrl()` can
-//      mint, and that function validates. You cannot hand-write a Fact with a
-//      literal URL, and you cannot omit the field. Both fail to compile.
+// Two things in this file make that impossible by construction, rather than
+// merely discouraged by a prompt:
 //
-//   2. NONE and ERROR are different statuses and must never be collapsed.
+//   1. A fact cannot exist without a source. The source URL is not an ordinary
+//      string. It is a special type that only the `sourceUrl()` function can
+//      produce, and that function checks the URL. You cannot write a fact by
+//      hand with a literal URL in it, and you cannot leave the field out.
+//      Both fail to compile.
 //
-// Note on the brand: this repo runs `strict: false`, so `strictNullChecks` is
-// off and a plain `sourceUrl: string` would still accept `null`. The brand is
-// what actually holds the line under these compiler settings — a raw string is
-// not assignable to it regardless of strictness.
+//   2. "Found nothing" and "failed to look" are different answers, and must
+//      never be treated as the same thing.
+//
+// Why the special type rather than a plain string: this repo compiles with
+// TypeScript's strict checks off, so a plain string field would still accept
+// null. The special type is what actually holds the line under these settings —
+// an ordinary string cannot be assigned to it, strict mode or not.
 // ─────────────────────────────────────────────────────────────────────────────
 
 export type SourceType = 'enrichment' | 'ats' | 'site' | 'registry' | 'news'
 
 export type Confidence = 'high' | 'medium' | 'low'
 
-/* A URL that has been through `sourceUrl()`. The intersection with an object
-   type carrying a `unique symbol` is what makes a plain string un-assignable:
-   there is no way to produce this type except by calling the constructor. */
+/* A URL that has been through `sourceUrl()`. Tagging the string type with a
+   private marker is what makes a plain string unusable here: there is no way to
+   produce this type except by calling that function. */
 declare const SOURCE_VERIFIED: unique symbol
 export type SourceUrl = string & { readonly [SOURCE_VERIFIED]: true }
 
 export type Provenance = {
   sourceUrl: SourceUrl
   sourceType: SourceType
-  /* ISO 8601. This is the age of the DATA, not the time of our call. An
-     enrichment provider refreshes its cache monthly, so a lookup made this
-     second may be describing a company as it was in March. Anything that
-     displays a fact is expected to surface this. */
+  /* A date and time in the standard format. This is how old the DATA is, not
+     when we asked for it. A data provider refreshes its store monthly, so a
+     lookup made this second may describe the company as it was in March.
+     Anything that shows a fact is expected to show this too. */
   retrievedAt: string
   confidence: Confidence
-  /* Verbatim from the source, capped at 200 chars by `fact()`. This is what
-     lets a downstream writer quote rather than paraphrase — "your posting from
-     3 March lists 'chasing outstanding client documents' as the first duty" is
-     only possible if the raw span survives extraction. */
+  /* Word for word from the source, cut to 200 characters by `fact()`. This is
+     what lets the report quote instead of rephrase. "Your posting from 3 March
+     lists 'chasing outstanding client documents' as the first duty" is only
+     possible if the original text survives this far. */
   excerpt?: string
 }
 
@@ -54,11 +58,12 @@ export type Fact<T> = {
 
 export const EXCERPT_MAX = 200
 
-/* Mints a `SourceUrl`, or returns null if the input isn't a real http(s) URL.
-   Null rather than throw: this sits on the report-generation path, which never
-   throws (see pipeline/validationBaseline.ts). A caller that can't produce a
-   source is expected to drop the fact, which is the correct outcome — a fact
-   we can't point at is one we shouldn't state. */
+/* Produces a checked source URL, or nothing if the input is not a real http or
+   https address. It returns nothing rather than throwing, because this sits on
+   the report-generation path, and nothing on that path is allowed to throw (see
+   pipeline/validationBaseline.ts). A caller that cannot produce a source is
+   expected to drop the fact. That is the right outcome: a fact we cannot point
+   at is one we should not state. */
 export function sourceUrl(raw: string): SourceUrl | null {
   if (typeof raw !== 'string' || raw.trim() === '') return null
   let parsed: URL
@@ -71,11 +76,11 @@ export function sourceUrl(raw: string): SourceUrl | null {
   return parsed.toString() as SourceUrl
 }
 
-/* The only sanctioned way to build a Fact. Returns null when provenance is
-   unusable, so "no source" degrades to "no fact" rather than to a fact with an
-   empty source. Truncates `excerpt` instead of rejecting it — a 200-char
-   prefix of the source text is still verbatim, which is the property that
-   matters for quoting. */
+/* The only allowed way to build a fact. It returns nothing when the source is
+   unusable, so "no source" becomes "no fact" rather than a fact with an empty
+   source. It shortens a long quote rather than refusing it: the first 200
+   characters of the source text are still the source's own words, which is the
+   part that matters for quoting. */
 export function fact<T>(
   value: T,
   provenance: {
@@ -105,14 +110,14 @@ export function fact<T>(
 
 export type ScoutId = 'S1' | 'S2' | 'S3' | 'S4' | 'S5' | 'S6' | 'S7'
 
-/* NONE and ERROR are load-bearing and must not be collapsed:
-     NONE  = we looked and there is genuinely nothing. The company isn't
-             hiring. This is INFORMATION, and a writer may say so.
-     ERROR = we failed to look. API down, blocked, timed out. This is a GAP,
-             and a writer must stay quiet about it.
-   Collapsing the two is how the old system ended up inventing: it could not
-   tell "no postings exist" from "we couldn't reach the ATS", so it treated
-   both as a prompt to produce something. */
+/* "Found nothing" and "error" do real work here and must never be merged:
+     NONE  = we looked and there genuinely is nothing. The company is not
+             hiring. That is INFORMATION, and the report may say so.
+     ERROR = we failed to look. The API was down, we were blocked, it timed
+             out. That is a GAP, and the report must stay quiet about it.
+   Merging the two is how the old system ended up inventing things: it could not
+   tell "there are no postings" from "we could not reach the job board", so it
+   treated both as an invitation to produce something. */
 export type ScoutStatus = 'FULL' | 'PARTIAL' | 'NONE' | 'ERROR'
 
 export type SourceAttempt = {
@@ -121,10 +126,10 @@ export type SourceAttempt = {
   ms: number
 }
 
-/* Coverage is declared, never hidden (R5 of the parent card). Every scout
-   reports what it tried as well as what it found, so the aggregator can score
-   how much the system actually knows rather than assuming a quiet result
-   means an empty world. */
+/* What we looked at is always declared, never hidden (R5 of the parent card).
+   Every scout reports what it TRIED as well as what it found, so we can score
+   how much we actually know, instead of assuming a quiet result means the
+   company has nothing going on. */
 export type ScoutResult<T> = {
   scout: ScoutId
   status: ScoutStatus
@@ -132,14 +137,16 @@ export type ScoutResult<T> = {
   sourcesAttempted: SourceAttempt[]
   durationMs: number
   costUsd: number
-  /* Human-readable reason for degradation, e.g. "Apollo 429, fell back to
-     site". Shown in the coverage test's report, never to a prospect. */
+  /* A readable reason for a weaker result, such as "Apollo rate-limited us,
+     fell back to the website". Shown in the coverage test's report, never to a
+     prospect. */
   notes?: string
 }
 
 export type Artifact = {
   content: string
-  /* ISO 8601 — when these bytes were fetched, not when they were requested.
-     A cache hit reports the original fetch time. */
+  /* A date and time in the standard format: when this page was actually
+     downloaded, not when someone asked for it. A page served from the cache
+     reports when it was first downloaded. */
   fetchedAt: string
 }
