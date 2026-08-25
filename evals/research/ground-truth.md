@@ -1,3 +1,10 @@
+> **Note, 25 Aug 2026.** The notes below were written against the old research
+> system, which ran a fixed set of steps and probed five fixed careers-page
+> addresses. That code is gone — there is now one agent with tools
+> (`src/lib/roi/research/agent.ts`). What each firm actually has, checked by
+> hand, is still true and still the reason this file exists. Where a note talks
+> about "what S2 probes", read it as a record of why we rebuilt it.
+
 # Ground truth for reading the analyst's findings
 
 The research analyst (LYR-216) replaced a verb-set intersection with an agent
@@ -113,7 +120,9 @@ compliance) — carried on GulfTalent, Indeed AE and Glassdoor.
 ⚠️ **We found none of them.** Their careers pages are `/careers-at-hlb-hamt/`
 and `/career/` — neither matches the `/careers`, `/careers/vacancies`,
 `/careers/jobs` shapes S2 probes. This is a **retrieval gap, not an empty
-company**, and it is evidence for LYR-213.
+company**, and it is what LYR-220 fixes: both addresses are ordinary links on
+their own homepage, in HTML S1 had already downloaded. S2 now follows that link
+(L1.75) before falling back to guessing paths.
 
 **stalawfirm.com** — STA Law Firm · baseline THIN, nothing retrieved
 
@@ -217,5 +226,7 @@ on _which_ failure mode it is, using the table above.
 
 Post the write-up to LYR-187. Anything that turns out to be a retrieval gap
 rather than an analyst problem — `hlbhamt.com`'s `/career/` path,
-`stalawfirm.com`'s `/en/*.html` and its latency — belongs on LYR-213 instead,
-which is the card for exactly that question.
+`stalawfirm.com`'s `/en/*.html` and its latency — belongs on LYR-220 instead,
+which is the card for exactly that question. (It was pointed at LYR-213; that
+card stays closed. LYR-220 covers the path shapes and the link following, and
+reports the latency rather than fixing it.)

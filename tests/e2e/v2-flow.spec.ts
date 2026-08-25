@@ -43,22 +43,19 @@ async function answerTheNumbers(page: Page) {
   await page.getByPlaceholder('about a third', { exact: true }).fill('30')
 }
 
-/* One finding from the bought data set, and one job posting. That pairing is
-   what the age rule turns on: the bought one is shown with a date next to it,
-   and the posting — read live during this run — is not. */
+/* Two findings in the shape the research agent now emits. Every one of them is
+   read live during the run — there is no bought data set any more, so no row
+   carries an "as of" date. */
 const FINDINGS = [
   {
-    headline: 'You are about 38 people',
-    kind: 'size',
-    sourceUrl: 'https://example.com/about',
-    sourceType: 'enrichment',
-    retrievedAt: '2026-03-01T00:00:00.000Z',
+    says: 'You are about 38 people',
+    about: 'size',
+    link: 'https://example.com/about',
   },
   {
-    headline:
-      'You are hiring a paralegal whose first listed duty is chasing outstanding client documents',
-    kind: 'hiring',
-    sourceUrl: 'https://example.com/careers/paralegal',
+    says: 'You are hiring a paralegal whose first listed duty is chasing outstanding client documents',
+    about: 'hiring',
+    link: 'https://example.com/careers/paralegal',
   },
 ]
 
@@ -213,7 +210,7 @@ test.describe('/v2', () => {
     await open.fill('Screening CVs by hand')
     await expect(open).toHaveValue('Screening CVs by hand')
 
-    // Finished: the analyst's own sentence, printed exactly as written.
+    // Finished: the agent's own sentence, printed exactly as written.
     await expect(panel).toContainText(
       'first listed duty is chasing outstanding client documents',
     )
@@ -221,12 +218,10 @@ test.describe('/v2', () => {
     await expect(
       panel.getByRole('link', { name: 'example.com/careers/paralegal' }),
     ).toHaveAttribute('href', 'https://example.com/careers/paralegal')
-    // The bought data is refreshed monthly, so that row says how old it is.
-    await expect(panel).toContainText(
-      'You are about 38 people (as of 1 Mar 2026)',
-    )
-    // A finding read live during this run needs no such note.
-    await expect(panel).not.toContainText(/paralegal.*\(as of/)
+    await expect(panel).toContainText('You are about 38 people')
+    /* Everything is read live now, so no row may claim an age. The old bought
+       data set went when S1 did. */
+    await expect(panel).not.toContainText(/\(as of/)
 
     // Nothing guessed: no workflow, no department, no "operating model".
     await expect(panel).not.toContainText(

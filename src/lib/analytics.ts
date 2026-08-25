@@ -43,4 +43,19 @@ export const EVENTS = {
   VALIDATION_COMPLETED: 'validation_completed',
   /** An authorized user skips report validation. */
   VALIDATION_SKIPPED: 'validation_skipped',
+  /** One research run finished. Carries how many findings, how sure it was, how
+   *  many calls it made and how many of those failed. This is the one that
+   *  answers "how often do we come back with nothing?" without anyone having to
+   *  run a harness against a sample of domains. */
+  RESEARCH_COMPLETED: 'research_completed',
+  /** One tool call failed, and why — timeout, not-found, refused, never-read,
+   *  rescue-spent. On its own it is noise; added up across every company it is
+   *  the shape of what beats us, measured on real prospects instead of on 25
+   *  domains we picked. */
+  RESEARCH_CALL_FAILED: 'research_call_failed',
+  /** The agent tried to say something about a page we never opened, and was
+   *  refused. This is the fabrication alarm. One is normal — it retries with a
+   *  real page. A spike means the agent is inventing citations, which is the
+   *  exact failure the whole research system was rebuilt to make impossible. */
+  RESEARCH_FINDING_REFUSED: 'research_finding_refused',
 } as const

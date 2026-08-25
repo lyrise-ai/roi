@@ -20,16 +20,13 @@
   ],
   "ignore": ["src/lib/roi/pipeline/__tests__/fixtures.ts"],
   "ignoreDependencies": [
-    "eslint-config-airbnb",
     "eslint-config-next",
     "eslint-config-prettier",
     "eslint-plugin-jsx-a11y",
     "eslint-plugin-prettier",
     "eslint-plugin-react",
     "eslint-plugin-react-hooks",
-    "eslint-plugin-security",
-    "eslint-plugin-simple-import-sort",
-    "eslint-plugin-sonarjs"
+    "eslint-plugin-simple-import-sort"
   ],
   "ignoreExportsUsedInFile": true
 }

@@ -35,14 +35,19 @@
 
 import { webSearch as providerSearch } from '@/src/lib/roi/tools/webSearch'
 
-export type SearchHit = { url: string; title: string }
+export type Hit = { url: string; title: string; secondHand?: boolean }
 
 /* How a URL we found relates to the company we were asked about.
-     own     — the company's own domain, or something under it
-     ats     — a hiring platform we know, with a board name that matches
-     blocked — LinkedIn, or a site that republishes other people's listings
-     other   — we cannot tie it to this company, so we drop it */
-export type HostClass = 'own' | 'ats' | 'blocked' | 'other'
+     theirs     — the company's own domain, or something under it
+     board      — a hiring platform we know, with a board name that matches
+     secondHand — a site that republishes other people's listings. Readable, but
+                  often wrong about whose job it is, so it is marked and ranked
+                  last rather than trusted
+     stranger   — we cannot tie it to this company, so we drop it. Removing the
+                  blocklist did not make everything fair game: attaching another
+                  firm's vacancy to this prospect is still worse than finding
+                  nothing */
+export type SiteOwner = 'theirs' | 'board' | 'secondHand' | 'stranger'
 
 /* Hiring platforms we trust as if they were the company's own site. Workday is
    first on merit: it turned up for 5 of the 22 firms we measured, more than
@@ -50,7 +55,7 @@ export type HostClass = 'own' | 'ats' | 'blocked' | 'other'
    because its addresses cannot be guessed
    (`{tenant}.wd{N}.myworkdayjobs.com`). Search finds them; guessing never
    could. */
-const ATS_HOSTS = [
+const JOB_BOARDS = [
   'myworkdayjobs.com',
   'talentera.com',
   'teamtailor.com',
@@ -71,18 +76,20 @@ const ATS_HOSTS = [
 
 /* Never fetched, by any route, for any reason.
 
-   LinkedIn is a legal decision, not a quality one. Proxycurl was shut down in
-   July 2025 after LinkedIn sued them in federal court over scraping, and we
-   sell to law firms. LinkedIn dominated the search results in testing, so this
-   list does real work rather than sitting there for show — and it is a filter
-   in code, not an instruction in a prompt, because a filter cannot be talked
-   past.
+   These republish other people's job listings, or sit behind a login. They are
+   worth reading — hlbhamt.com's two auditor jobs are on GulfTalent and Indeed
+   and nowhere on its own site — but they are worth reading CAREFULLY. They
+   carry no reliable dates, they go stale, and they are often wrong about which
+   company a posting belongs to.
 
-   The rest are sites that republish other people's job listings. They carry no
-   dates, they are often out of date, and they are often wrong about which
-   company a posting belongs to. A fact pointing at one of those is worse than
-   no fact at all, because it looks checkable. */
-const BLOCKED_HOSTS = [
+   So this is a label, not a wall. Anything from here reaches the agent marked
+   as second-hand, and the agent judges whether the page is really about this
+   company. That is the same split as everywhere else in here: we do the
+   filtering a rule can do, and the reading a rule cannot.
+
+   LinkedIn will usually just fail. It answers automated requests with a login
+   wall or a 999, so a read costs a rescue-fetch credit to be told no. */
+const SECOND_HAND = [
   'linkedin.com',
   'lnkd.in',
   'indeed.com',
@@ -105,7 +112,7 @@ const BLOCKED_HOSTS = [
 
 /* Address paths that look like a vacancy list or an individual job page, as
    opposed to an About page that just happens to mention hiring. */
-const VACANCY_PATH =
+const JOB_WORDS =
   /\/(jobs?|vacanc|career|opportunit|position|opening|apply|job-application|recruit)/i
 
 /* Takes either a full URL or a bare domain, because callers pass both: a search
@@ -148,7 +155,7 @@ export function hostOf(input: string): string {
 
 /* The core name a board should look like. `acmelaw.co.uk` and `acmelaw.com`
    both come down to `acmelaw`. */
-export function companyToken(domain: string): string {
+export function nameFromDomain(domain: string): string {
   const host = hostOf(domain) || String(domain ?? '').toLowerCase()
   const labels = host.split('.').filter(Boolean)
   if (labels.length === 0) return ''
@@ -175,7 +182,7 @@ export function companyToken(domain: string): string {
    ponytail: a brand shared by member firms in different countries (bdo/bdoau)
    can still slip through. Only tighten this if a coverage re-run shows it
    attaching the wrong country's postings. */
-export function slugMatchesCompany(slug: string, token: string): boolean {
+export function couldBeTheirs(slug: string, token: string): boolean {
   const a = String(slug ?? '')
     .toLowerCase()
     .replace(/[^a-z0-9]/g, '')
@@ -189,19 +196,19 @@ export function slugMatchesCompany(slug: string, token: string): boolean {
   return longer.startsWith(shorter)
 }
 
-export function classifyHost(
+export function whoseSite(
   url: string,
   domain: string,
   /* Other domains the company itself says are the same as this one — see
      `canonicalDomainFromHtml`. We never work these out here: they are either
      handed in or we manage without them. */
   aliases: string[] = [],
-): HostClass {
+): SiteOwner {
   const host = hostOf(url)
-  if (host === '') return 'other'
+  if (host === '') return 'stranger'
 
-  if (BLOCKED_HOSTS.some((b) => host === b || host.endsWith(`.${b}`))) {
-    return 'blocked'
+  if (SECOND_HAND.some((b) => host === b || host.endsWith(`.${b}`))) {
+    return 'secondHand'
   }
 
   /* The company's own domain, or anything under it.
@@ -219,15 +226,15 @@ export function classifyHost(
      whole file exists to prevent. */
   const own = hostOf(domain)
   const owned = [own, ...aliases.map(hostOf)].filter((h) => h !== '')
-  if (owned.some((o) => host === o || host.endsWith(`.${o}`))) return 'own'
+  if (owned.some((o) => host === o || host.endsWith(`.${o}`))) return 'theirs'
 
-  const ats = ATS_HOSTS.find((a) => host === a || host.endsWith(`.${a}`))
-  if (ats) {
-    const slug = host.slice(0, host.length - ats.length).split('.')[0]
-    return slugMatchesCompany(slug, companyToken(domain)) ? 'ats' : 'other'
+  const board = JOB_BOARDS.find((a) => host === a || host.endsWith(`.${a}`))
+  if (board) {
+    const slug = host.slice(0, host.length - board.length).split('.')[0]
+    return couldBeTheirs(slug, nameFromDomain(domain)) ? 'board' : 'stranger'
   }
 
-  return 'other'
+  return 'stranger'
 }
 
 /* A vacancy page says so either in the path (`/careers`) or in the domain
@@ -235,15 +242,15 @@ export function classifyHost(
    `careers.bdo.co.uk` — correctly identified as theirs, and exactly the right
    page — because its path is just `/`. That was one of the six domains that
    produced nothing in the LYR-221 measurement. */
-export function isVacancyUrl(url: string): boolean {
+export function looksLikeJobs(url: string): boolean {
   try {
     const parsed = new URL(url)
-    if (VACANCY_PATH.test(parsed.pathname)) return true
+    if (JOB_WORDS.test(parsed.pathname)) return true
     const label = parsed.hostname
       .toLowerCase()
       .replace(/^www\./, '')
       .split('.')[0]
-    return VACANCY_PATH.test(`/${label}`)
+    return JOB_WORDS.test(`/${label}`)
   } catch {
     return false
   }
@@ -252,35 +259,47 @@ export function isVacancyUrl(url: string): boolean {
 /* Sorts the results, filters them, and removes duplicates. A hiring board beats
    the company's own site, because that is where dated, individual postings
    live; their own careers page is usually just prose. Anything we cannot
-   attribute is already gone by this point — blocked and unknown results never
-   survive — so no caller can accidentally fetch LinkedIn or another company's
-   board. */
-export function rankHits(
-  hits: SearchHit[],
+   attribute is already gone by this point, so a stranger's board never
+   survives. A republisher does survive, marked `secondHand`, because sometimes
+   a firm's only public jobs are there. */
+export function pickTheirPages(
+  hits: Hit[],
   domain: string,
   limit = 4,
   aliases: string[] = [],
-): SearchHit[] {
+): Hit[] {
   if (!Array.isArray(hits)) return []
   const seen = new Set<string>()
-  const scored: { hit: SearchHit; score: number }[] = []
+  const scored: { hit: Hit; score: number }[] = []
 
   for (const hit of hits) {
     const url = typeof hit?.url === 'string' ? hit.url : ''
-    const cls = url === '' ? 'other' : classifyHost(url, domain, aliases)
-    /* On the company's own domain, a page that is not about vacancies is
-       usually the About page and holds no jobs. On a hiring platform, the front
-       page IS the board. */
+    const cls = url === '' ? 'stranger' : whoseSite(url, domain, aliases)
+    /* Anything on their own domain is worth having, whatever the address looks
+       like. This used to also require the address to mention jobs, from back
+       when searching was only ever hunting for vacancies. It cost us real pages:
+       a search for `site:hlbhamt.com "Accounts Payable Outsourcing"` came back
+       with eight of their own service pages and we threw away all eight,
+       because a services address has no "job" in it.
+
+       A republisher still has to look like a vacancy. Their non-job pages are
+       genuinely not about this company. And on a hiring platform the front page
+       IS the board, so it needs no test at all. */
     const keep =
       url !== '' &&
       !seen.has(url) &&
-      (cls === 'ats' || (cls === 'own' && isVacancyUrl(url)))
+      (cls === 'board' ||
+        cls === 'theirs' ||
+        (cls === 'secondHand' && looksLikeJobs(url)))
 
     if (url !== '') seen.add(url)
     if (keep) {
+      /* Their own site and a real hiring board first; a republisher last, since
+         it is the one most likely to be about a different company. */
+      const score = { board: 3, theirs: 2, secondHand: 1, stranger: 0 }[cls]
       scored.push({
-        hit: { url, title: hit.title ?? '' },
-        score: cls === 'ats' ? 2 : 1,
+        hit: { url, title: hit.title ?? '', secondHand: cls === 'secondHand' },
+        score,
       })
     }
   }
@@ -303,10 +322,7 @@ const SEARCH_TIMEOUT_MS = 6_000
    pairs the scouts sort on. We deliberately throw away the snippet and the
    engine's own summary, because a scout has to read the page itself rather
    than trust a search engine's description of it. */
-export async function webSearch(
-  query: string,
-  limit = 8,
-): Promise<SearchHit[]> {
+export async function webSearch(query: string, limit = 8): Promise<Hit[]> {
   try {
     const { results } = await providerSearch(query, limit, SEARCH_TIMEOUT_MS)
     return results
@@ -333,7 +349,7 @@ export async function webSearch(
    four times, and "farrer" returned six unrelated US firms. Both scored zero
    usable results. "Gowling WLG" and "Farrer & Co" scored four each. Search
    engines match how people write a name, and nobody writes a domain. */
-export function discoveryQuery(
+export function searchFor(
   domain: string,
   vertical?: string,
   companyName?: string,
@@ -352,7 +368,7 @@ function usableName(companyName?: string): string | null {
 }
 
 function subjectFromDomain(domain: string): string {
-  const name = companyToken(domain).replace(/([a-z])([A-Z])/g, '$1 $2')
+  const name = nameFromDomain(domain).replace(/([a-z])([A-Z])/g, '$1 $2')
   const pretty = hostOf(domain).split('.')[0].replace(/-/g, ' ')
   return pretty.length >= name.length ? pretty : name
 }
@@ -369,10 +385,10 @@ function subjectFromDomain(domain: string): string {
    HTML from a plain fetch and markdown from Firecrawl, and a caller should not
    have to know which one produced it.
 
-   Same domain only. A careers page also links to LinkedIn, to the hiring
-   platform, to the press page and to a cookie policy. Following links off the
-   domain would walk straight into the sources this file exists to keep out. */
-export function jobLinksFrom(
+   Same domain only. A careers page also links to the hiring platform, the press
+   page and a cookie policy, and following every one of those turns one read into
+   twenty. If the jobs are somewhere else, search finds them. */
+export function jobLinks(
   content: string,
   baseUrl: string,
   limit = 6,
@@ -406,7 +422,7 @@ export function jobLinksFrom(
       base.toString().replace(/\/$/, '')
     )
       return
-    if (!isVacancyUrl(resolved.toString())) return
+    if (!looksLikeJobs(resolved.toString())) return
 
     /* An individual job page has a long last piece in its address — long enough
        to be a job title or an id, not just `/careers` or `/jobs`. That is what
@@ -422,4 +438,169 @@ export function jobLinksFrom(
   for (const match of content.matchAll(/\]\(([^)\s]+)/g)) push(match[1])
 
   return [...candidates].slice(0, limit)
+}
+
+/* Words that suggest a link leads to a company's careers page, in EITHER the
+   address or the link text (LYR-220).
+
+   Deliberately wider than `JOB_WORDS`, and used for the opposite purpose.
+   `JOB_WORDS` decides — it is the last word on whether a search result is
+   worth fetching, so it has to be right. This one only has to be generous: it
+   collects candidates for a model to choose between, so a false positive costs
+   a few tokens and a false negative costs the whole company.
+
+   `/join-us` is why the two cannot be the same regex. It is one of the five
+   paths S2 has always probed, and `JOB_WORDS` does not match it. Prefiltering
+   with `JOB_WORDS` would have made this step narrower than the guess list it
+   replaces. */
+const CAREERS_WORDS =
+  /(jobs?|vacanc|career|opportunit|position|opening|apply|recruit|join|work.?(with|for|at|here)|life.?at|talent|hiring|why.?work|our.?(team|people)|graduate|internship|trainee)/i
+
+/* Collects every link on a page that might be the company's careers page, with
+   the words the page used for it.
+
+   This is the RECALL half of finding a careers page; `pickCareersLinks` in the
+   S2 scout is the precision half. Splitting them that way is the whole point of
+   LYR-220. Every retrieval bug this system has had came from one regex being
+   asked to do both jobs at once — `/careers` missing `/career/`, an 8-character
+   floor dropping a 6-character path, a five-entry list standing in for the shape
+   of the entire web. So this one is allowed to be sloppy and cheap, and the
+   judgement it cannot make is made by something that can.
+
+   The link TEXT matters as much as the address. A link reading "Careers" is a
+   careers link whatever its href says, which is how this reaches pages no
+   pattern over addresses would ever guess.
+
+   Same domain only, for the same reason `jobLinks` is: a homepage links to a
+   dozen places that are not its careers page. */
+export function careersLinks(
+  content: string,
+  baseUrl: string,
+  limit = 40,
+): { url: string; text: string }[] {
+  if (typeof content !== 'string' || content === '') return []
+
+  let base: URL
+  try {
+    base = new URL(baseUrl)
+  } catch {
+    return []
+  }
+
+  const byUrl = new Map<string, string>()
+  const push = (href: string, rawText: string) => {
+    if (!href || href.startsWith('#') || href.startsWith('mailto:')) return
+    let resolved: URL
+    try {
+      resolved = new URL(href, base)
+    } catch {
+      return
+    }
+    if (
+      resolved.hostname.toLowerCase().replace(/^www\./, '') !== hostOf(baseUrl)
+    )
+      return
+    resolved.hash = ''
+
+    const text = rawText
+      .replace(/<[^>]+>/g, ' ')
+      .replace(/\s+/g, ' ')
+      .trim()
+      .slice(0, 80)
+    if (!CAREERS_WORDS.test(resolved.pathname) && !CAREERS_WORDS.test(text))
+      return
+
+    /* First mention wins. A homepage names its careers page in both the header
+       and the footer, and the header's link text is usually the better one. */
+    const key = resolved.toString()
+    if (!byUrl.has(key)) byUrl.set(key, text)
+  }
+
+  /* HTML from a plain fetch, markdown from Firecrawl. A caller should not have
+     to know which one produced the page it is holding. */
+  for (const m of content.matchAll(
+    /<a\b[^>]*href\s*=\s*["']([^"']+)["'][^>]*>([\s\S]{0,300}?)<\/a>/gi,
+  ))
+    push(m[1], m[2])
+  for (const m of content.matchAll(/\[([^\]]{0,120})\]\(([^)\s]+)\)/g))
+    push(m[2], m[1])
+
+  return [...byUrl].slice(0, limit).map(([url, text]) => ({ url, text }))
+}
+
+// -- Who is this company -----------------------------------------------------
+
+/* Cuts whatever was typed down to a plain domain. This is where outside input
+   enters the research system — the domain is whatever the prospect wrote in the
+   Website box.
+
+   Checked piece by piece rather than with one big pattern. The obvious pattern
+   for this can take exponentially long on a long hostile string, and splitting
+   first makes the check both fast and impossible to trip up. */
+
+function isValidLabel(label: string): boolean {
+  if (label.length === 0 || label.length > 63) return false
+  if (label.startsWith('-') || label.endsWith('-')) return false
+  for (const char of label) {
+    const isDigit = char >= '0' && char <= '9'
+    const isLetter = char >= 'a' && char <= 'z'
+    if (!isDigit && !isLetter && char !== '-') return false
+  }
+  return true
+}
+
+export function cleanDomain(input: string): string | null {
+  if (typeof input !== 'string') return null
+  let value = input.trim().toLowerCase()
+  if (value === '') return null
+
+  value = value.replace(/^[a-z][a-z0-9+.-]*:\/\//, '')
+  value = value.split(/[/?#]/)[0]
+  value = value.replace(/^www\./, '')
+  value = value.split('@').pop()
+  value = value.split(':')[0]
+
+  /* Checked piece by piece rather than with one big pattern over the whole
+     name. The obvious pattern for this can take exponentially long on a long
+     hostile string, and this function sits on the boundary where outside input
+     comes in: the domain is whatever the prospect typed. Splitting it first
+     makes the check fast and impossible to trip up. */
+  if (value.length > 253) return null
+  const labels = value.split('.')
+  if (labels.length < 2) return null
+  return labels.every(isValidLabel) ? value : null
+}
+
+/* The other domain a company SAYS is the same as this one, read from the
+   `rel="canonical"` link on its own page.
+
+   This is not a guess, which is the whole reason it is safe. `kingsleynapley.com`
+   serves `kingsleynapley.co.uk`, so its real careers page was being thrown away
+   as a stranger's until we read that. `bakertilly.com` declares nothing, so
+   `bakertilly.ca` — a different member firm in another country — is still a
+   stranger, exactly as it should be. Nothing here works an alias out from
+   spelling. */
+export function declaredDomain(html: string, domain: string): string | null {
+  if (typeof html !== 'string' || html === '') return null
+
+  const declared =
+    html.match(
+      /<link[^>]+rel\s*=\s*["']canonical["'][^>]+href\s*=\s*["']([^"']+)["']/i,
+    ) ??
+    html.match(
+      /<link[^>]+href\s*=\s*["']([^"']+)["'][^>]+rel\s*=\s*["']canonical["']/i,
+    ) ??
+    html.match(
+      /<meta[^>]+property\s*=\s*["']og:url["'][^>]+content\s*=\s*["']([^"']+)["']/i,
+    )
+  if (!declared) return null
+
+  const alias = cleanDomain(declared[1])
+  const input = cleanDomain(domain)
+  if (!alias || !input || alias === input) return null
+
+  return nameFromDomain(alias) !== '' &&
+    nameFromDomain(alias) === nameFromDomain(input)
+    ? alias
+    : null
 }

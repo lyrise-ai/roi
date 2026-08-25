@@ -139,7 +139,6 @@ export default function ReportLoadingScreen({
     }
   }, [sseEvents.length])
 
-  // eslint-disable-next-line security/detect-object-injection
   const activePhase = PHASES[phaseIndex]
   const isFinalising = viewState === 'finalising'
   const isComplete = viewState === 'complete'
@@ -593,7 +592,6 @@ function ActivityLog({ logs, phaseIndex, elapsed, isFinalising }) {
     'Financial Modelling',
     'Profit Map Assembly',
   ]
-  // eslint-disable-next-line security/detect-object-injection
   const activePhaseLabel = phaseActivityLabels[phaseIndex]
   const logContainerRef = useRef(null)
 

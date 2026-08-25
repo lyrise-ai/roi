@@ -1,45 +1,86 @@
 // ─────────────────────────────────────────────────────────────────────────────
-// research/artifactCache — the only place in the research system that goes out
-// to the network for web pages (LYR-187 R1 / LYR-194).
+// pages — the only place the research system goes out to the network.
 //
-// Scouts ask this file for a page; they never fetch one themselves. The
-// careers page is wanted by the job-postings scout, the services scout and the
-// tech scout. Without something in the middle that would be three separate
-// downloads of identical bytes. It also means running a second report for the
-// same company costs almost nothing.
+// Tools ask this file for a page; they never fetch one themselves. The careers
+// page gets wanted more than once in a run, and without something in the middle
+// that would be several downloads of the same bytes. It also means running a
+// second report for the same company costs almost nothing.
 //
 // Two layers, on purpose:
-//   memory   — lasts one server run. Stops several scouts asking for the same
-//              URL at the same moment from each fetching it.
-//   Supabase — lasts between server runs. Vercel throws the server away
-//              between requests, so the memory layer alone would buy nothing on
-//              a repeat visit. This is the layer that makes the second run
-//              cheap.
+//   memory   — lasts one server run. Stops two calls for the same URL at the
+//              same moment from each fetching it.
+//   Supabase — lasts between server runs. Vercel throws the server away between
+//              requests, so memory alone would buy nothing on a repeat visit.
 //
 // The Supabase layer is allowed to fail. If the database is unreachable or not
-// set up, we fall back to memory only rather than failing the run. That is also
+// set up we fall back to memory only, rather than failing the run. That is also
 // how a plain `node --test` run behaves, since it has no database settings.
 //
-// How we fetch: a plain request first, Firecrawl only as a fallback. Small law
-// and accountancy firms — our target customers — mostly run simple sites, and a
-// plain request gets their careers page in full. Firecrawl earns its cost on
-// the minority that block ordinary requests or build the page with JavaScript:
-// altamimi.com, a UAE firm, refuses a plain fetch outright. Keeping Firecrawl
-// as the second choice rather than the default is what keeps us well inside its
-// free 1,000 credits a month.
+// How we fetch: a plain request first, Firecrawl only as a rescue. Small law and
+// accountancy firms — our customers — mostly run simple sites, and a plain
+// request gets their careers page in full. Firecrawl earns its cost on the few
+// that refuse ordinary requests or build the page with JavaScript. Keeping it
+// second rather than default is what keeps us inside the free 1,000 credits a
+// month.
 //
-// This file NEVER throws, and never treats an empty page as success. A caller
-// gets either a page or null, and null means one thing only: we could not read
-// this page. Downstream that is a gap in our looking, never a finding about the
-// company.
+// ── It never returns null ────────────────────────────────────────────────────
+//
+// This used to hand back `null` whether the site timed out, refused us, or had
+// no such page. That one word threw away the difference between "this company
+// has nothing" and "we never got to look" — and that difference is the whole
+// point of the research system. `stalawfirm.com` was written down as "genuinely
+// unreachable" for a whole card because of it. The site answers fine. It just
+// takes 20 seconds, and we wait 15.
+//
+// So a failure now says which failure it was, in words the agent can act on and
+// a person can read. It still never throws.
 // ─────────────────────────────────────────────────────────────────────────────
 
 import { providerKey } from './env'
-import type { Artifact } from './types'
 
-export const ARTIFACT_TTL_MS = 7 * 24 * 60 * 60 * 1000
+/* A page we downloaded, and when. `fetchedAt` is when the bytes were really
+   pulled, not when someone asked — a page served from the cache reports when it
+   was first downloaded. */
+export type Page = { content: string; fetchedAt: string }
 
-const FETCH_TIMEOUT_MS = 15_000
+/* Why we could not read a page. A short closed list on purpose: the agent
+   reasons about `why`, and `detail` ends up in front of a prospect by way of
+   `gaps`, so both have to mean something to a model AND to a person. */
+export type ReadFailure = {
+  ok: false
+  why: 'timeout' | 'refused' | 'not-found' | 'needs-browser' | 'rescue-spent'
+  detail: string
+}
+
+/* Written out flat rather than as `({ok: true} & Page) | ReadFailure`. This repo
+   compiles with TypeScript's strict checks off, and an intersection inside a
+   union stops `if (!page.ok)` narrowing — the caller then cannot see `why` at
+   all. Flat, it works. */
+export type ReadOk = {
+  ok: true
+  url: string
+  content: string
+  fetchedAt: string
+}
+
+export type ReadResult = ReadOk | ReadFailure
+
+export const PAGE_TTL_MS = 7 * 24 * 60 * 60 * 1000
+
+/* How long we wait for an ordinary page. Fifteen seconds is generous for a
+   normal site and short enough that a dead one does not hold up an interview. */
+export const FETCH_TIMEOUT_MS = 15_000
+
+/* How long a caller may ask us to wait when the ordinary limit was not enough.
+
+   Some real firms are simply slow. `stalawfirm.com`'s apex redirect alone takes
+   20 seconds and its careers page another 18, so at 15 we never see either and
+   score the firm as having nothing — which is a fact about their web host, not
+   about their company.
+
+   Capped because someone is waiting. The agent gets 20 turns, so an uncapped
+   wait is an uncapped run. */
+export const MAX_WAIT_MS = 45_000
 
 /* Sent with the plain request. Node's default identifier is refused by a fair
    number of professional-services sites sitting behind a firewall. This is an
@@ -49,14 +90,13 @@ const USER_AGENT =
   'Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 ' +
   '(KHTML, like Gecko) Chrome/126.0.0.0 Safari/537.36'
 
-type MemoryEntry = { artifact: Artifact; expiresAt: number }
+type MemoryEntry = { page: Page; expiresAt: number }
 
 const memory = new Map<string, MemoryEntry>()
 
-/* Joins up requests for the same URL happening at the same moment. Two scouts
-   asking for /careers at once share a single fetch, rather than both racing to
-   fill the same slot. */
-const inflight = new Map<string, Promise<Artifact | null>>()
+/* Joins up requests for the same URL happening at the same moment, so two calls
+   for /careers share one fetch instead of racing to fill the same slot. */
+const inflight = new Map<string, Promise<ReadResult>>()
 
 /* Works out the key we file a page under. Two spellings of the same page must
    not become two fetches and two rows, so we strip out capitalisation in the
@@ -88,7 +128,7 @@ export function normalizeUrl(raw: string): string | null {
 
 /* Empties the memory layer. For tests, and for `npm run dev`, where an old page
    would otherwise survive a hot reload. Does not touch Supabase. */
-export function clearArtifactCache(): void {
+export function clearPageCache(): void {
   memory.clear()
   inflight.clear()
 }
@@ -103,7 +143,7 @@ function supabaseConfigured(): boolean {
 /* Both Supabase helpers swallow every error. This layer only makes things
    faster. A miss caused by a database problem means a slower run, not a failed
    one, and must never show up as a scout error. */
-async function readPersisted(key: string): Promise<Artifact | null> {
+async function readPersisted(key: string): Promise<Page | null> {
   if (!supabaseConfigured()) return null
   try {
     const { getSupabaseAdmin } = await import('../../supabaseAdmin')
@@ -128,7 +168,7 @@ async function readPersisted(key: string): Promise<Artifact | null> {
   }
 }
 
-async function writePersisted(key: string, artifact: Artifact): Promise<void> {
+async function writePersisted(key: string, page: Page): Promise<void> {
   if (!supabaseConfigured()) return
   try {
     const { getSupabaseAdmin } = await import('../../supabaseAdmin')
@@ -137,10 +177,10 @@ async function writePersisted(key: string, artifact: Artifact): Promise<void> {
       .upsert(
         {
           url_key: key,
-          content: artifact.content,
-          fetched_at: artifact.fetchedAt,
+          content: page.content,
+          fetched_at: page.fetchedAt,
           expires_at: new Date(
-            new Date(artifact.fetchedAt).getTime() + ARTIFACT_TTL_MS,
+            new Date(page.fetchedAt).getTime() + PAGE_TTL_MS,
           ).toISOString(),
         },
         { onConflict: 'url_key' },
@@ -158,8 +198,8 @@ async function writePersisted(key: string, artifact: Artifact): Promise<void> {
    company and most of them genuinely do not exist, so this is the difference
    between one credit and five. */
 type PlainFetch =
-  | { content: string; blocked: false }
-  | { content: null; blocked: boolean }
+  | { content: string; blocked: false; why: null }
+  | { content: null; blocked: boolean; why: ReadFailure['why'] }
 
 /* Tells a refusal apart from an answer. Login walls, bot blocks, rate limits
    and server faults all mean the page probably exists and a real browser might
@@ -178,37 +218,51 @@ function isBlockingStatus(status: number): boolean {
   )
 }
 
-async function plainFetch(url: string): Promise<PlainFetch> {
+async function plainFetch(url: string, waitMs: number): Promise<PlainFetch> {
   try {
     const response = await fetch(url, {
       headers: { 'user-agent': USER_AGENT, accept: 'text/html,*/*' },
       redirect: 'follow',
-      signal: AbortSignal.timeout(FETCH_TIMEOUT_MS),
+      signal: AbortSignal.timeout(waitMs),
     })
     if (!response.ok) {
-      return { content: null, blocked: isBlockingStatus(response.status) }
+      const blocked = isBlockingStatus(response.status)
+      return {
+        content: null,
+        blocked,
+        why: blocked ? 'refused' : 'not-found',
+      }
     }
     const body = await response.text()
-    if (body && body.trim() !== '') return { content: body, blocked: false }
+    if (body && body.trim() !== '')
+      return { content: body, blocked: false, why: null }
     /* A success response with nothing in it is the mark of a page that builds
        itself with JavaScript — exactly what a real browser fixes. */
-    return { content: null, blocked: true }
-  } catch {
-    /* Timeout or transport error — the page may be fine and we were not. */
-    return { content: null, blocked: true }
+    return { content: null, blocked: true, why: 'needs-browser' }
+  } catch (error) {
+    /* `AbortSignal.timeout` throws with this name, and it is worth telling
+       apart from a site that does not exist. A firm we could reach in 20
+       seconds is a firm we could research if we waited; a name that does not
+       resolve is not. */
+    const timedOut = (error as { name?: string })?.name === 'TimeoutError'
+    return {
+      content: null,
+      blocked: true,
+      why: timedOut ? 'timeout' : 'refused',
+    }
   }
 }
 
 // -- The Firecrawl budget ----------------------------------------------------
 // We are on the free plan: 1,000 credits a month and 10 page reads a minute.
 // Both are shared by every report the app runs, so this file spends them rather
-// than any single scout — and it spends them carefully.
+// than any single tool — and it spends them carefully.
 //
 // The rate limit here is there to stop us hitting theirs, not to react after we
 // do. Staying under 10 a minute means we mostly never get refused in the first
 // place. That matters, because finding the limit by being refused costs a round
 // trip and a worse result every time. Being refused is never an exception here:
-// we return nothing, the page is unavailable, and the scout records a gap.
+// we return nothing, the page is unavailable, and the caller records a gap.
 
 const FIRECRAWL_MAX_PER_MINUTE = 10
 const FIRECRAWL_WINDOW_MS = 60_000
@@ -229,7 +283,7 @@ let firecrawlDisabledReason: string | null = null
    of credits halfway through. Telling those apart is the whole point of R5 on
    the parent card: what we managed to look at is always declared, never
    hidden. */
-export function firecrawlBudget(): {
+export function rescueBudget(): {
   available: boolean
   reason: string | null
   callsInWindow: number
@@ -247,7 +301,7 @@ export function firecrawlBudget(): {
   }
 }
 
-export function resetFirecrawlBudget(): void {
+export function resetRescueBudget(): void {
   firecrawlCalls = []
   firecrawlDisabledUntil = 0
   firecrawlDisabledReason = null
@@ -270,7 +324,7 @@ function disableFirecrawl(ms: number, reason: string): void {
 async function firecrawlFetch(url: string): Promise<string | null> {
   const key = providerKey('FIRECRAWL_API_KEY')
   if (!key) return null
-  if (!firecrawlBudget().available) return null
+  if (!rescueBudget().available) return null
 
   firecrawlCalls.push(Date.now())
 
@@ -290,7 +344,7 @@ async function firecrawlFetch(url: string): Promise<string | null> {
          feeds it to a model that charges by the word.
          ponytail: so pages fetched this way have no machine-readable data, and
          a blocked site on a .com has to fall back to reading its footer for the
-         country. If R8 shows blocked sites losing their country because of
+         country. If a run shows sites losing their country because of
          this, ask for both and prefer the raw HTML. */
       body: JSON.stringify({ url, formats: ['markdown'] }),
       signal: AbortSignal.timeout(FETCH_TIMEOUT_MS * 2),
@@ -328,48 +382,136 @@ async function firecrawlFetch(url: string): Promise<string | null> {
   }
 }
 
-/* The one function scouts call to get a web page.
-   Returns null when it fails. It never throws, and never reports an empty page
-   as a success. */
-export async function getArtifact(url: string): Promise<Artifact | null> {
-  const key = normalizeUrl(url)
-  if (!key) return null
+/* The one function tools call to get a web page.
 
+   Never throws, never treats an empty page as a success, and never answers
+   `null`. A failure says which failure it was, because the caller can act on
+   that: a timeout is a real site worth one more try at a different address, and
+   a 404 is not. */
+export async function readPage(
+  url: string,
+  /* How long to wait. Callers leave this alone until a page times out; then
+     asking again with more is the one recovery worth having, because a slow
+     site is a real site. Clamped, so no caller can ask for forever. */
+  waitMs: number = FETCH_TIMEOUT_MS,
+): Promise<ReadResult> {
+  const wait = Math.min(Math.max(waitMs, 1_000), MAX_WAIT_MS)
+  const key = normalizeUrl(url)
+  if (!key) {
+    return {
+      ok: false,
+      why: 'not-found',
+      detail: `"${url}" is not a web address we can fetch`,
+    }
+  }
+
+  /* The wait is deliberately not part of the key. A page fetched after 30
+     seconds is the same page as one fetched after 2, so a slow first read still
+     makes every later read of it free. Nothing is cached on failure, so asking
+     again with a longer wait really does refetch. */
   const cached = memory.get(key)
   if (cached) {
-    if (cached.expiresAt > Date.now()) return cached.artifact
+    if (cached.expiresAt > Date.now())
+      return { ok: true, url: key, ...cached.page }
     memory.delete(key)
   }
 
   const pending = inflight.get(key)
   if (pending) return pending
 
-  const work = (async (): Promise<Artifact | null> => {
+  const work = (async (): Promise<ReadResult> => {
     const persisted = await readPersisted(key)
     if (persisted) {
       memory.set(key, {
-        artifact: persisted,
-        expiresAt: new Date(persisted.fetchedAt).getTime() + ARTIFACT_TTL_MS,
+        page: persisted,
+        expiresAt: new Date(persisted.fetchedAt).getTime() + PAGE_TTL_MS,
       })
-      return persisted
+      return { ok: true, url: key, ...persisted }
     }
 
-    const plain = await plainFetch(key)
-    const content =
-      plain.content ?? (plain.blocked ? await firecrawlFetch(key) : null)
-    if (!content) return null
-
-    const artifact: Artifact = {
-      content,
-      fetchedAt: new Date().toISOString(),
+    const plain = await plainFetch(key, wait)
+    if (plain.content === null && !plain.blocked) {
+      /* A clean 404. Firecrawl cannot do better than "no such page", so we do
+         not spend a credit finding that out twice. */
+      return {
+        ok: false,
+        why: plain.why,
+        detail: `${key} answered, and there is no page there`,
+      }
     }
-    memory.set(key, { artifact, expiresAt: Date.now() + ARTIFACT_TTL_MS })
-    await writePersisted(key, artifact)
-    return artifact
+
+    let content = plain.content
+    if (content === null) {
+      const budget = rescueBudget()
+      if (!budget.available) {
+        return {
+          ok: false,
+          why: 'rescue-spent',
+          detail: `${key} needs a full browser and our rescue budget is spent (${budget.reason ?? 'limit reached'}). That is our limit, not something about this company.`,
+        }
+      }
+      content = await firecrawlFetch(key)
+    }
+
+    if (!content) {
+      return {
+        ok: false,
+        why: plain.why ?? 'refused',
+        detail: detailFor(plain.why, key, wait),
+      }
+    }
+
+    const page: Page = { content, fetchedAt: new Date().toISOString() }
+    memory.set(key, { page, expiresAt: Date.now() + PAGE_TTL_MS })
+    await writePersisted(key, page)
+    return { ok: true, url: key, ...page }
   })().finally(() => {
     inflight.delete(key)
   })
 
   inflight.set(key, work)
   return work
+}
+
+/* One sentence per failure, written for a person. These travel into `gaps` and
+   are read by a prospect, so "timed out" is not good enough on its own — it has
+   to say what that means about their company, which is usually nothing. */
+function detailFor(
+  why: ReadFailure['why'] | null,
+  url: string,
+  wait: number,
+): string {
+  const seconds = Math.round(wait / 1000)
+  switch (why) {
+    case 'timeout':
+      return wait >= MAX_WAIT_MS
+        ? `${url} did not answer within ${seconds}s, which is the longest we will wait. The site is real but too slow to research — this says nothing about the company.`
+        : `${url} did not answer within ${seconds}s. The site is real but slower than we waited. Asking again with waitSeconds up to ${Math.round(MAX_WAIT_MS / 1000)} may get it.`
+    case 'needs-browser':
+      return `${url} loaded but builds itself with JavaScript, and a full browser could not be used either.`
+    case 'not-found':
+      return `${url} answered, and there is no page there.`
+    default:
+      return `${url} refused us, and a full browser could not get it either.`
+  }
+}
+
+/* Turns downloaded markup into readable text. The model reads words; paying to
+   send it tags is paying for nothing. Handles both what we hold: markup from a
+   plain fetch, and markdown from the rescue fetcher (which passes through
+   unharmed, since it has no tags to strip). */
+export function textOf(html: string): string {
+  if (typeof html !== 'string') return ''
+  return html
+    .replace(/<script\b[^>]*>[\s\S]*?<\/script>/gi, ' ')
+    .replace(/<style\b[^>]*>[\s\S]*?<\/style>/gi, ' ')
+    .replace(/<!--[\s\S]*?-->/g, ' ')
+    .replace(/<[^>]+>/g, ' ')
+    .replace(/&nbsp;/g, ' ')
+    .replace(/&amp;/g, '&')
+    .replace(/&lt;/g, '<')
+    .replace(/&gt;/g, '>')
+    .replace(/&#(\d+);/g, (_, code) => String.fromCharCode(Number(code)))
+    .replace(/\s+/g, ' ')
+    .trim()
 }
