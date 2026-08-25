@@ -1,6 +1,6 @@
-// Test-only fixture builder for assembleReport.
-// Bundled on the fly by assembleReport.test.mjs (esbuild) so the `@/` path
-// alias and TypeScript are resolved without adding a test-runner dependency.
+// Builds sample reports for the assembleReport tests. Test code only.
+// assembleReport.test.mjs bundles this with esbuild, which sorts out TypeScript
+// and the `@/` path shortcut without us adding a test framework.
 import { assembleReport } from '@/src/lib/roi/pipeline/assembleReport'
 import { roiCalculator } from '@/src/lib/roi/pipeline/roiCalculator'
 
@@ -116,8 +116,8 @@ export interface BuildOptions {
   company?: Partial<CompanyProfile>
 }
 
-// Builds a complete, valid ReportState (before assembly) — shared by any test
-// that needs the raw state rather than the PDF's assembled output.
+// Builds a complete, valid report object, before assembly. Any test that needs
+// the raw report rather than the finished PDF output uses this.
 export function buildState(opts: BuildOptions = {}): ReportState {
   const normInput = baseNormInput(opts.normInput)
   const company = baseCompany(opts.company)
@@ -139,7 +139,7 @@ export function buildState(opts: BuildOptions = {}): ReportState {
   }
 }
 
-// Builds a complete, valid ReportState and returns the assembled output.
+// Builds a complete, valid report object and returns the assembled result.
 export function buildAssembled(opts: BuildOptions = {}): AssembleReportOutput {
   return assembleReport(buildState(opts))
 }

@@ -1,18 +1,18 @@
 // ─────────────────────────────────────────────────────────────────────────────
-// workflowMutations — pure WorkflowInput[] array transforms, no LLM calls.
-// Shared by agent.ts's update_workflow/add_workflow/remove_workflow chat
-// tools and the validation wizard's finalize endpoint
-// (pages/api/reports/[id]/validate-finalize.js), so both edit paths use
-// identical matching semantics and can never drift apart.
+// workflowMutations — plain functions that add to, edit and remove from the
+// list of workflows. No model calls.
+// Both edit paths use these: the chat tools in agent.ts, and the wizard's finish
+// step (pages/api/reports/[id]/validate-finalize.js). So the two match names the
+// same way and can never drift apart.
 // ─────────────────────────────────────────────────────────────────────────────
 
 import type { WorkflowInput } from '@/src/lib/roi/types'
 
-// Case-insensitive lookup, with a bounded fuzzy fallback for LLM name drift
-// (e.g. "Proposal Drafting" vs "Proposal Drafting and Tailoring"). Exact
-// match wins first; a substring/prefix match is only trusted when it
-// resolves to exactly one workflow, so an ambiguous partial name never
-// silently edits the wrong one.
+// Finds a workflow by name, ignoring capitalisation, with a careful loose match
+// for when the model renames things slightly ("Proposal Drafting" versus
+// "Proposal Drafting and Tailoring"). An exact match always wins. A partial
+// match is only trusted when it points at exactly one workflow, so an
+// ambiguous name never quietly edits the wrong one.
 export function findWorkflowIndex(
   workflows: WorkflowInput[],
   name: string,
@@ -39,8 +39,8 @@ export function findWorkflowIndex(
   return -1
 }
 
-// Case-insensitive existence check — matches add_workflow's existing duplicate
-// guard.
+// Is there already a workflow with this name, ignoring capitalisation? Same
+// check add_workflow uses to refuse duplicates.
 export function workflowExists(
   workflows: WorkflowInput[],
   name: string,
@@ -48,8 +48,8 @@ export function workflowExists(
   return findWorkflowIndex(workflows, name) !== -1
 }
 
-// Returns `workflows` unchanged if `name` isn't found (callers that need to
-// surface a not-found error check findWorkflowIndex/workflowExists first).
+// Returns the list unchanged if the name is not found. Callers that need to
+// report "no such workflow" check with the two functions above first.
 export function patchWorkflow(
   workflows: WorkflowInput[],
   name: string,
@@ -60,8 +60,8 @@ export function patchWorkflow(
   return workflows.map((w, i) => (i !== idx ? w : { ...w, ...patches }))
 }
 
-// Exact-match removal — matches remove_workflow's existing (case-sensitive)
-// matching rule.
+// Removes by exact name, capitalisation included — the same rule
+// remove_workflow already used.
 export function removeWorkflowByName(
   workflows: WorkflowInput[],
   name: string,

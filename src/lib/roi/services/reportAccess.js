@@ -1,10 +1,10 @@
 import { sendReportAccessAlert } from '@/src/lib/roi/services/email'
 import { visitStarts } from '@/src/lib/roi/services/visitWindow'
 
-// Prefer the request's own host over NEXT_PUBLIC_BASE_URL: the header always
-// matches whatever domain actually served this request (production, a Vercel
-// preview deploy, or localhost), whereas the env var is one fixed value per
-// environment and easy to leave stale (e.g. copied from .env.local).
+// Use the domain this request actually came in on, rather than the one in the
+// settings. The request always knows the real domain — production, a preview
+// deploy, or localhost — while the setting is one fixed value per environment
+// and easy to leave out of date, for instance by copying it from .env.local.
 function buildBaseUrl(req) {
   const host = req?.headers?.['x-forwarded-host'] || req?.headers?.host
   if (host) {
@@ -52,10 +52,10 @@ export async function trackReportAccess({
   const eventType = getEventType({ isShareLink, isAlpha, isEmployee })
   const accessType = getAccessType({ isShareLink, isAlpha, isEmployee })
 
-  // Record first, decide second. Two requests from the same open land
-  // milliseconds apart, so anything decided from a read taken *before* the
-  // write has both of them believing they are the only one — which is how a
-  // single visit produced two alerts numbered #2 and #3.
+  // Write first, then decide. Two requests from one person opening a report
+  // arrive milliseconds apart. If we decide from a read taken BEFORE the write,
+  // both of them think they are the only one — which is how a single visit
+  // produced two alerts, numbered #2 and #3.
   const { data: inserted, error: insertError } = await admin
     .from('events')
     .insert({ user_id: viewerUserId, report_id: reportId, type: eventType })
@@ -66,13 +66,13 @@ export async function trackReportAccess({
     console.error('[report-access] event insert failed:', insertError)
   }
 
-  // Only logged-in employees viewing a report are excluded; every external
-  // and tester access is worth an alert.
+  // We only skip our own signed-in staff. Every outside visitor and tester is
+  // worth an alert.
   if (isEmployee) return
 
-  // ponytail: anonymous share-link viewers share one identity, so two
-  // different people opening the same link within the window read as one
-  // visitor. Give the viewer a cookie if that distinction ever matters.
+  // ponytail: everyone opening a share link looks like the same person to us,
+  // so two different people opening one link close together count as one
+  // visitor. Give the viewer a cookie if that ever matters.
   let history = admin
     .from('events')
     .select('created_at')
@@ -99,8 +99,8 @@ export async function trackReportAccess({
     ? new Date(inserted.created_at).getTime()
     : null
 
-  // Someone else's request already opened this visit — it has been counted
-  // and alerted, and this one is the same person still arriving.
+  // Another request already started this visit. It has been counted and
+  // alerted, and this one is the same person still loading the page.
   if (mine !== null && starts.at(-1) !== mine) return
 
   try {
@@ -115,8 +115,8 @@ export async function trackReportAccess({
       visitNumber: starts.length,
     })
   } catch (err) {
-    // Nothing on the report path throws: a missed alert must not cost the
-    // viewer the page they asked for.
+    // Nothing on the report path is allowed to throw. A missed alert must never
+    // cost the visitor the page they asked for.
     console.error('[report-access] alert failed:', err)
   }
 }

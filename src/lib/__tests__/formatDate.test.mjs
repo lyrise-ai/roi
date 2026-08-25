@@ -1,12 +1,15 @@
-// The three screens that render timestamps each used to carry their own copy of
-// this, and one of them (admin/alpha-invite) had already drifted into reading
-// zone-less Postgres timestamps as local time. These lock the merged module's
-// two load-bearing behaviours: a missing zone means UTC, and the UTC formatter
-// really is pinned to UTC.
+// The three screens that show timestamps each used to carry their own copy of
+// this code, and one of them had already drifted into reading timestamps with no
+// timezone on them as local time.
 //
-// Assertions are deliberately timezone-independent except for fmtDateTimeUTC —
-// fmtDate/fmtDateTime render in the viewer's zone by design, so an exact-string
-// assertion there would just be a test that CI runs in the same zone I do.
+// These tests pin down the two things the merged version must get right: a
+// timestamp with no timezone means UTC, and the UTC formatter really does stay in
+// UTC.
+//
+// Everything here is deliberately independent of what timezone you run it in,
+// except for the UTC formatter. The other two format in the viewer's own
+// timezone by design, so checking their exact text would only be testing that CI
+// runs in the same timezone I do.
 import assert from 'node:assert/strict'
 import { test } from 'node:test'
 import {
@@ -22,7 +25,8 @@ test('a timestamp without a zone is read as UTC, not local', () => {
     parseTimestamp('2026-08-10 21:05:33').getTime(),
     Date.parse('2026-08-10T21:05:33Z'),
   )
-  // and the formatters agree, which is the bug that actually showed on screen
+  // and the two formatters agree with each other, which is the bug people
+  // actually saw
   assert.equal(
     fmtDateTime('2026-08-10 21:05:33'),
     fmtDateTime('2026-08-10T21:05:33Z'),
@@ -61,7 +65,7 @@ test('fmtDate and fmtDateTime keep the "date, time" shape', () => {
   const date = fmtDate('2026-08-10T21:05:33Z')
   assert.match(date, /^\d{1,2} [A-Z][a-z]{2} \d{4}$/)
   assert.equal(fmtDateTime('2026-08-10T21:05:33Z').split(', ')[0], date)
-  // uppercased meridiem, and seconds are kept
+  // AM and PM in capitals, and the seconds are kept
   assert.match(fmtDateTime('2026-08-10T21:05:33Z'), /\d:\d{2}:\d{2} (AM|PM)$/)
 })
 

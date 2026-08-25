@@ -3,15 +3,16 @@ import * as Sentry from '@sentry/nextjs'
 Sentry.init({
   dsn: 'https://35bc0693cb1fdcd1e6e5d2c146ca5c0b@o4511621876678656.ingest.de.sentry.io/4511621883428944',
   enabled: process.env.NODE_ENV !== 'development',
-  // No captureConsoleIntegration. It used to promote every console.error in the
-  // repo — 80-odd of them, most in deliberate best-effort catch blocks that
-  // have already handled the failure — into a Sentry issue, and therefore a
-  // Linear ticket. Real failures still arrive here as thrown exceptions via
-  // onRequestError, or as explicit captureException calls.
+  // We deliberately do not pick up console output. It used to turn every
+  // console.error in the repo — around 80 of them, most inside deliberate
+  // catch blocks that had already handled the problem — into a Sentry issue, and
+  // therefore a Linear ticket.
+  // Real failures still arrive here, either as thrown errors or as explicit
+  // calls to report them.
   integrations: [],
-  // Vercel's serverless module loader can emit this benign Node runtime
-  // warning on cold starts. It is not tied to the route handling the request
-  // and should not become an actionable Sentry/Linear issue.
+  // Vercel's module loader can produce this harmless Node warning on a cold
+  // start. It has nothing to do with the request being handled, and should never
+  // become a ticket.
   ignoreErrors: [
     /vm\.USE_MAIN_CONTEXT_DEFAULT_LOADER is an experimental feature/,
   ],

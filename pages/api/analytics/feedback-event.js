@@ -1,8 +1,9 @@
 // POST /api/analytics/feedback-event
-// Records Sentry feedback widget open/abandon/submit/error interactions in
-// the shared events table, so we can see funnel drop-off per touchpoint.
-// Auth is optional — the widget can be triggered by unauthenticated visitors
-// (e.g. share-link recipients).
+// Records what people do with the feedback widget — open it, abandon it, submit
+// it, or hit an error — in the shared events table, so we can see where people
+// drop out.
+// Being signed in is optional: the widget can be opened by visitors who are
+// not, such as people on a share link.
 
 import {
   createClient,
@@ -36,7 +37,7 @@ export default async function handler(req, res) {
     } = await supabase.auth.getUser()
     userId = user?.id ?? null
   } catch {
-    // unauthenticated — fine, we'll write without a user_id
+    // not signed in, which is fine — we write the row with no user on it
   }
 
   const meta = {
@@ -59,9 +60,9 @@ export default async function handler(req, res) {
     return res.status(500).json({ error: 'Failed to record event' })
   }
 
-  // Mirror to PostHog. The Supabase row above stays authoritative — it backs
-  // the alpha dashboard and the usage pages — this is the copy you can slice
-  // into a funnel without writing SQL.
+  // Send the same thing to PostHog. The database row above stays the real
+  // record — it feeds the alpha dashboard and the usage pages. This is the copy
+  // you can build a funnel from without writing SQL.
   captureServer(event_type, meta, userId)
   await flushPostHog()
 

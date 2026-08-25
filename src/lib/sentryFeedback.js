@@ -3,12 +3,13 @@ export async function loadSentryFeedback() {
   return Sentry.getFeedback?.() ?? null
 }
 
-// Sentry's feedback form callbacks (onFormOpen/onFormClose/onSubmitSuccess)
-// are global singletons with no argument identifying which touchpoint
-// triggered them. Since only one feedback form can be open at a time, call
-// sites set the active source right before opening their form, and
-// reportFeedbackEvent reads it back when the global callbacks in
-// instrumentation-client.ts log the event.
+// Sentry's feedback form tells us when it opens, closes and is submitted — but
+// those callbacks are global and carry no clue about WHICH button opened the
+// form.
+//
+// Only one feedback form can be open at a time, so each place that opens one
+// records where it came from just beforehand, and we read that back when the
+// global callbacks fire.
 let activeFeedbackSource = null
 
 export function setFeedbackSource(source) {

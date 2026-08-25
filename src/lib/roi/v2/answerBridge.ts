@@ -1,21 +1,30 @@
 // ─────────────────────────────────────────────────────────────────────────────
 // answerBridge — Profit Map POC (LYR-188 / POC 10)
 //
-// The interview (pages/v2/index.jsx) stores each pain point's five number
-// questions as raw SegmentedInput values — {mode:'exact', exact}, {mode:'range',
-// low, high} or {mode:'estimate'} — none of them numbers. miniCalculator.ts
-// wants plain numbers. This is the seam between the two: it never fabricates a
-// number for a field the user didn't give one for, so the reveal can decide
-// what to show (and mark with ProvenanceMark) instead of silently getting a 0.
+// The questions page (pages/v2/index.jsx) keeps each pain point's five number
+// answers exactly as the input control produced them: {mode:'exact', exact},
+// {mode:'range', low, high} or {mode:'estimate'}. None of those are numbers.
+// miniCalculator.ts needs plain numbers. This file sits between the two and
+// does that conversion.
 //
-// Positional mapping, matching QUANT in pages/v2/index.jsx exactly:
-//   quant[0] = volume/month   — not read here; miniCalculator has no field for it
-//   quant[1] = people
-//   quant[2] = hours/week, each
-//   quant[3] = annual pay
+// The rule it never breaks: it does not make up a number for a question the
+// user did not answer. It reports the answer as missing instead. That way the
+// reveal screen can decide what to do — hold the figure back, or show it with
+// a mark next to it — rather than quietly receiving a 0 and printing a wrong
+// number.
+//
+// The five answers come in a fixed order, matching QUANT in
+// pages/v2/index.jsx exactly:
+//   quant[0] = how many times a month  — not used here, the calculator has no
+//                                        field for it
+//   quant[1] = how many people
+//   quant[2] = hours a week, each
+//   quant[3] = pay per year
 //   quant[4] = "how much would still need a person" after automation
 //
-// Pure: no I/O, no imports outside this file. Runs in the browser or in Node.
+// Nothing in this file reads a file, calls a server, or imports anything. It
+// runs the same in the browser and in Node, which is what makes it easy to
+// test.
 // ─────────────────────────────────────────────────────────────────────────────
 
 export type SegmentedAnswer =
@@ -26,26 +35,30 @@ export type SegmentedAnswer =
 export interface BridgedField {
   value: number | null
   isEstimated: boolean
-  // 'user' is what the prospect typed. 'estimate' is the canned figure the
-  // interview already showed them for that question (DEMOS[].quant[].estimate
-  // in pages/v2/index.jsx) standing in for a blank — POC-only, see
-  // parseEstimateText below. There is still no research-inference fallback
-  // (POC 9 / LYR-187 area, Yousef); when it lands it replaces the canned
-  // source, not the flag.
+  // Where the number came from. 'user' means they typed it. 'estimate' means
+  // they left it blank and we used the fixed estimate the questions page had
+  // already shown them for that question (DEMOS[].quant[].estimate in
+  // pages/v2/index.jsx) — POC only, see parseEstimateText below. There is
+  // still nothing that works a number out from research (POC 9 / LYR-187 area,
+  // Yousef); when that lands it replaces the fixed estimate, not this field.
   source: 'user' | 'estimate' | null
 }
 
 const MISSING: BridgedField = { value: null, isEstimated: false, source: null }
 
-// TODO(agent) — LYR-XXX, the rule for every free-text answer in this flow:
-// anything we ask the prospect to TYPE has to be read by an agent, not a
-// regex. We control the question, never the answer: "70k", "$70,000 a year",
-// "about a third", "seventy thousand EGP", "1.5 days a week" are all things
-// people write into these boxes, and the same pass is where we'd learn the
-// report's currency (EGP vs $) instead of assuming dollars. Every regex in
-// this file is the static stand-in until that agent exists — it is why the
-// reveal keeps withholding numbers the user actually gave us. Everywhere the
-// user types prose, this comment applies; grep TODO(agent) for the sites.
+// TODO(agent) — the rule for every typed answer in this flow: if we ask the
+// user to type it, an agent has to read it, not a pattern match.
+//
+// We choose the question. We never choose the answer. People write "70k",
+// "$70,000 a year", "about a third", "seventy thousand EGP", "1.5 days a week"
+// into these boxes, and all of those are reasonable things to write. The same
+// reading pass is also where we would learn which currency the report should
+// be in, instead of assuming dollars.
+//
+// Every pattern match in this file is a stand-in until that agent exists. It
+// is also the reason the reveal screen sometimes holds back a number the user
+// did give us: we simply could not read it. This applies anywhere the user
+// types free text — search for TODO(agent) to find the places.
 //
 // Until then: strips the formatting these fields see in practice (currency
 // signs, thousands commas, a percent sign, a k/m suffix) and reads the rest
@@ -63,15 +76,17 @@ function parseNumeric(raw: string | undefined): number | null {
   const suffix = match[2]?.toLowerCase()
   if (suffix === 'k') return n * 1_000
   if (suffix === 'm') return n * 1_000_000
-  return n // '%' is left as-is: toFraction() in miniCalculator already treats anything above 1 as percentage points
+  return n // A '%' sign changes nothing: the calculator already reads anything above 1 as a percentage
 }
 
-// Reads one of OUR OWN canned estimate strings — the "about 4 people" /
-// "about $72k a year" / "about a third" copy in DEMOS — back into a number.
-// Deliberately not the same job as parseNumeric: this input is copy we wrote
-// and can grep, so a small reader over the shapes we actually use is enough
-// and no agent is needed here. The moment an estimate comes from research
-// rather than from DEMOS, it should arrive as a number and this goes away.
+// Turns one of OUR OWN estimate strings back into a number — the "about 4
+// people", "about $72k a year", "about a third" wording in DEMOS.
+//
+// This is a different job from parseNumeric above, and it does not need an
+// agent. That one reads what a stranger typed; this one reads text we wrote
+// ourselves and can search for. So a small reader covering the few shapes we
+// actually use is enough. Once estimates come from real research instead of
+// DEMOS, they should arrive as numbers and this can go.
 const WORD_FRACTIONS: Record<string, number> = {
   'a quarter': 0.25,
   'a third': 1 / 3,
@@ -88,12 +103,14 @@ export function parseEstimateText(raw: string | undefined): number | null {
   return token ? parseNumeric(token[0]) : null
 }
 
-// POC-only fallback (LYR-188): a field the user left blank falls back to the
-// estimate the interview already showed them for that question, flagged
-// `isEstimated` with source 'estimate' so the reveal can mark it as ours.
-// This is what makes the Next-Next-Next demo walk show figures at all.
-// It never overrides a number the user gave, and an estimate with nothing
-// numeric in it ("Nothing to base one on", the no-scan copy) stays missing.
+// POC-only stand-in (LYR-188). If the user left a question blank, we use the
+// estimate the questions page already showed them for it, flagged as an
+// estimate so the reveal screen can mark it as ours. This is what makes the
+// click-through demo show any figures at all.
+//
+// It never replaces a number the user gave. And an estimate with no number in
+// it ("Nothing to base one on", what we say when we know nothing about the
+// company) stays missing.
 function orEstimate(field: BridgedField, estimate?: string): BridgedField {
   if (field.value !== null) return field
   const value = parseEstimateText(estimate)
@@ -102,13 +119,16 @@ function orEstimate(field: BridgedField, estimate?: string): BridgedField {
     : { value, isEstimated: true, source: 'estimate' }
 }
 
-// Converts one SegmentedInput answer into a flagged, calculator-ready field.
-// - 'exact': the typed number, or missing if empty/unparseable.
-// - 'range': the average of low/high; either bound alone is used as-is.
-//   TODO: 'average' chosen per team decision (Amany/Yousef); revisit if they
-//   want conservative/low instead.
-// - 'estimate': the user gave no number. Flagged as estimated, value stays
-//   null rather than inventing one — see the `source` comment above.
+// Turns one answer from the input control into a number the calculator can
+// use, with a note saying where it came from.
+// - 'exact': the number they typed, or missing if the box was empty or we
+//   could not read it.
+// - 'range': the middle of low and high. If only one of the two was filled in,
+//   we use that one.
+//   TODO: the team chose the middle (Amany/Yousef); revisit if they would
+//   rather be cautious and use the low end.
+// - 'estimate': they gave no number. We flag it as an estimate and leave the
+//   value empty rather than inventing one — see the `source` note above.
 export function bridgeAnswer(
   answer: SegmentedAnswer | undefined,
 ): BridgedField {
@@ -137,16 +157,17 @@ export function bridgeAnswer(
   }
 }
 
-// quant[4] asks how much STILL needs a person after automation — the
-// opposite quantity from the calculator's automatablePct (the share
-// automation removes). This inverts it in whatever units the user answered
-// in: a fraction stays a fraction (1 − x), and anything read as percentage
-// points (miniCalculator's own >1-means-points convention) is inverted the
-// same way (100 − x), so the result can be handed to the calculator as-is.
+// The fifth question asks how much STILL needs a person after automation. The
+// calculator wants the opposite: how much automation takes away. So we flip
+// it here.
 //
-// CONFIRMED (Yousef, review of PR #56): the inversion is correct — Q4 asks
-// for the leftover, so automatablePct = 1 − answer. QUANT's own comment in
-// pages/v2/index.jsx was updated to say so; don't "fix" this back.
+// We flip it in whatever unit the user answered in. A fraction stays a
+// fraction (1 − x). A number above 1 is read as a percentage, so it flips the
+// same way (100 − x). Either way the calculator can use the result directly.
+//
+// CONFIRMED (Yousef, review of PR #56): flipping is correct. The question asks
+// for what is left over, so automatable = 1 − answer. The comment on QUANT in
+// pages/v2/index.jsx was corrected to say so. Do not "fix" this back.
 export function bridgeAutomatable(
   answer: SegmentedAnswer | undefined,
   estimate?: string,
@@ -165,13 +186,14 @@ export interface BridgedPainFields {
   automatablePct: BridgedField
 }
 
-// quant[0] (volume/month) is intentionally not in the return value —
-// miniCalculator's MiniCalculatorInput has no field for it.
+// The first answer (how many times a month) is left out on purpose — the
+// calculator has no field for it.
 //
-// `estimates` is positionally the same five-slot array, holding the estimate
-// copy the interview showed for each question (quantFor(demo, i).estimate).
-// Passing it in keeps this file free of DEMOS: the caller decides which
-// estimates the user was actually shown, this file only reads them.
+// `estimates` is a five-item list in the same order, holding the estimate text
+// the questions page showed for each one (quantFor(demo, i).estimate). We pass
+// it in rather than importing DEMOS here, so this file stays free of demo
+// data. The caller knows which estimates the user was actually shown; this
+// file only reads them.
 export function bridgePainQuant(
   quant: SegmentedAnswer[] = [],
   estimates: (string | undefined)[] = [],
@@ -204,12 +226,14 @@ const REQUIRED_FIELDS = [
   'automatablePct',
 ] as const
 
-// Assembles the four bridged fields into the calculator's input shape, but
-// only when every one of them resolved to a real number. A field left as
-// null (blank, or 'estimate' with no fallback yet) must never become a 0 fed
-// into the calculator — that would silently understate the figures — so an
-// incomplete set is signalled instead, letting the reveal choose what to do
-// (show hours-spent only, hedge, or ask for the missing field).
+// Packs the four numbers into the shape the calculator wants — but only if all
+// four are real numbers.
+//
+// A missing one must never turn into a 0 on its way into the calculator. A 0
+// would quietly make the figures too small and nobody would see why. So we
+// report the set as incomplete instead, and let the reveal screen decide what
+// to do: show hours only, say it cannot price this one, or ask for the missing
+// answer.
 export function assembleCalculatorInput(
   fields: BridgedPainFields,
   team?: string,

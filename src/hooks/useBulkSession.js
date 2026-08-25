@@ -5,10 +5,9 @@ import { loginRedirect } from '../lib/routes'
 export const STAGGER_MS = 60_000
 const STORAGE_PREFIX = 'lyrise_bulk_'
 
-// ─── Module-level store ──────────────────────────────────────────────────────
-// The scheduler, in-flight tracking, and log buffers all live outside React
-// so that bulk generation continues uninterrupted as the user navigates
-// between /roi-report/bulk/[id] and /report/[id].
+// -- State kept outside React ------------------------------------------------
+// The queue, what is currently running, and the log buffers all live outside
+// React, so a bulk run keeps going while the user moves between pages.
 
 const scheduledTimers = new Map() // key -> setTimeout handle
 const inFlight = new Set() // key
@@ -175,10 +174,10 @@ async function generateRow(sessionId, index) {
 
     let savedReportId = null
     let sawDone = false
-    // The agent emits `done` before it renders the PDF and sends the email, so
-    // a row that reaches DONE has not necessarily been emailed. Carry the
-    // failure onto the row instead of dropping it: a whole batch once went out
-    // with every email silently failing and every row showing green.
+    // The agent says it is done BEFORE it renders the PDF and sends the email,
+    // so a row marked done has not necessarily been emailed. We attach any
+    // failure to the row rather than dropping it: a whole batch once ran with
+    // every email failing silently and every row showing green.
     let emailError = null
     await drainSSE(response.body.getReader(), new TextDecoder(), (event) => {
       if (event.type === 'text_delta') {
@@ -212,7 +211,7 @@ async function generateRow(sessionId, index) {
     }
   } catch (err) {
     if (err?.name === 'AbortError' || cancelled.has(sessionId)) {
-      // Cancelled by user — leave the row as CANCELLED (set by cancelBulkSession).
+      // The user cancelled. Leave the row marked cancelled.
       return
     }
     updateRowInStorage(sessionId, index, {
@@ -229,10 +228,10 @@ function scheduleAll(sessionId) {
   let session = readSession(sessionId)
   if (!session) return
 
-  // On a fresh page load, any rows stuck in GENERATING are from a previous
-  // mount whose fetch died with the JS context. Reset them so they get
-  // re-scheduled. We can tell the fetch isn't actually alive because the
-  // module-level inFlight set is empty after a full reload.
+  // After a page reload, any row still marked "generating" is left over from
+  // before: its request died along with the page. We reset those so they get
+  // queued again. We can tell nothing is really running, because the list of
+  // in-flight requests is empty after a full reload.
   let dirty = false
   const rows = session.rows.map((row, i) => {
     if (row.status === 'GENERATING' && !inFlight.has(rowKey(sessionId, i))) {
@@ -287,9 +286,9 @@ export function createBulkSession(payloads, options = {}) {
 }
 
 /**
- * Stops a bulk session: cancels pending timers, aborts in-flight fetches,
- * and marks every non-DONE row as CANCELLED. Already-saved reports remain
- * untouched in Supabase and are still accessible from the dashboard.
+ * Stops a bulk run: cancels anything waiting to start, aborts anything in
+ * progress, and marks every unfinished row as cancelled. Reports that were
+ * already saved are untouched and still available from the dashboard.
  */
 export function cancelBulkSession(sessionId) {
   if (!sessionId) return
@@ -322,9 +321,9 @@ export default function useBulkSession(sessionId) {
   )
   const [activeLogs, setActiveLogs] = useState({})
 
-  // Subscribe to session changes and (re-)schedule any pending rows on mount
-  // — covers the page-refresh case where the module-level scheduler may have
-  // been wiped (full reload) but localStorage still holds the queue.
+  // Listen for changes, and queue up any waiting rows when this mounts. That
+  // covers a page refresh, where the queue in memory is gone but the saved one
+  // in the browser is still there.
   useEffect(() => {
     if (!sessionId) return undefined
     const sync = () => setSession(readSession(sessionId))
@@ -341,7 +340,7 @@ export default function useBulkSession(sessionId) {
     }
   }, [sessionId])
 
-  // Subscribe to per-row log buffers
+  // Listen for new log output, per row
   useEffect(() => {
     if (!sessionId || !session?.rows) return undefined
     const unsubs = session.rows.map((_, index) =>
@@ -352,8 +351,9 @@ export default function useBulkSession(sessionId) {
       }),
     )
     return () => unsubs.forEach((fn) => fn())
-    // Keyed on row *count*, not the rows themselves: the array identity changes
-    // on every log tick, and re-subscribing each tick would drop buffered logs.
+    // This depends on how MANY rows there are, not on the rows themselves. The
+    // array is replaced on every log update, and re-subscribing that often would
+    // lose the logs we have buffered.
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [sessionId, session?.rows?.length])
 

@@ -1,18 +1,18 @@
 import { notifyDevTeam } from '@/src/lib/notifyError'
 import { createClient } from '../../src/lib/supabase-server'
 
-// This endpoint is intentionally unauthenticated (share-link visitors hit it),
-// so it trusts arbitrary input. Two guards keep it from being abused as an
-// email-spam amplifier:
-//   1. per-IP throttle (in-memory; best-effort across a single instance)
-//   2. hard size caps on every field before it reaches the email
+// This endpoint deliberately needs no sign-in, because share-link visitors hit
+// it. So it receives whatever anyone sends. Two things stop it being used to
+// send spam:
+//   1. a limit per IP address, held in memory, per server
+//   2. a hard size cap on every field before it reaches the email
 const RATE_LIMIT_WINDOW_MS = 60_000
 const RATE_LIMIT_MAX = 5 // alerts per IP per window
 const MAX_FIELD_LEN = 4_000
 const MAX_STACK_LEN = 20_000
 const MAX_CONTEXT_KEYS = 20
 
-// ip -> array of request timestamps within the current window
+// for each IP address, when its recent requests arrived
 const hits = new Map()
 
 function isRateLimited(ip) {
@@ -74,7 +74,8 @@ export default async function handler(req, res) {
     } = await supabase.auth.getUser()
     userEmail = user?.email
   } catch {
-    // non-authenticated users (e.g. share-link visitors) — that's fine
+    // people who are not signed in, such as share-link visitors — that is
+    // fine
   }
 
   await notifyDevTeam({

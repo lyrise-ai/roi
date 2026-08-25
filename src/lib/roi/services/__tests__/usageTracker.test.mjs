@@ -1,8 +1,8 @@
-// The tracker is how we know what a report costs. On the 5.6 family cached
-// input is 10x cheaper than fresh input, and both the analyst and the report
-// writer resend a large stable system prompt every call — so a tracker that
-// bills cached tokens at the full rate overstates the true cost of a report by
-// close to an order of magnitude, on exactly the calls we care about.
+// The tracker is how we know what a report costs. On the 5.6 family, text the
+// model has seen before is 10 times cheaper than new text, and both the analyst
+// and the report writer resend a large, unchanging prompt on every call. So a
+// tracker that charges those repeated tokens at full price overstates the cost
+// of a report by nearly ten times — on exactly the calls we care about.
 //
 //   Run:  node --test src/lib/roi/services/__tests__/usageTracker.test.mjs
 //
@@ -27,7 +27,7 @@ before(async () => {
   fs.mkdirSync(cacheRoot, { recursive: true })
   const tmpDir = fs.mkdtempSync(path.join(cacheRoot, 'usage-test-'))
 
-  // Only `flush()` reaches for these; the pricing math under test does not.
+  // Only the write-out step needs these. The pricing sums under test do not.
   const stub = path.join(tmpDir, 'stub.mjs')
   fs.writeFileSync(
     stub,

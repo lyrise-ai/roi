@@ -1,17 +1,18 @@
 // ─────────────────────────────────────────────────────────────────────────────
-// Browser telemetry. Two tools, one job each (see CLAUDE.md for the split):
+// Browser tracking. Two tools, one job each (CLAUDE.md explains the split):
 //
-//   PostHog — the front door. Product analytics, session replay, and the error
-//             list you actually triage. Loads eagerly: it has to be running
-//             before the first pageview and before the replay would have
-//             started, so deferring it loses exactly the seconds you want.
+//   PostHog — the front door: product analytics, session recordings, and the
+//             error list we actually work through. It loads straight away,
+//             because it has to be running before the first page view and
+//             before a recording would have started. Delaying it loses exactly
+//             the seconds you want.
 //
-//   Sentry  — the deep dive you click through to from a PostHog issue. Loads
-//             lazily on idle, because nothing needs it until something has
-//             already gone wrong.
+//   Sentry  — the detail you click through to from a PostHog issue. It loads
+//             later, when the browser is idle, because nothing needs it until
+//             something has already gone wrong.
 //
-// PostHog no-ops without NEXT_PUBLIC_POSTHOG_PROJECT_TOKEN, which is how CI and
-// un-opted-in dev environments stay out of the production project.
+// PostHog does nothing at all without its token, which is how CI and any dev
+// machine that has not opted in stay out of the real project.
 // ─────────────────────────────────────────────────────────────────────────────
 
 import { getPostHog } from '@/src/lib/posthog-browser'
@@ -20,9 +21,10 @@ import {
   setFeedbackSource,
 } from '@/src/lib/sentryFeedback'
 
-// Used only to build the PostHog→Sentry links. The project id is the last path
-// segment of the DSN below; the org *slug* isn't in the DSN, so it comes from
-// env — if the links 404, this is the value that's wrong.
+// Only used to build the links from PostHog into Sentry. The project id is the
+// last part of the Sentry address below, but the organisation name is not in
+// there at all, so it comes from settings. If those links 404, this is the value
+// that is wrong.
 const SENTRY_ORG = process.env.NEXT_PUBLIC_SENTRY_ORG || 'lyrise'
 const SENTRY_PROJECT_ID = 4511621883428944
 
@@ -33,7 +35,8 @@ const enableFeedback = process.env.NEXT_PUBLIC_SENTRY_FEEDBACK !== 'false'
 
 // ── PostHog ──────────────────────────────────────────────────────────────────
 
-// Start loading immediately — getPostHog() owns the config and the promise.
+// Start loading right away. getPostHog() owns both the settings and the
+// promise.
 const posthogReady = getPostHog()
 
 // ── Sentry ───────────────────────────────────────────────────────────────────
@@ -82,23 +85,24 @@ function loadSentry() {
         Sentry.init({
           dsn: 'https://35bc0693cb1fdcd1e6e5d2c146ca5c0b@o4511621876678656.ingest.de.sentry.io/4511621883428944',
           integrations,
-          // Replay is PostHog's job. These stay at 0 so we never pay two
-          // vendors to record the same session.
+          // Recording sessions is PostHog's job. These stay at zero so we never
+          // pay two companies to record the same session.
           replaysSessionSampleRate: 0,
           replaysOnErrorSampleRate: 0,
           tracesSampleRate: process.env.NODE_ENV === 'development' ? 1.0 : 0.1,
           enableLogs: true,
         })
 
-        // Two-way link: stamps the PostHog person and session replay URL onto
-        // Sentry events, so a Sentry issue opens straight into the recording of
-        // the user who hit it. Added after init because it needs both SDKs
-        // loaded, and PostHog is on its own async chunk.
+        // Links the two together: it stamps the PostHog person and the link to
+        // their session recording onto Sentry events, so a Sentry issue opens
+        // straight into a recording of the person who hit it. We add it after
+        // setup because it needs both libraries loaded, and PostHog loads
+        // separately.
         //
-        // sendExceptionsToPostHog stays false on purpose — capture_exceptions
-        // in posthog-browser.ts already sends client exceptions to PostHog.
-        // Both on would double-count, and since PostHog alerts open the Linear
-        // tickets, a double count is a duplicate ticket.
+        // Sending exceptions on to PostHog stays switched OFF on purpose.
+        // posthog-browser.ts already sends browser errors to PostHog itself.
+        // Both at once would count each error twice — and since PostHog alerts
+        // create the Linear tickets, counting twice means two tickets.
         posthogReady
           .then((posthog) => {
             if (!posthog) return

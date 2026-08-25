@@ -1,16 +1,19 @@
 /* eslint-disable no-console */
 // ─────────────────────────────────────────────────────────────────────────────
-// POST /api/roi-share-email — "Send via email". Used both by the report
-// toolbar (send/resend to your own stored address) and the report-ending
-// panel's "Loop in a colleague" card (send to anyone). Same endpoint either
-// way — the only difference is what happens to the recipient:
-//   - sending to your own address: reuses the existing share_token deep link
-//   - sending to anyone else: provisions (or reuses) a colleague invite —
-//     a chat_usage grant keyed by a durable, revocable token — and the
-//     email links to /report/{id}?invite={token}, which silently
-//     authenticates the colleague on arrival (see reportViewerAccess.js).
-// Any accessor with legitimate report access (owner, employee, or an
-// already-invited colleague) may use this, not just the owner.
+// POST /api/roi-share-email — "Send via email".
+//
+// Two places use it: the button on the report toolbar, which sends or resends
+// to your own saved address, and the "Loop in a colleague" card at the end of
+// the report, which sends to anyone. It is the same endpoint either way. The
+// only difference is what the recipient gets:
+//   - to your own address: the existing share link, unchanged
+//   - to anyone else: we create, or reuse, a colleague invite — their own chat
+//     allowance, found by a long-lived token we can revoke — and the email
+//     links to /report/{id}?invite={token}, which signs the colleague in
+//     without them noticing (see reportViewerAccess.js).
+//
+// Anyone who may legitimately see the report can use this: the owner, our
+// staff, or a colleague who was already invited. Not just the owner.
 //
 // Body: { reportId: string, to: string }
 // Response: { ok: true } | { error: string }
@@ -40,10 +43,10 @@ export const config = {
 const IS_DEV = process.env.NODE_ENV === 'development'
 const EMAIL_RE = /^[^\s@]+@[^\s@]+\.[^\s@]+$/
 
-// Prefer the request's own host over NEXT_PUBLIC_BASE_URL: the header always
-// matches whatever domain actually served this request (production, a Vercel
-// preview deploy, or localhost), whereas the env var is one fixed value per
-// environment and easy to leave stale (e.g. copied from .env.local).
+// Use the domain this request actually came in on, rather than the one in the
+// settings. The request always knows the real domain — production, a preview
+// deploy, or localhost — while the setting is one fixed value per environment
+// and easy to leave out of date, for instance by copying it from .env.local.
 function buildBaseUrl(req) {
   const host = req.headers?.['x-forwarded-host'] || req.headers?.host
   if (host) {

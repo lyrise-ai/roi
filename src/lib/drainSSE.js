@@ -1,11 +1,11 @@
 // ─────────────────────────────────────────────────────────────────────────────
-// drainSSE — recursive ReadableStream consumer for Server-Sent Events
-// Shared by roi-report.jsx and ReportViewer.jsx
+// drainSSE — reads a stream the server keeps open and pushes updates down.
+// Used by both roi-report.jsx and ReportViewer.jsx.
 // ─────────────────────────────────────────────────────────────────────────────
 
 /**
- * Drains an SSE ReadableStream, parsing each `data: {...}` line as JSON
- * and calling onEvent for each valid event object.
+ * Reads the stream to the end, treating each `data: {...}` line as JSON and
+ * calling onEvent once per valid event.
  *
  * @param {ReadableStreamDefaultReader} reader
  * @param {TextDecoder} decoder

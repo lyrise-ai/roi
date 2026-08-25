@@ -168,7 +168,8 @@ function buildCopy(state: ReportState): ReportCopy {
   const lever1 = Math.round(summary.profitUplift12mo * 0.45)
   const lever2 = Math.round(summary.profitUplift12mo * 0.3)
 
-  // Get raw inputs from state.workflows for display
+  // Pull the original typed-in numbers out of the workflows so we can show
+  // them
   const inp = state.workflows ?? []
   const inp2 = inp.find((w) => w.name === wf2?.name)
   const inp1 = inp.find((w) => w.name === wf1?.name)

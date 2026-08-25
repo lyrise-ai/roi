@@ -1,12 +1,12 @@
-// Regression test for the reveal's observation sentence (LYR-188 / POC 10,
-// piece 3). Locks in that the sentence is built from real bridged numbers
-// only — no invented value, no "null"/"NaN"/dash when a field is missing —
-// and that it reads naturally (spelled-out small numbers, comma-formatted
-// large ones).
+// Tests for the sentence at the top of the reveal screen (LYR-188 / POC 10,
+// piece 3). They pin down two things: the sentence is built only from real
+// answers — never an invented number, and never "null", "NaN" or a bare dash
+// when one is missing — and it reads like English, with small numbers written
+// out and large ones comma-separated.
 //
-// No test-runner dependency: uses Node's built-in `node:test` + `node:assert`.
-// observation.ts has no path aliases, so it's bundled with esbuild the same
-// way answerBridge.test.mjs does.
+// No test framework needed: this uses Node's own `node:test` and
+// `node:assert`. observation.ts uses no path shortcuts, so esbuild bundles it
+// here the same way answerBridge.test.mjs does.
 //
 //   Run:  node --test src/lib/roi/v2/__tests__/observation.test.mjs
 //
@@ -101,8 +101,8 @@ test('number formatting: large counts fall back to comma-formatted digits', () =
 })
 
 test('number formatting: annualHours rounds to a natural chunk, not raw precision', () => {
-  // 3 people x 11.4 hours/week x 50 weeks = 1,710 exactly, but arbitrary
-  // annualHours (e.g. from a real calc run) should round to the nearest 100.
+  // 3 people x 11.4 hours a week x 50 weeks is exactly 1,710. But any annual
+  // hours figure in this range should be rounded to the nearest 100.
   const sentence = buildObservationSentence(field(3), field(11.4), 7_432)
   assert.match(sentence, /about 7,400 hours a year/)
 })

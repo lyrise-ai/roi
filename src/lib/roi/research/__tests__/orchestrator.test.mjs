@@ -1,9 +1,10 @@
-// Orchestration tests (LYR-187 R5 / LYR-198).
+// Tests for how the scouts are run (LYR-187 R5 / LYR-198).
 //
-// The scouts are aliased to stubs at bundle time, so these test the wiring and
-// nothing else: that S1 gates S2, that results stream as they land rather than
-// arriving in a batch at the end, and that no scout failure mode can take down
-// the run. Those are the properties the scan panel is built on.
+// The scouts themselves are swapped for fakes when the test bundle is built, so
+// these test the wiring and nothing else: that S2 waits for S1, that results
+// arrive one at a time rather than all at the end, and that no way a scout can
+// fail is able to kill the run. Those three are what the side panel is built
+// on.
 //
 //   Run:  node --test src/lib/roi/research/__tests__/orchestrator.test.mjs
 //
@@ -26,9 +27,9 @@ before(async () => {
   fs.mkdirSync(cacheRoot, { recursive: true })
   tmpDir = fs.mkdtempSync(path.join(cacheRoot, 'orchestrator-test-'))
 
-  /* Both scouts are driven by globals the tests set, and both record the order
-     they were called in so the gating assertion is about observed behaviour
-     rather than about timing luck. */
+  /* Both fake scouts are controlled by values the tests set, and both record
+     the order they were called in. So the check that S2 waits for S1 is about
+     what actually happened, not about lucky timing. */
   fs.writeFileSync(
     path.join(tmpDir, 's1-stub.mjs'),
     `export const runS1 = (domain) => {
@@ -57,9 +58,9 @@ before(async () => {
     entryPoints: [entry],
     bundle: true,
     packages: 'external',
-    /* esbuild's `alias` only accepts package names, so the scouts are swapped
-       with a resolver plugin instead. The `$` anchors matter: `./scouts/s1`
-       must not also capture `./scouts/s1Derive`. */
+    /* esbuild's simple alias option only handles package names, so we swap the
+       scouts with a small plugin instead. The end-of-string anchors matter:
+       `./scouts/s1` must not also catch `./scouts/s1Derive`. */
     plugins: [
       {
         name: 'stub-scouts',
@@ -119,11 +120,11 @@ beforeEach(() => {
   globalThis.__s2 = async () => s2Result()
 })
 
-// ── S1 gates everything ──────────────────────────────────────────────────────
+// -- everything waits for S1 -------------------------------------------------
 
 test('S1 completes before S2 is dispatched', async () => {
-  /* Not a timing coincidence: S2 must not be called until S1 has resolved,
-     because S2 picks its sources by region. */
+  /* This is not about timing luck. S2 must not be called at all until S1 has
+     finished, because S2 picks where to look based on the region. */
   let s1Done = false
   globalThis.__s1 = async () => {
     await sleep(30)
@@ -160,11 +161,11 @@ test('S2 still runs when S1 could not determine a region', async () => {
   assert.equal(run.summary.coverage.S2, 'FULL')
 })
 
-// ── streaming ────────────────────────────────────────────────────────────────
+// -- results arrive one at a time --------------------------------------------
 
 test('results stream as they land, not in a batch at the end', async () => {
-  /* The scan panel renders off S1 while S2 is still crawling. If the callback
-     only fired at the end, the panel would be a spinner instead. */
+  /* The side panel draws S1's results while S2 is still working. If the
+     callback only fired at the end, the panel would just be a spinner. */
   const seen = []
   globalThis.__s2 = async () => {
     await sleep(40)

@@ -1,7 +1,7 @@
 // ─────────────────────────────────────────────────────────────────────────────
-// ROI Modeler system prompt
-// Receives research agent output + questionnaire data.
-// Produces financial assumptions for the ROI Calculator.
+// The instructions we give the modelling agent.
+// It gets what the research found plus what the user typed on the form.
+// It produces the money assumptions the calculator then works from.
 // ─────────────────────────────────────────────────────────────────────────────
 
 export const ROI_MODELER_SYSTEM_PROMPT = `
@@ -201,7 +201,7 @@ export const ROI_MODELER_SCHEMA = {
           adoption_base: { type: 'number', minimum: 0, maximum: 1 },
           adoption_high: { type: 'number', minimum: 0, maximum: 1 },
           rationale: { type: 'string' },
-          // Rule 6A — per-workflow evidence-backed rate
+          // Rule 6A: an hourly rate per workflow, backed by real evidence
           fullyLoadedHourlyCostOverride: { type: 'number', minimum: 1 },
           rateSource: { type: 'string' },
           rateSourceUrl: { type: ['string', 'null'] },

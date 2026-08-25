@@ -1,16 +1,18 @@
 /* eslint-disable no-console */
 // ─────────────────────────────────────────────────────────────────────────────
-// POST /api/roi-agent — Unified ROI agent endpoint (generation + chat editing)
+// POST /api/roi-agent — one endpoint for both building a report and editing it
+// through chat.
 //
-// Replaces /api/roi-report for all new flows.
-// Streams SSE events:
-//   { type: 'text_delta', delta }           — agent is typing
-//   { type: 'tool_start', tool }            — agent called a tool
-//   { type: 'tool_result', tool, output }   — a tool call finished (success or error)
-//   { type: 'pipeline_log', message }       — key pipeline milestone (research, model, assemble)
-//   { type: 'report_update', state }        — report HTML changed
-//   { type: 'done', messages? }             — agent finished
-//   { type: 'error', message }
+// It replaces /api/roi-report for everything new.
+//
+// It holds the connection open and pushes updates down it as they happen:
+//   text_delta    — the agent is typing
+//   tool_start    — the agent started using a tool
+//   tool_result   — a tool finished, whether it worked or failed
+//   pipeline_log  — a milestone: research done, model run, report assembled
+//   report_update — the report itself changed
+//   done          — the agent has finished
+//   error         — something went wrong
 // ─────────────────────────────────────────────────────────────────────────────
 
 import crypto from 'node:crypto'
@@ -52,12 +54,12 @@ export const config = {
 
 const IS_DEV = process.env.NODE_ENV === 'development'
 
-// Translate raw errors into user-facing messages. Quota/rate-limit errors
-// from OpenAI should never expose billing details to the end user.
+// Turns raw errors into something we can show a user. Billing and rate-limit
+// errors from OpenAI must never expose our account details to them.
 function friendlyErrorMessage(err) {
   const msg = err?.message ?? ''
-  // Use the precise quota detector from openaiQuotaAlert if the error is an
-  // Error instance; fall back to keyword checks for plain objects / strings.
+  // If this is a real Error, use the exact check from openaiQuotaAlert. For a
+  // plain object or a string, fall back to looking for keywords.
   const isQuota =
     isOpenAIQuotaError(err) ||
     err?.status === 429 ||
@@ -72,7 +74,7 @@ function friendlyErrorMessage(err) {
 }
 
 function send(res, event) {
-  // Once the connection is closed, writing throws (EPIPE) — silently drop.
+  // Once the connection is closed, writing to it throws. Just drop it.
   if (res.writableEnded || res.destroyed) return
   res.write(`data: ${JSON.stringify(event)}\n\n`)
   if (typeof res.flush === 'function') res.flush()
@@ -184,10 +186,10 @@ export default async function handler(req, res) {
   const adminSupabase = createAdminClient()
   let persistedReport = null
   let persistedChatHistory = []
-  // Share-link chat: an email recipient is editing via the tokenized URL.
-  // They have no Supabase session, so we attribute writes to the report
-  // owner (chat_messages.user_id) and gate the 5-message cap on
-  // reports.share_message_count instead of chat_usage.
+  // Chat from a share link: someone who received the report by email is editing
+  // it through the link. They are not signed in, so we record their messages
+  // against the report owner, and count their 5-message limit on the report
+  // itself rather than against a user account.
   let isShareLinkChat = false
 
   if (mode === 'chat' && shareToken && reportId) {
@@ -214,9 +216,9 @@ export default async function handler(req, res) {
     }
   }
 
-  // Alpha status is derived from the authenticated user's own metadata, not
-  // client input — it's set once at magic-link generation time and can't be
-  // spoofed via the request body.
+  // Whether this is an alpha tester comes from their own account record, not
+  // from anything the browser sent. It is set once when their sign-in link is
+  // created, so a request cannot fake it.
   const isAlpha = user?.user_metadata?.alpha === true
 
   if (mode === 'chat' && !isShareLinkChat) {
@@ -257,9 +259,9 @@ export default async function handler(req, res) {
       return
     }
 
-    // Chat history belongs to the report — every accessor (owner, employee,
-    // or invited colleague) sees the same full thread; only the quota below
-    // is per-user.
+    // The chat history belongs to the report. Everyone who can see the report —
+    // the owner, our staff, an invited colleague — sees the same full
+    // conversation. Only the message allowance below is per person.
     const { data: messages } = await adminSupabase
       .from('chat_messages')
       .select('role, content')
@@ -268,8 +270,8 @@ export default async function handler(req, res) {
       .limit(20)
     chatUserRole = isEmployeeChat ? 'EMPLOYEE' : (userData?.role ?? 'CLIENT')
 
-    // Employees chat without limits; clients, alpha testers, and invited
-    // colleagues are capped — each against their own chat_usage row.
+    // Our own staff have no message limit. Clients, alpha testers and invited
+    // colleagues each have their own allowance.
     if (!isEmployeeChat && grant && grant.message_count >= CHAT_LIMIT) {
       adminSupabase
         .from('events')
@@ -292,7 +294,7 @@ export default async function handler(req, res) {
 
   if (mode === 'chat' && isShareLinkChat) {
     chatUserRole = 'CLIENT'
-    // Share-link visitors see the full message thread on the report.
+    // Someone on a share link sees the whole conversation on the report.
     const { data: messages } = await adminSupabase
       .from('chat_messages')
       .select('role, content')
@@ -301,12 +303,14 @@ export default async function handler(req, res) {
       .limit(20)
     persistedChatHistory = buildPersistedChatHistory(messages ?? [])
 
-    // Atomically claim a slot before doing any work. The RPC increments
-    // share_message_count only if it's still below CHAT_LIMIT and returns
-    // the new count; a null result means the cap is reached. Claiming up
-    // front (rather than incrementing after the LLM call) closes the
-    // race where two concurrent submits both read count=N<CHAT_LIMIT,
-    // both run the LLM, and only one of the post-hoc updates lands.
+    // Take a message slot in one step before doing any work. The database
+    // function adds one to the count only if it is still under the limit, and
+    // returns the new count. Nothing back means the limit is reached.
+    //
+    // Claiming the slot up front, rather than adding to the count after the
+    // model call, closes a race: two messages sent at the same moment both read
+    // the same count, both run the model, and only one of the two updates
+    // afterwards actually lands.
     const { data: claimedCount, error: claimErr } = await adminSupabase.rpc(
       'claim_share_chat_slot',
       { p_report_id: reportId, p_max: CHAT_LIMIT },
@@ -334,8 +338,9 @@ export default async function handler(req, res) {
     persistedReport.share_message_count = claimedCount
   }
 
-  // Alpha testers get one report per account (keeps the guided tour to a single
-  // run). Normal clients and employees can generate freely.
+  // An alpha tester gets one report per account, which keeps the guided tour to
+  // a single run. Normal clients and our own staff can generate as many as they
+  // like.
   if (mode === 'generate' && isAlpha && user) {
     const { data: existingReport } = await supabase
       .from('reports')
@@ -356,23 +361,24 @@ export default async function handler(req, res) {
   res.setHeader('Connection', 'keep-alive')
   res.setHeader('X-Accel-Buffering', 'no')
 
-  // ── Telemetry ──────────────────────────────────────────────────────────────
-  // Everything past this point is the long-running work. The started/completed
-  // /failed triple is what makes a stuck run visible: a `started` with no
-  // matching terminal event is a generation that died without even reaching
-  // the catch — a lambda timeout, or the client vanishing mid-stream.
+  // -- Tracking ---------------------------------------------------------------
+  // Everything past this point is the slow work. We record a start, and then
+  // either a finish or a failure. That pairing is what makes a stuck run
+  // visible: a start with neither of the other two means a run that died without
+  // even reaching our error handler — a server timeout, or the browser
+  // disappearing mid-stream.
   const telemetryStartedAt = Date.now()
-  // Share-link visitors have no authenticated session or stable visitor id at
-  // this call site. Keep the attribution gap explicit — null, which PostHog
-  // treats as anonymous — instead of grouping them under the report owner or
-  // under a shared literal, which would collapse every share-link visitor in
-  // the product into one apparent user.
+  // Someone on a share link is not signed in and has no lasting id here. We
+  // leave the field empty, which PostHog treats as anonymous, rather than
+  // filing them under the report owner or under one shared label — either of
+  // which would make every share-link visitor in the product look like a single
+  // user.
   const phDistinctId = user?.id ?? null
   const phBase = {
     mode,
     is_alpha: Boolean(isAlpha),
-    // The join key back to the report. Without it a failure event names no
-    // run, and there is nothing to open when triaging one.
+    // The link back to the report. Without it, a failure names no particular
+    // run, and there is nothing to open when working out what went wrong.
     report_id: reportId ?? null,
     is_share_link: isShareLinkChat,
   }
@@ -382,13 +388,14 @@ export default async function handler(req, res) {
     phDistinctId,
   )
 
-  // ── Client-disconnect handling ─────────────────────────────────────────────
-  // If the browser tab closes, navigates away, or the landing page crashes
-  // mid-stream, the underlying connection drops. Without this the agent keeps
-  // burning tokens and still fires the PDF/email side effects for a report
-  // nobody is waiting on. Abort the agent loop and skip the email when the
-  // client goes away — already-saved reports stay accessible from the
-  // dashboard, and an employee can still email them manually.
+  // -- When the browser goes away ---------------------------------------------
+  // If the tab closes, the user navigates away, or the page crashes mid-run, the
+  // connection drops. Without this, the agent keeps spending money and still
+  // makes the PDF and sends the email for a report nobody is waiting for.
+  //
+  // So we stop the agent and skip the email when that happens. Reports already
+  // saved stay available on the dashboard, and a member of staff can still email
+  // one by hand.
   const abortController = new AbortController()
   let clientDisconnected = false
   res.on('close', () => {
@@ -512,11 +519,13 @@ export default async function handler(req, res) {
       const userRole = chatUserRole
       state.specificityAssessment = assessReportSpecificity(state)
 
-      // Persist LLM usage for this chat turn (report already exists). upsert on
-      // report_id keeps one usage row per report. Awaited (not fire-and-forget):
-      // on Vercel the serverless function can be frozen once the response ends,
-      // dropping un-awaited background writes. persistUsage swallows its own
-      // errors, so awaiting it can never break the chat turn.
+      // Save what this chat turn cost. The report already exists, and there is
+      // one usage row per report, so this adds to it.
+      //
+      // We wait for it rather than firing it off in the background: Vercel can
+      // freeze the server the moment the response ends, and a background write
+      // would be lost. This save swallows its own errors, so waiting for it can
+      // never break the chat turn.
       if (capturedUsage) {
         await persistUsage(capturedUsage, {
           reportId,
@@ -524,14 +533,15 @@ export default async function handler(req, res) {
         })
       }
 
-      // chat_messages.user_id is FK to auth.users. For share-link visitors
-      // (no session) we attribute writes to the report owner so the FK
-      // holds and the owner sees the conversation in their own thread.
+      // Every chat message has to point at a real user account. Someone on a
+      // share link is not signed in, so we record their messages against the
+      // report owner. That keeps the database happy, and the owner sees the
+      // conversation in their own thread.
       const chatWriterUserId = isShareLinkChat
         ? persistedReport.user_id
         : user.id
-      // Use admin client for share-link writes since the chat_messages RLS
-      // insert policy requires user_id = auth.uid().
+      // Share-link messages are written with the admin key, because the normal
+      // rule requires the message's user to be the one making the request.
       const chatWriteClient = isShareLinkChat ? adminSupabase : supabase
 
       await chatWriteClient.from('chat_messages').insert({
@@ -592,8 +602,8 @@ export default async function handler(req, res) {
         })
 
       if (isShareLinkChat) {
-        // Slot was already claimed atomically via claim_share_chat_slot
-        // before the LLM ran, so no post-hoc increment is needed here.
+        // The message slot was already taken before the model ran, so there is
+        // nothing to add to the count here.
       } else if (userRole !== 'EMPLOYEE') {
         const { data: usage, error: usageReadErr } = await adminSupabase
           .from('chat_usage')
@@ -628,7 +638,7 @@ export default async function handler(req, res) {
       }
     }
 
-    // Save report to DB after generation
+    // Save the finished report to the database
     let generatedShareToken = null
     let savedReportId = null
     if (mode === 'generate' && state.assembled) {
@@ -685,11 +695,11 @@ export default async function handler(req, res) {
 
       if (savedReport?.id) {
         savedReportId = savedReport.id
-        // Persist LLM usage now that the report row (report_id) exists.
-        // Awaited (not fire-and-forget): on Vercel the serverless function can
-        // be frozen once the response ends, dropping un-awaited background
-        // writes. persistUsage swallows its own errors, so awaiting it can
-        // never block or fail generation.
+        // Now that the report row exists, save what the run cost.
+        // We wait for it rather than firing it off in the background: Vercel can
+        // freeze the server the moment the response ends, and a background write
+        // would be lost. This save swallows its own errors, so waiting for it
+        // can never block or fail generation.
         if (capturedUsage) {
           await persistUsage(capturedUsage, {
             reportId: savedReport.id,
@@ -716,10 +726,10 @@ export default async function handler(req, res) {
       }
     }
 
-    // Fire-and-forget PDF + email after generation.
-    // Skip when the client has disconnected: the report is still saved above
-    // and reachable from the dashboard, but we don't auto-email a company a
-    // report whose request was abandoned.
+    // Make the PDF and send the email after generation, without waiting.
+    // We skip this when the browser has gone away: the report is still saved
+    // above and available on the dashboard, but we do not automatically email a
+    // company a report whose request was abandoned.
     if (clientDisconnected && mode === 'generate' && state.assembled) {
       console.warn(
         '[roi-agent] client gone — report saved but skipping PDF/email',
@@ -746,9 +756,10 @@ export default async function handler(req, res) {
             ? emailOverride.trim().toLowerCase()
             : null
         const recipient = overrideAddr ?? state.normInput.email
-        // Whoever generated the report gets a copy. DEFAULT_REPORT_BCC is a
-        // fixed pair, so an operator outside it (a new salesperson running a
-        // bulk batch) had no way to see what went to their own prospects.
+        // Whoever generated the report gets a copy. The default blind-copy list
+        // is a fixed pair of addresses, so anyone outside it — a new salesperson
+        // running a bulk batch — had no way to see what went to their own
+        // prospects.
         const bcc = [
           ...new Set(
             [...DEFAULT_REPORT_BCC, user.email]
@@ -792,15 +803,16 @@ export default async function handler(req, res) {
         mode: req.body?.mode ?? null,
       })
     }
-    // Both: the event so the failure shows up in funnels next to the successful
-    // runs, the exception so it lands in the issue list that raises the ticket.
+    // We send both. The event so the failure shows up in the funnel next to the
+    // successful runs, and the exception so it lands in the error list that
+    // creates the ticket.
     captureServer(
       EVENTS.GENERATION_FAILED,
       {
         ...phBase,
         duration_ms: Date.now() - telemetryStartedAt,
-        // PostHog is the error list we triage; a failure count with no reason
-        // attached cannot be triaged.
+        // PostHog is the error list we actually work through. A failure count
+        // with no reason attached is not something anyone can act on.
         error_message: err?.message ?? String(err),
       },
       phDistinctId,
@@ -809,8 +821,8 @@ export default async function handler(req, res) {
     send(res, { type: 'error', message: friendlyErrorMessage(err) })
   }
 
-  // The lambda can be frozen the instant the stream closes, so push telemetry
-  // before ending rather than trusting a batch timer that may never fire.
+  // The server can be frozen the instant the connection closes, so send the
+  // tracking data now rather than trusting a timer that may never fire.
   await flushPostHog()
   res.end()
 }

@@ -1,22 +1,24 @@
 // ─────────────────────────────────────────────────────────────────────────────
-// reportGrants — who besides the report owner may view/chat on a report, and
-// the "Loop in a colleague" invite mechanism that grants that access.
+// reportGrants — who, besides the owner, may view a report and chat on it, and
+// how the "Loop in a colleague" invite gives them that access.
 //
-// A colleague invite is just a chat_usage row created ahead of time
-// (user_id null until first claimed), keyed by a durable, revocable
-// invite_token. This gives each invited colleague their own chat quota for
-// free (chat_usage is already per user+report) without a dedicated table.
-// The invite-claim flow (silently minting + verifying a Supabase magic-link
-// OTP on first visit) mirrors the existing alpha_invites pattern in
-// pages/auth/alpha.js — same idea, applied to report sharing instead of
-// alpha signup.
+// A colleague invite is simply a row in the chat_usage table created in
+// advance, with no user attached until someone first uses the link, and found
+// by a long-lived invite token we can revoke. That gives each invited colleague
+// their own chat allowance for free, because chat_usage is already counted per
+// person per report — no extra table needed.
+//
+// Accepting an invite works by quietly creating and using a one-time sign-in
+// link on the visitor's first visit. It is the same pattern as the alpha
+// invites in pages/auth/alpha.js, applied to report sharing instead of
+// signup.
 // ─────────────────────────────────────────────────────────────────────────────
 
 import crypto from 'node:crypto'
 
 /**
- * Does this authenticated user have legitimate access to this report —
- * as the owner, an employee, or an invited colleague with a claimed grant?
+ * Is this signed-in person actually allowed to see this report — as its owner,
+ * as one of our employees, or as an invited colleague who accepted the invite?
  */
 export function hasReportAccess({ report, userId, isEmployee, grant }) {
   if (isEmployee) return true
@@ -25,8 +27,9 @@ export function hasReportAccess({ report, userId, isEmployee, grant }) {
 }
 
 /**
- * Look up this user's chat_usage row for this report, if any — used both
- * as the access grant (hasReportAccess) and the per-user quota record.
+ * Finds this person's chat_usage row for this report, if there is one. The same
+ * row does two jobs: it is their permission to see the report, and it is where
+ * their chat allowance is counted.
  */
 export async function getGrantForUser({ admin, reportId, userId }) {
   if (!userId) return null
@@ -40,7 +43,7 @@ export async function getGrantForUser({ admin, reportId, userId }) {
 }
 
 /**
- * Look up a not-yet-claimed or already-claimed invite by its token.
+ * Finds an invite by its token, whether or not anyone has used it yet.
  */
 export async function getGrantByToken({ admin, reportId, token }) {
   if (!token) return null
@@ -54,9 +57,9 @@ export async function getGrantByToken({ admin, reportId, token }) {
 }
 
 /**
- * Create (or reuse) a colleague invite for this report + email. Idempotent
- * per (report_id, invited_email) so re-sending to the same colleague doesn't
- * create duplicate grants or reset an already-claimed one.
+ * Creates a colleague invite for this report and email, or reuses the existing
+ * one. Sending to the same colleague twice does not create a second invite and
+ * does not reset one they have already accepted.
  */
 export async function createColleagueInvite({ admin, reportId, email }) {
   const normalizedEmail = email.trim().toLowerCase()
@@ -99,8 +102,8 @@ export async function createColleagueInvite({ admin, reportId, email }) {
 }
 
 /**
- * List every colleague invite on a report (excluding the owner's own usage
- * row), claimed or still pending, for the "Shared with…" management list.
+ * Lists every colleague invite on a report, accepted or still waiting, for the
+ * "Shared with..." list. The owner's own row is left out.
  */
 export async function listColleagueInvites({ admin, reportId, ownerUserId }) {
   const { data } = await admin

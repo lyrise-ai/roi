@@ -1,11 +1,14 @@
-// Cascade and contract tests for S2 (LYR-187 R3 / LYR-196).
+// Tests for S2's steps and its promises (LYR-187 R3 / LYR-196).
 //
-// Nothing here touches the network, an ATS, or OpenAI. `fetch` is stubbed, and
-// the `ai` SDK plus the repo's llm module are aliased to stubs at bundle time
-// so extraction is deterministic — the extraction model's judgement is not
-// what these tests are about. What they pin down is the cascade: L1 fan-out,
-// the NONE-vs-miss distinction that the old system collapsed, L2 fallback, and
-// the promise that a raw JD body never leaves the scout.
+// Nothing here touches the network, a hiring platform or OpenAI. Fetching is
+// faked, and the AI library and our model config are swapped for fakes when the
+// bundle is built, so reading a posting gives the same answer every time. The
+// model's judgement is not what these tests are about.
+//
+// What they do pin down: trying all the platforms at once, the difference
+// between "not hiring" and "we guessed wrong" that the old system lost, falling
+// back to the careers page, and the promise that raw advert text never leaves
+// this scout.
 //
 //   Run:  node --test src/lib/roi/research/scouts/__tests__/s2.test.mjs
 //
@@ -33,9 +36,9 @@ before(async () => {
   fs.mkdirSync(cacheRoot, { recursive: true })
   tmpDir = fs.mkdtempSync(path.join(cacheRoot, 's2-test-'))
 
-  /* `generateObject` is driven by a global the tests set, so extraction is a
-     fixture rather than a model call. `jsonSchema` is identity — the real one
-     only tags the object for the SDK. */
+  /* The fake model call is controlled by a value the tests set, so reading a
+     posting is fixed test data rather than a real call. The schema helper does
+     nothing here; the real one only labels the object for the library. */
   fs.writeFileSync(
     path.join(tmpDir, 'ai-stub.mjs'),
     `export const jsonSchema = (s) => s
@@ -106,9 +109,9 @@ const notFound = () => ({
 
 const GREENHOUSE_JOB = {
   title: 'Paralegal',
-  /* A realistic JD body. Deliberately not a one-liner: `extractPosting` skips
-     the model for bodies under 80 chars, since paying for a call to read
-     nothing is worse than returning the title alone. */
+  /* A realistic advert body. Deliberately not one line: we skip the model
+     entirely for anything under 80 characters, because paying for a call to
+     read nothing is worse than just keeping the title. */
   content:
     '<p>As a paralegal you will chase outstanding client documents, reconcile matter records in 3E, ' +
     'and collate bundles ahead of filing deadlines. You will support four fee earners across the ' +

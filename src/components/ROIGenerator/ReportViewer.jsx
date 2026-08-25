@@ -68,7 +68,7 @@ function buildInitialMessage(state) {
   return parts.join(' ')
 }
 
-// Human-readable labels for each tool call
+// Readable names for each tool the agent can call
 const TOOL_LABELS = {
   web_search: 'Searching the web…',
   fetch_page: 'Reading page…',
@@ -85,16 +85,16 @@ const TOOL_LABELS = {
   remove_workflow: 'Removing workflow…',
 }
 
-// Maps the agent's own section keys (from AgentEvent's `changedSections`) to
-// the report's nav-sidebar keys — derived from NAV_ITEMS' changedKeys
-// (Report/navItems.js) so this and the nav sidebar can never drift apart.
+// Links the section names the agent uses to the section names in the report's
+// sidebar. It is built from the sidebar's own list (Report/navItems.js), so the
+// two can never disagree.
 const CHANGED_TO_NAV_KEYS = buildChangedToNavKeys()
 
 const NAV_LABEL_BY_KEY = Object.fromEntries(
   NAV_ITEMS.map(({ key, label }) => [key, label]),
 )
 
-// Render **bold** markdown from agent responses
+// Turns **bold** markers in the agent's replies into real bold text
 function renderText(text) {
   return text
     .split(/(\*\*[^*]+\*\*)/)
@@ -131,10 +131,10 @@ export default function ReportViewer({
   const [activeTool, setActiveTool] = useState(null)
   const [isAgentRunning, setIsAgentRunning] = useState(false)
   const [input, setInput] = useState('')
-  // Nav-sidebar keys touched by the most recent chat edit — persists until the
-  // next message (drives the "Sections updated" chip row); `flashSections` is
-  // the same set but auto-clears after a few seconds (drives the highlight
-  // ring on the section itself).
+  // Which sidebar sections the last chat edit touched. This stays until the next
+  // message and drives the "Sections updated" row. The other list holds the same
+  // sections but clears itself after a few seconds, and drives the highlight ring
+  // around the section itself.
   const [changedSections, setChangedSections] = useState([])
   const [flashSections, setFlashSections] = useState(new Set())
   const [limitReached, setLimitReached] = useState(
@@ -146,9 +146,8 @@ export default function ReportViewer({
   const [creditsEarned, setCreditsEarned] = useState(0)
   const [toastMsg, setToastMsg] = useState(null)
   const toastTimerRef = useRef(null)
-  // Surfaces tool-level and stream-level failures that would otherwise vanish
-  // silently (the SSE 'error' event and tool_result error outputs used to be
-  // dropped client-side with no visible feedback at all).
+  // Shows failures from a tool or from the connection itself. These used to be
+  // thrown away in the browser with nothing shown to the user at all.
   const [chatErrorMsg, setChatErrorMsg] = useState(null)
   const chatErrorTimerRef = useRef(null)
   const showChatError = useCallback((msg) => {
@@ -193,11 +192,11 @@ export default function ReportViewer({
   const chatPanelRef = useRef(null)
   const scrollToSectionRef = useRef(null)
 
-  // Share-link recipient tracking: when a prospect opens "Edit with chat" from
-  // the email, record the open and how long they spend on the page (the chat
-  // panel session). Only runs for share-link visitors; employees/owners are
-  // not tracked. session-end uses sendBeacon (in trackShareEvent) so it fires
-  // even as the tab closes.
+  // Tracking for people who arrive on a share link. When a prospect opens "Edit
+  // with chat" from the email, we record the open and how long they stay. This
+  // only runs for share-link visitors; staff and owners are not tracked. The
+  // end-of-session event uses the browser's "send even if I'm leaving" method,
+  // so it still fires as the tab closes.
   useEffect(() => {
     if (!isShareLink || !shareToken || !reportId) return undefined
 
@@ -216,8 +215,9 @@ export default function ReportViewer({
       })
     }
 
-    // pagehide is the most reliable unload signal across browsers (incl. mobile
-    // bfcache); visibilitychange→hidden catches tab switches/closes too.
+    // The pagehide event is the most reliable "this page is going away" signal
+    // across browsers, including mobile. Watching for the page becoming hidden
+    // catches tab switches and closes as well.
     const onHide = () => endSession()
     const onVisibility = () => {
       if (document.visibilityState === 'hidden') endSession()
@@ -273,15 +273,15 @@ export default function ReportViewer({
 
   useEffect(() => {
     if (forceTour) {
-      // Share-link visitors should always see the tour on first arrival
-      // from the email, even if a prior anon visit dismissed it.
+      // Someone arriving from the email should always get the tour on their
+      // first visit, even if an earlier anonymous visit dismissed it.
       openTour()
       return
     }
     try {
       if (!localStorage.getItem('lyrise_tour_seen')) openTour()
     } catch {
-      // private browsing
+      // private browsing mode, where storage is unavailable
     }
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [forceTour])

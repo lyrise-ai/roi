@@ -26,15 +26,17 @@ module.exports = {
     },
   },
 
-  // ESLint has no TypeScript parser here, so declaration files trip `no-undef`
-  // on TS-only globals (`JSX.Element`). tsc is the gate for those files.
+  // ESLint has no TypeScript parser set up here, so TypeScript declaration files
+  // trip the "undefined variable" rule on TypeScript-only names. The TypeScript
+  // compiler is what checks those files.
   overrides: [
     {
       files: ['**/*.d.ts'],
       rules: { 'no-undef': 'off' },
     },
-    // Tests aren't a trust boundary, and asserting a dynamic URL needs a
-    // built regex. console is how a test reports what it did.
+    // Tests are not a place outside input arrives, and checking a URL that
+    // changes needs a pattern built at run time. In a test, console output is
+    // how it tells you what it did.
     {
       files: ['tests/**', 'evals/**', '**/__tests__/**'],
       rules: {
@@ -55,17 +57,18 @@ module.exports = {
   ],
 
   rules: {
-    // `__loaded` is posthog-js's own public "is init finished" flag — their
+    // That name is PostHog's own public "has it finished loading" flag. Their
     // name, not ours.
     'no-underscore-dangle': ['error', { allow: ['_value', '__loaded'] }],
 
-    // Server handlers and the ROI pipeline log deliberately, and Sentry picks
-    // those up. Only a bare console.log is noise.
+    // Our server code and the ROI pipeline log on purpose, and Sentry picks
+    // those up. Only a plain console.log is noise.
     'no-console': ['warn', { allow: ['warn', 'error'] }],
 
-    // ~100 hits, every one of them `obj[key]` on an object we built. The rule
-    // can't tell a prototype-pollution sink from an array index, and at that
-    // volume it buries the security warnings that do matter.
+    // About 100 hits, every one of them looking up a key on an object we built
+    // ourselves. The rule cannot tell a genuinely risky lookup from an array
+    // index, and at that volume it buries the security warnings that do
+    // matter.
     'security/detect-object-injection': 'off',
 
     'react/prop-types': 'off',

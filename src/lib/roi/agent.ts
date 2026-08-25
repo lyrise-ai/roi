@@ -1,11 +1,15 @@
 /* eslint-disable no-restricted-syntax */
 /* eslint-disable no-continue */
 // ─────────────────────────────────────────────────────────────────────────────
-// Unified ROI Report Agent
-// Single streamText agent handles both generation and chat-based editing.
-// Tools mutate ReportState in-place; onReportUpdate fires on every assembled change.
-// Single sources of truth: state.company, state.globals, state.workflows, state.copy
-// Everything else (calcOutput, assembled, renderedHtml) is derived on demand.
+// The ROI report agent.
+//
+// One agent does two jobs: building a report from scratch, and editing it
+// afterwards through chat. Its tools change the report object directly, and
+// onReportUpdate fires every time the assembled report changes.
+//
+// Four fields are the truth: state.company, state.globals, state.workflows and
+// state.copy. Everything else (calcOutput, assembled, renderedHtml) is worked
+// out from those four whenever it is needed, never stored as the truth.
 // ─────────────────────────────────────────────────────────────────────────────
 
 import {
@@ -54,7 +58,7 @@ import type {
   CostOfDelayData,
 } from '@/src/lib/roi/types'
 
-// ── Modeler LLM output type (local — not exported) ────────────────────────────
+// The shape the modeller model answers in. Local to this file, not exported.
 
 interface ModelerResult {
   currency: { code: string; symbol: string; name: string }
@@ -80,10 +84,10 @@ interface ModelerResult {
 
 export { PIPELINE_LOG_TOOL_NAMES } from '@/src/lib/roi/constants'
 
-// Map a salary-source URL hostname to a clean display label. We trust the URL
-// over the modeler's free-text rateSource — if the URL is real, derive the
-// label from it so the Provenance table never says "Bayt" for a glassdoor.com
-// link or "Glassdoor" for a generic linkedin.com link.
+// Turns a salary source URL into a clean name to display. We trust the URL more
+// than the name the model wrote next to it: if the URL is real, we take the
+// name from it. That way the sources table never says "Bayt" beside a
+// glassdoor.com link, or "Glassdoor" beside a plain linkedin.com one.
 function deriveRateSourceFromUrl(
   url: string | null | undefined,
 ): string | null {
@@ -114,12 +118,13 @@ function deriveRateSourceFromUrl(
   for (const [re, label] of KNOWN) {
     if (re.test(host)) return label
   }
-  // Fall back to a tidied hostname (drop trailing TLD, capitalise).
+  // Otherwise tidy up the domain itself: drop the .com and capitalise it.
   const stem = host.split('.').slice(0, -1).join('.') || host
   return stem.charAt(0).toUpperCase() + stem.slice(1)
 }
 
-// Map free-text seniority strings (from modeler) to the three calculator tiers.
+// The model writes seniority in its own words. Map that onto the three levels
+// the calculator knows about.
 function classifySeniority(s?: string | null): 'junior' | 'mid' | 'senior' {
   if (!s) return 'mid'
   const l = s.toLowerCase()
@@ -132,16 +137,18 @@ function classifySeniority(s?: string | null): 'junior' | 'mid' | 'senior' {
 
 // ── Internal helpers ──────────────────────────────────────────────────────────
 
-// Pure recompute chain: calculator → assemble → render. No LLM calls, no
-// callbacks — safe to call from any server context that has a ReportState
-// (chat tools below, and the validation wizard's finalize endpoint at
-// pages/api/reports/[id]/validate-finalize.js). Mutates and returns `state`.
+// Redoes the whole chain: calculator, then assemble, then render. No model
+// calls and no callbacks, so it is safe to call from anywhere on the server
+// that holds a report (the chat tools below, and the finish step of the
+// validation wizard at pages/api/reports/[id]/validate-finalize.js). It changes
+// `state` and hands it back.
 export function recomputeReportState(
   state: ReportState,
   execTemplateHtml: string,
   fullTemplateHtml: string,
-  // See roiCalculator's applyRevenueGuardrail param — must stay false for
-  // every post-generation caller (chat tools, validate-finalize).
+  // See the applyRevenueGuardrail note in roiCalculator. It must stay false for
+  // everyone calling after the report was first built (the chat tools, and
+  // validate-finalize).
   applyRevenueGuardrail = false,
 ): ReportState {
   if (!state.workflows || !state.globals || !state.company) return state
@@ -180,11 +187,11 @@ function reAssemble(
   callbacks.onReportUpdate(state, changedSections)
 }
 
-// Ground truth for the model's own narration — every mutating chat tool
-// reports before/after/delta instead of a bare new number, so "did this
-// edit actually move the total, and by how much" is a fact the model reads
-// off the tool result rather than something it has to infer or remember
-// from a paragraph of system-prompt instructions (LYR-146).
+// Facts for the model to describe its own edit with. Every chat tool that
+// changes something reports the before, the after and the difference, instead
+// of just the new number. So "did that edit move the total, and by how much" is
+// something the model reads off the result, not something it has to work out or
+// remember from the prompt (LYR-146).
 interface TotalsSnapshot {
   od12: number
   pu12: number
@@ -280,9 +287,10 @@ const SALARY_SEARCH_POOL = [
 const SALARY_SEARCH_RE =
   /salary|hourly rate|compensation|glassdoor|bayt\.com|gulftalent|payscale|naukrigulf|wuzzuf|comparably|talent\.com/i
 
-// Mirrors NAV_ITEMS' keys in src/components/ROIGenerator/Report/navItems.js
-// (kept as a plain literal rather than importing that client-tree module —
-// these 11 ids are stable UI section anchors, not business logic).
+// The same keys as NAV_ITEMS in
+// src/components/ROIGenerator/Report/navItems.js. Written out here rather than
+// imported, because that file belongs to the browser side. These 11 ids are
+// fixed section anchors, not business rules.
 const REPORT_SECTION_KEYS = [
   'overview',
   'snapshot',
@@ -298,10 +306,10 @@ const REPORT_SECTION_KEYS = [
 ] as const
 type ReportSectionKey = (typeof REPORT_SECTION_KEYS)[number]
 
-// Formats the shared report model as plain text for a given visible section —
-// lets the chat agent ground itself in the ACTUAL current report content on
-// demand instead of only reasoning from the once-per-turn system-prompt
-// snapshot, which never described several of these sections at all.
+// Writes out one visible section of the report as plain text. This lets the
+// chat agent look at what the report ACTUALLY says right now, instead of
+// working only from the summary it was given at the start of the turn — a
+// summary that never described several of these sections at all.
 export function formatReportSection(
   state: ReportState,
   section: ReportSectionKey,
@@ -429,8 +437,9 @@ function buildTools(
 ) {
   let companySearchCount = 0
   let salarySearchCount = 0
-  // Rule 6B (5–20% revenue guardrail) only ever applies during the initial
-  // generation run — never on post-generation chat edits. See roiCalculator.
+  // Rule 6B — keep the total between 5% and 20% of revenue — only applies while
+  // the report is first being built, never on later chat edits. See
+  // roiCalculator.
   const applyRevenueGuardrail = mode === 'generate'
 
   return {
@@ -774,7 +783,7 @@ function buildTools(
         state.coreThesis = input.coreThesis
         state.salaryEvidence = input.salary_evidence ?? []
 
-        // Surface salary evidence in the evidence panel so it shows up in the UI
+        // Put salary sources into the evidence list so they appear in the UI
         ;(input.salary_evidence ?? []).forEach((ev) => {
           ev.sourceUrls.forEach((url, idx) => {
             addEvidence(state, {
@@ -860,7 +869,7 @@ function buildTools(
           }
         }
 
-        // Fix 1: surface scraped rate/salary signals to the modeler
+        // Pass any pay figures we scraped through to the modeller
         const rateSignals = (state.evidenceItems ?? [])
           .filter(
             (item) =>
@@ -875,7 +884,8 @@ function buildTools(
             url: item.url ?? null,
           }))
 
-        // Pre-compute TFG target band so the modeler hits Rule 6B on the first try
+        // Work out the target range up front, so the modeller lands inside
+        // Rule 6B on its first attempt
         const revenueU = (state.company.revenueEstimateM ?? 0) * 1e6
         const tfgTargetRange =
           revenueU > 0 && state.confidenceLevel !== 'low'
@@ -887,7 +897,7 @@ function buildTools(
 
         const modelerUserContent = JSON.stringify({
           company_profile: state.company,
-          // Fix 3: include owner so modeler can differentiate by seniority
+          // Include who owns the work, so the modeller can price by seniority
           workflows: state.workflows.map((w) => ({
             name: w.name,
             function: w.function,
@@ -897,8 +907,8 @@ function buildTools(
             minutesPerItemAfter: w.minutesPerItemAfter,
             volumeRationale: w.rationale,
           })),
-          // Salary evidence collected during research — modeler MUST use this to set
-          // fullyLoadedHourlyCostOverride per workflow instead of guessing.
+          // Pay figures found during research. The modeller MUST use these to
+          // set the hourly cost for each workflow instead of guessing.
           salary_evidence: state.salaryEvidence ?? [],
           processes: state.normInput.processes,
           selectedCurrency: state.normInput.selectedCurrency,
@@ -944,8 +954,9 @@ function buildTools(
             `attempt ${attempt + 1}/3${attempt > 0 ? ' (retry)' : ''}`,
           )
 
-          // Read the id off the model rather than restating it: a hardcoded
-          // string here silently mis-prices every report after a model swap.
+          // Ask the model object for its own id instead of writing one here. A
+          // hardcoded id would quietly mis-price every report the day we switch
+          // models.
           const modelerModel = getFastModel()
           const result = await generateObject({
             model: modelerModel,
@@ -980,10 +991,11 @@ function buildTools(
             },
           }
 
-          // Merge per-workflow assumptions from modeler into state.workflows.
-          // Fuzzy match: exact → contains → starts-with, so minor LLM name drift
-          // (e.g. "Proposal Drafting" vs "Proposal Drafting and Tailoring") still
-          // gets the right assumptions instead of silently falling back to defaults.
+          // Copy the modeller's per-workflow assumptions onto our workflows.
+          // We match names loosely — exact first, then contains, then starts
+          // with — because the model renames things slightly ("Proposal
+          // Drafting" vs "Proposal Drafting and Tailoring"). Without that, the
+          // right assumptions would be quietly dropped for defaults.
           updatedWorkflows = state.workflows!.map((wf) => {
             const assump = modelerOut.workflowAssumptions.find(
               (a) => a.workflowName.toLowerCase() === wf.name.toLowerCase(),
@@ -998,9 +1010,9 @@ function buildTools(
             const seniority = classifySeniority(assump.seniorityLevel)
             const rawRateSource = assump.rateSource ?? null
             const rateSourceUrl = assump.rateSourceUrl ?? null
-            // Trust the URL over the modeler's free-text label. If a real URL
-            // is present, derive the source name from its hostname so the
-            // Provenance table never disagrees with the link it points to.
+            // Trust the URL over the name the model wrote. If there is a real
+            // URL, take the source name from it, so the sources table never
+            // disagrees with the link beside it.
             const urlDerived = deriveRateSourceFromUrl(rateSourceUrl)
             const rateSource =
               urlDerived ??
@@ -1058,8 +1070,9 @@ function buildTools(
           const od = s.operationalDividend12mo
           const pu = s.profitUplift12mo
 
-          // Rule 6B: 5–20% revenue band — enforced mechanically inside roiCalculator
-          // via proportional scaling (silent), so no LLM retry needed here.
+          // Rule 6B — keep the total between 5% and 20% of revenue. The
+          // calculator enforces this itself by scaling everything down, so we
+          // never have to ask the model to try again.
 
           roiLog(
             'modeler',
@@ -1068,7 +1081,8 @@ function buildTools(
             } hrs/yr=${s.totalAnnualHours}`,
           )
 
-          // Rule 6E: OD/PU ratio 0.8–3×
+          // Rule 6E: the profit uplift must be 0.8 to 3 times the operational
+          // dividend
           if (od > 0) {
             const puRatio = pu / od
             if (puRatio > 3.0) {
@@ -1407,10 +1421,10 @@ function buildTools(
           applyRevenueGuardrail,
         )
         const after = snapshotTotals(state)
-        // Rule 6A regional-rate-floor is the one guardrail still active on
-        // edits — surface it as a fact, not something the model has to
-        // infer, so it can honestly tell the user their requested rate got
-        // lifted instead of silently reporting success.
+        // Rule 6A — the minimum hourly rate for the region — is the one limit
+        // still active during edits. We report it as a plain fact rather than
+        // leaving the model to work it out, so it can tell the user their rate
+        // was raised instead of just saying "done".
         const wc = state.calcOutput?.workflows.find(
           (w) => w.name.toLowerCase() === workflowName.toLowerCase(),
         )
@@ -1583,8 +1597,8 @@ function buildTools(
                 : null,
           }))
         }
-        // Keep the revenue estimate in the same currency/units as everything
-        // else that was just scaled, so it still displays correctly.
+        // Keep the revenue estimate in the same currency and units as
+        // everything else we just converted, or it will display wrongly.
         if (
           state.company?.revenueEstimateM != null &&
           state.company.revenueEstimateM > 0
@@ -1896,11 +1910,10 @@ export function buildChatSystemPrompt(state: ReportState): string {
   const sym = currencySymbolFor(globals.currency)
   const s = calc.summary
 
-  // Same canonical join+sort as the PDF/web/wizard (reportModel.ts) — this
-  // used to be its own unsorted copy, so "the top workflow" (used below for
-  // COMPOSITION EXAMPLES and lever positional fallback) could silently mean
-  // a different workflow to the chat agent than what's actually shown on
-  // the page.
+  // Uses the same joining and sorting as the PDF, the web report and the
+  // wizard (reportModel.ts). This used to be its own unsorted copy, which meant
+  // "the top workflow" could quietly mean one thing to the chat agent and
+  // another to the page the user is looking at.
   const merged = mergeWorkflows(state.workflows!, calc.workflows)
 
   const workflowSection = merged
@@ -1935,10 +1948,9 @@ export function buildChatSystemPrompt(state: ReportState): string {
     })
     .join('\n\n')
 
-  // Show the deterministic per-lever arithmetic the renderer actually
-  // displays — NOT the empty rationale_with_arithmetic field, which is
-  // overwritten in assembleReport. Otherwise the chat agent may "fix"
-  // arithmetic that isn't actually shown.
+  // Show the same per-lever maths the renderer puts on screen. Do NOT show the
+  // empty rationale_with_arithmetic field, which assembleReport overwrites
+  // later. Otherwise the chat agent goes and "fixes" sums nobody can see.
   const redirectionPct = Math.max(0, globals.profitMultiplier - 1)
   const leverLines = (copy.profit_levers ?? [])
     .map((l, i) => {
@@ -2172,8 +2184,8 @@ export async function runReportAgent(params: {
   templateHtml: string
   fullTemplateHtml: string
   estimatesOnly?: boolean
-  // Aborts the streamText loop when the caller (e.g. an HTTP client) goes away,
-  // so we stop burning tokens on a report nobody is waiting on.
+  // Stops the agent when whoever asked for the report goes away, so we do not
+  // keep paying for a report nobody is waiting for.
   abortSignal?: AbortSignal
 }): Promise<void> {
   const {
@@ -2212,15 +2224,16 @@ export async function runReportAgent(params: {
     tracker,
     mode,
   )
-  // These three are one-time generation lock-in steps (set_research_output →
-  // run_financial_model → set_report_copy). They're never mentioned in the
-  // chat system prompt, but buildTools registers all 13 tools unconditionally,
-  // so nothing stopped the model from calling run_financial_model mid-chat —
-  // which reruns the modeler LLM from scratch and silently overwrites every
-  // workflow's volume/time/rate with fresh AI-invented numbers, discarding
-  // every edit made so far in the conversation. Excluding them from the tool
-  // set actually sent to the model (not just the prompt text) makes this
-  // impossible rather than merely discouraged.
+  // These three run once, in order, while the report is first being built:
+  // set_research_output, then run_financial_model, then set_report_copy. The
+  // chat prompt never mentions them — but buildTools always registers all 13
+  // tools, so nothing stopped the model from calling run_financial_model in the
+  // middle of a chat. That reruns the modeller from scratch and quietly
+  // replaces every workflow's volume, time and rate with fresh invented
+  // numbers, throwing away every edit made in the conversation so far.
+  //
+  // Taking them out of the tool list we actually send makes that impossible,
+  // rather than merely discouraged.
   const {
     set_research_output: _setResearchOutput,
     run_financial_model: _runFinancialModel,
@@ -2264,7 +2277,7 @@ ${
       },
     ]
   } else {
-    // Chat mode — state must have calcOutput + copy
+    // Chat mode: the report must already have its calculated figures and copy
     if (!state.calcOutput || !state.copy) {
       callbacks.onError(
         new Error('Chat mode requires a fully generated report state'),
@@ -2286,12 +2299,12 @@ ${
     tools,
     stopWhen: stepCountIs(mode === 'generate' ? 24 : 8),
     abortSignal,
-    // Chat mode: `system` above is a one-time snapshot of `state` taken
-    // before this call starts. If the model chains multiple tool calls in
-    // one turn (e.g. edit a workflow, then rewrite a copy section to match),
-    // later steps would otherwise keep reasoning from that stale snapshot
-    // even though every tool mutates the live `state` correctly. Rebuild it
-    // fresh before each step so the model always sees current numbers.
+    // In chat mode, the `system` text above is a snapshot of the report taken
+    // once, before this call started. If the model uses several tools in one
+    // turn — edit a workflow, then rewrite the paragraph to match — the later
+    // steps would still be reading that old snapshot, even though each tool
+    // updated the real report correctly. So we rebuild it before every step,
+    // and the model always sees current numbers.
     ...(mode === 'chat' && {
       prepareStep: async ({ stepNumber }) =>
         stepNumber === 0 ? {} : { system: buildChatSystemPrompt(state) },
@@ -2317,8 +2330,9 @@ ${
               : String(part.error),
         })
       } else if (part.type === 'error') {
-        // An abort surfaces here as an error part — treat it as a clean stop,
-        // not a generation failure, so the caller doesn't persist/email it.
+        // A cancellation arrives here looking like an error. Treat it as a
+        // clean stop, not a failed report, so the caller does not save it or
+        // email it.
         if (abortSignal?.aborted) {
           roiWarn('agent', '⏹ runReportAgent aborted — caller disconnected')
           return
@@ -2346,16 +2360,16 @@ ${
 
   const response = await result.response
 
-  // Track main agent loop usage and flush summary
+  // Record what the main agent loop cost, and write out the summary
   try {
     const usage = await result.usage
     tracker.record({ call: 'main_agent', model: mainModel.modelId, ...usage })
   } catch {
     /* usage not available — skip */
   }
-  // Hand the usage summary to the caller, which persists it once the report
-  // row (report_id) exists. In generate mode the report is saved AFTER the
-  // agent runs, so the agent itself has no report_id to write.
+  // Give the usage summary to the caller, which saves it once the report row
+  // exists. When building a new report, the row is only saved AFTER the agent
+  // finishes, so the agent has no report id of its own to write against.
   callbacks.onUsage?.(tracker.flush())
 
   if (mode === 'generate' && !state.assembled) {

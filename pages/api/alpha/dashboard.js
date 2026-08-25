@@ -1,44 +1,50 @@
-// GET /api/alpha/dashboard — the only read path for alpha program metrics.
+// GET /api/alpha/dashboard — the only way to read the alpha programme's
+// numbers.
 //
-// alpha_feedback (and alpha_invites) are RLS-locked to service-role only —
-// there are no client-facing policies (see
+// The alpha feedback and invite tables are locked to the server's admin key.
+// There are no rules that let the browser read them at all (see
 // supabase/migrations/20260713_000014_alpha_feedback_rebuild.sql and
-// 20260705_000012_alpha_invites.sql). A client-side supabase.from(...) call
-// against either table always returns zero rows. This route, running with
-// the admin client server-side, is the only way to see this data at all.
+// 20260705_000012_alpha_invites.sql), so a query from the browser always comes
+// back empty. This route, running on the server with the admin key, is the only
+// way to see this data.
 //
-// Every number below is wrapped in an envelope (value/unit/label/explains/
-// formula/sample/caveat/confidence/healthy) instead of being a bare number.
-// The reasoning lives here, once, in the code that computes it — the
-// dashboard UI reads `explains`/`formula`/`caveat`/`healthy` off the payload
-// rather than re-deriving or duplicating this logic in a second place where
-// it could drift out of sync.
+// Every number below is wrapped up with its own label, unit, explanation,
+// formula, sample size, caveat, confidence and which direction is good —
+// instead of being a bare number. The reasoning lives here, once, next to the
+// code that works the number out. The dashboard page reads those fields off the
+// response rather than working them out a second time somewhere they could
+// drift apart.
 
 import { createRouteClient } from '@/src/lib/supabaseRouteClient'
 import { getRoleForUser } from '@/src/lib/authHelpers'
 import { getSupabaseAdmin } from '@/src/lib/supabaseAdmin'
 
-// A PMF score computed from a handful of respondents is not a rough version
-// of the truth, it is noise that happens to look like a percentage. 20 is a
-// deliberately conservative floor. We used to withhold the score entirely
-// below this floor — but a hidden number just invites people to go compute
-// their own from the raw counts anyway, with none of the caveats attached.
-// Instead the score always ships, tagged confidence: 'low' with a caveat
-// spelling out exactly how many more responses would make it trustworthy.
-// The launch readiness gate is the one place that still hard-fails below
-// this floor — showing a number and being willing to act on it are two
+// A product-market-fit score worked out from a handful of people is not a rough
+// version of the truth. It is noise that happens to look like a percentage. 20
+// is a deliberately cautious minimum.
+//
+// We used to hide the score entirely below that. But hiding a number just makes
+// people work it out themselves from the raw counts, with none of the warnings
+// attached. So now the score is always shown, marked low confidence, with a
+// note saying exactly how many more answers would make it trustworthy.
+//
+// The "are we ready to launch" check is the one place that still hard-fails
+// below this floor. Showing a number and being willing to act on it are two
 // different bars.
 const PMF_MIN_SAMPLE = 20
 
-// Base "new issue" URL for a specific Linear team, e.g.
-// https://linear.app/<workspace-slug>/team/<TEAM-KEY>/new — title and
-// description are appended as query params per what_to_fix item at request
-// time. Deliberately a separate env var from LINEAR_TEAM_ID (see
-// pages/api/linear/triage.js): that one is the internal team UUID the
-// GraphQL API needs, this one is the human-facing workspace/team slug a
-// browser URL needs, and the two are not interchangeable. Read from env
-// rather than hardcoded so the target team can move without a code change;
-// if unset, linear_url is just null and the UI has nothing to link to.
+// The "create an issue" link for one Linear team, like
+// https://linear.app/<workspace>/team/<TEAM>/new. We add the title and
+// description onto the end of it for each problem in the list.
+//
+// This is deliberately a different setting from LINEAR_TEAM_ID (see
+// pages/api/linear/triage.js). That one is the internal id Linear's API needs.
+// This one is the readable name a browser URL needs. They are not
+// interchangeable.
+//
+// It comes from settings rather than being written into the code, so the team
+// can move without a code change. If it is not set, there is simply no link and
+// the page shows none.
 const LINEAR_NEW_ISSUE_URL = process.env.LINEAR_NEW_ISSUE_URL
 
 const FUNNEL_STEPS = [
@@ -69,10 +75,10 @@ function round(value, decimals = 1) {
   return Math.round(value * factor) / factor
 }
 
-// PostgREST returns an embedded to-one relation as a plain object in most
-// configurations, but as a one-element array under some ambiguous-relation
-// setups. Normalizing here means every call site below can treat
-// row.invite / row.report as "an object or null" and nothing else.
+// When we ask Supabase for a related row, it usually comes back as a plain
+// object — but in some setups it comes back as a list with one item in it.
+// Sorting that out here means everything below can treat the related invite or
+// report as "an object, or nothing", and never worry about it again.
 function one(relation) {
   if (!relation) return null
   return Array.isArray(relation) ? (relation[0] ?? null) : relation
@@ -85,25 +91,27 @@ function slugify(text) {
     .replace(/(^-|-$)/g, '')
 }
 
-// Confidence is a pure function of sample size, not a judgment call made at
-// each call site — the same three thresholds apply everywhere so "reliable"
-// means the same thing on every metric on this page. It is deliberately
-// separate from whether a *value* can even be computed (a 0/0 division still
-// yields value: null regardless of what confidence tier the sample falls
-// into).
+// Confidence comes only from how many people are in the sample. It is not a
+// judgement made separately for each number, so "reliable" means the same thing
+// everywhere on this page.
+//
+// It is deliberately separate from whether a number can be worked out at all:
+// dividing by zero still gives no value, whatever the sample size says.
 function confidenceFromSample(sample) {
   if (sample >= 20) return 'reliable'
   if (sample >= 5) return 'building'
   return 'low'
 }
 
-// Every computed number in this payload is wrapped the same way so the UI
-// never has to re-derive what a number means or duplicate this logic.
-// `sample` is mandatory: a number with no stated sample size invites a
-// reader to treat 3 respondents and 300 the same way. `healthy` is a static,
-// direction-only hint ("which way is good") and stays null for metrics where
-// that judgment doesn't apply — a plain count of testers isn't "healthy" or
-// "unhealthy", it just is what it is.
+// Every number in the response is wrapped the same way, so the page never has
+// to work out what a number means or repeat this logic.
+//
+// The sample size is required. A number with no sample size lets a reader treat
+// 3 people and 300 the same way.
+//
+// The "healthy" field only says which direction is good, and stays empty for
+// numbers where that does not apply — a plain count of testers is not healthy or
+// unhealthy, it simply is what it is.
 function metric({
   value,
   unit,
@@ -127,26 +135,27 @@ function metric({
   }
 }
 
-// ── "Real tester" ────────────────────────────────────────────────────────
+// -- What counts as a "real tester" -----------------------------------------
 //
-// A row in alpha_feedback is created for every session that starts the alpha
-// tour, including our own team clicking through it to test a change, and
-// including sessions where the invite was later revoked (e.g. someone who
-// left, or a link generated by mistake). None of that is a real tester.
+// A feedback row is created for every session that starts the alpha tour. That
+// includes our own team clicking through to test a change, and sessions whose
+// invite was later revoked — someone who left, or a link made by mistake. None
+// of those is a real tester.
 //
-// We deliberately gate this on the *invite* (a live, non-revoked
-// alpha_invites row) rather than on the feedback row's own email, because
-// alpha_feedback has no email column of its own by design — identity is
-// always joined from alpha_invites, never duplicated onto the feedback row
-// (see the rebuild migration's comment on why). Checking "does this email
-// look internal" against free-text would also be gameable and wouldn't
-// catch a revoked invite; checking the invite itself catches both an
-// internal email *and* a tester whose access has since been pulled, with
-// one condition.
+// We decide this from the INVITE — a live, unrevoked invite row — rather than
+// from an email on the feedback row. The feedback table deliberately has no
+// email column of its own; identity is always joined from the invite and never
+// copied onto the feedback row (the rebuild migration explains why).
 //
-// reached_intake=true is also required: a feedback row can exist with every
-// field null if a session started and immediately abandoned before the tour
-// rendered anything. That's not a tester who gave us signal, it's a blip.
+// Checking "does this email look like one of ours" against free text would also
+// be easy to slip past, and would not catch a revoked invite. Checking the
+// invite catches both an internal email AND a tester whose access has since
+// been pulled, in one condition.
+//
+// We also require that they actually reached the first screen. A feedback row
+// can exist with every field empty if a session started and was abandoned
+// before anything rendered. That is not a tester who told us anything; it is a
+// blip.
 function isRealTester(row) {
   const invite = one(row.invite)
   if (!invite) return false
@@ -163,8 +172,9 @@ function furthestStep(row) {
       return FUNNEL_STEPS[i].replace('reached_', '')
     }
   }
-  // Unreachable for a real tester (reached_intake is required to qualify),
-  // kept only so this function can never return undefined.
+  // A real tester can never reach this line, because reaching the first screen
+  // is required to count as one. It is here only so this function always
+  // returns something.
   return 'intake'
 }
 
@@ -233,11 +243,11 @@ export default async function handler(req, res) {
   const realTesterRows = (feedbackRows ?? []).filter(isRealTester)
   const totalTesters = realTesterRows.length
 
-  // ── 1. TESTERS ────────────────────────────────────────────────────────
-  // Who counts as a real tester, one row per person, with enough identity
-  // (email, name, company) to actually follow up with them — this is the
-  // list a human reads to go say "hey, thanks for testing this" or "let's
-  // debug why you dropped off after intake".
+  // -- 1. TESTERS ------------------------------------------------------
+  // One row per real tester, with enough detail — email, name, company — to
+  // actually get back to them. This is the list a person reads before saying
+  // "thanks for testing this", or "let's work out why you stopped after the
+  // first screen".
   const testerRows = realTesterRows.map((row) => {
     const invite = one(row.invite)
     const report = one(row.report)
@@ -250,22 +260,24 @@ export default async function handler(req, res) {
     }
   })
 
-  // ── 2. FUNNEL ─────────────────────────────────────────────────────────
-  // Each reached_* flag is written independently by whichever page the
-  // tester actually reaches (see alpha_feedback_rebuild migration), so a
-  // broken write to one step can't silently take down another. That also
-  // means these counts are NOT derived from one "furthest step" value — a
-  // tester could in principle have reached_report=true and
-  // reached_validation=false if the validation write failed. Because each
-  // step can only be reached by passing through the step before it in the
-  // actual product flow, the counts must come out non-increasing
-  // (intake >= generation >= validation >= report >= survey). If they
-  // don't, that is not a rounding quirk — it means a write to an earlier
-  // flag silently failed for at least one tester (this happened for real:
-  // the old dashboard once showed 89% "generated" against 78% "intake",
-  // which is not a possible funnel and meant the intake flag write had
-  // failed without anyone noticing). We check for that here and surface it
-  // instead of quietly rendering an impossible funnel.
+  // -- 2. THE FUNNEL ---------------------------------------------------
+  // Each "reached this step" flag is written on its own, by whichever page the
+  // tester actually got to (see the alpha_feedback_rebuild migration). So a
+  // failed write on one step cannot quietly break another.
+  //
+  // That also means these counts do NOT come from a single "furthest step"
+  // value. A tester could in principle be marked as having reached the report
+  // but not the validation step, if the validation write failed.
+  //
+  // In the real product you cannot reach a step without passing through the one
+  // before it. So the counts must never go UP as you move along the funnel. If
+  // they do, that is not a rounding quirk — it means a write to an earlier step
+  // failed for at least one tester, silently.
+  //
+  // This actually happened: the old dashboard once showed 89% "generated"
+  // against 78% "reached intake", which is not a possible funnel, and meant the
+  // intake write had been failing unnoticed. We check for it here and say so,
+  // rather than quietly drawing an impossible funnel.
   const funnelCounts = Object.fromEntries(
     FUNNEL_STEPS.map((step) => [
       step,
@@ -344,12 +356,11 @@ export default async function handler(req, res) {
     }),
   }
 
-  // ── 3. MODEL ACCURACY ─────────────────────────────────────────────────
-  // Source of truth: reports.validation_data, joined via each real tester's
-  // report_id. One report per tester (a report can only be linked to one
-  // alpha_feedback row at a time via report_id), so "unique reports among
-  // real testers" and "real testers who reached a report" are the same
-  // population here.
+  // -- 3. HOW ACCURATE OUR MODEL WAS -----------------------------------
+  // This comes from each report's saved validation data, found through the
+  // tester's report id. There is one report per tester, because a report can
+  // only be attached to one feedback row at a time. So "reports among real
+  // testers" and "real testers who reached a report" are the same group.
   const reportsById = new Map()
   for (const row of realTesterRows) {
     const report = one(row.report)
@@ -359,18 +370,19 @@ export default async function handler(req, res) {
   }
   const linkedReports = [...reportsById.values()]
 
-  // baseline.source tells us whether validation_data.baseline was captured
-  // *before* the tester touched anything ('generation') or reconstructed
-  // after the fact ('finalize-fallback', for reports created before this
-  // instrumentation existed — see validationBaseline.ts). A fallback
-  // baseline is built from state.workflows at finalize time, which by then
-  // already reflects whatever the tester changed. Diffing "what the tester
-  // ended up with" against itself always comes out as zero drift and 100%
-  // kept — not because our model was perfect, but because there was no
-  // untouched snapshot to compare against. Including these would silently
-  // and systematically flatter every accuracy number. We exclude them, but
-  // report the count so it's visible how much of the historical data this
-  // throws away.
+  // Each saved baseline says where it came from: taken BEFORE the tester
+  // touched anything, or rebuilt afterwards for reports made before we had this
+  // instrumentation (see validationBaseline.ts).
+  //
+  // A rebuilt baseline is put together at the end, from numbers that already
+  // include whatever the tester changed. Comparing what the tester ended up with
+  // against itself always shows zero drift and 100% kept — not because our
+  // model was perfect, but because there was no untouched copy to compare
+  // against.
+  //
+  // Including those would quietly flatter every accuracy number, always in the
+  // same direction. So we leave them out, but report how many we left out, so
+  // it is visible how much old data this throws away.
   const reportsWithGenerationBaseline = linkedReports.filter(
     (report) => report.validation_data?.baseline?.source === 'generation',
   )
@@ -394,10 +406,10 @@ export default async function handler(req, res) {
 
     for (const name of proposedNames) {
       const decision = decisions[name]
-      // volumePct/durationPct are only meaningful for workflows the tester
-      // kept — validate-finalize.js never computes a correction for a
-      // workflow the tester removed, so a removed workflow's volumePct is
-      // not "we were 0% off", it's simply not a corrected value at all.
+      // The correction percentages only mean anything for workflows the tester
+      // kept. We never work out a correction for a workflow they deleted, so a
+      // deleted workflow's percentage is not "we were 0% off" — it is simply
+      // not a corrected number at all.
       if (decision?.kept === true) {
         totalKept += 1
         if (typeof decision.volumePct === 'number') {
@@ -489,14 +501,15 @@ export default async function handler(req, res) {
     }),
   }
 
-  // ── 4. TRUST DELTA ────────────────────────────────────────────────────
-  // trust_before is asked at the start of the validation wizard, trust_after
-  // at the end (see OverviewStep.jsx / FeedbackStep.jsx). We only average
-  // over testers who answered *both* — mixing in someone who answered only
-  // one half would let mean(before) and mean(after) drift apart from being
-  // computed over different people, and the "delta" would stop meaning
-  // "how this group's trust moved" and start meaning "difference between
-  // two unrelated groups".
+  // -- 4. DID TRUST GO UP OR DOWN? -------------------------------------
+  // We ask how much they trust the numbers at the start of the wizard, and
+  // again at the end (see OverviewStep.jsx and FeedbackStep.jsx). We only
+  // average over testers who answered BOTH.
+  //
+  // Including someone who answered only one of the two would mean the before
+  // and after averages come from different groups of people. The difference
+  // between them would stop meaning "how this group's trust moved" and start
+  // meaning "the gap between two unrelated groups".
   const pairedTrust = realTesterRows.filter(
     (row) =>
       typeof row.trust_before === 'number' &&
@@ -540,7 +553,7 @@ export default async function handler(req, res) {
     }),
   }
 
-  // ── 5. EXPERIENCE ─────────────────────────────────────────────────────
+  // -- 5. WHAT THE EXPERIENCE FELT LIKE --------------------------------
   const intakeEaseValues = realTesterRows
     .map((row) => row.intake_ease)
     .filter((v) => typeof v === 'number')
@@ -601,19 +614,18 @@ export default async function handler(req, res) {
     unclear_reason: unclearRanked,
   }
 
-  // ── 6. PMF (Sean Ellis / Vohra test) ──────────────────────────────────
-  // "Completed survey" here means the tester answered the core PMF
-  // question (pmf_disappointed) — that's the question the score is built
-  // from, so it's the right denominator, independent of whether they also
-  // answered the optional free-text follow-ups.
+  // -- 6. PRODUCT-MARKET FIT (the Sean Ellis test) ---------------------
+  // "Completed the survey" here means they answered the one core question:
+  // how disappointed would you be if this went away. That is the question the
+  // score is built from, so it is the right group to divide by — whether or not
+  // they also answered the optional written follow-ups.
   //
-  // raw_pmf and segmented_pmf always compute and ship a value once the
-  // denominator is nonzero — pmfReady no longer decides whether the number
-  // is *shown*, only what caveat (if any) rides along with it. Confidence
-  // (derived from `sample` in metric()) already tells the reader how much
-  // to trust it; hiding the number on top of that would just be redundant
-  // and would invite people to reconstruct it themselves from the raw
-  // counts anyway.
+  // Both scores are always worked out and always sent, as long as anyone
+  // answered at all. Whether the sample is big enough no longer decides whether
+  // the number is SHOWN, only what warning travels with it. The confidence
+  // level already tells the reader how much to trust it. Hiding the number on
+  // top of that would be saying the same thing twice, and would just make people
+  // rebuild it from the raw counts themselves.
   const pmfCounts = { very: 0, somewhat: 0, not: 0 }
   for (const row of realTesterRows) {
     if (row.pmf_disappointed === 'Very disappointed') pmfCounts.very += 1
@@ -687,11 +699,11 @@ export default async function handler(req, res) {
     }),
   }
 
-  // ── 7. INTENT (for the CEO) ───────────────────────────────────────────
-  // How soon a tester says they'd actually move on this, in their own
-  // words at the end of the validation wizard — a leading indicator of
-  // real budget intent, as distinct from the PMF survey's retrospective
-  // "would you miss it" framing.
+  // -- 7. HOW SOON THEY WOULD ACT (for the CEO) ------------------------
+  // How soon a tester says they would actually move on this, in their own words
+  // at the end of the wizard. It is an early sign of real budget intent, which
+  // is a different question from the survey's backward-looking "would you miss
+  // it".
   const intentCounts = { this_quarter: 0, next_quarter: 0, exploring: 0 }
   let intentAnswered = 0
   for (const row of realTesterRows) {
@@ -734,18 +746,21 @@ export default async function handler(req, res) {
     }),
   }
 
-  // ── 8. RECRUITING TARGET ──────────────────────────────────────────────
-  // gap_a: the plain arithmetic gap to a PMF-worthy sample.
+  // -- 8. DO WE NEED MORE TESTERS? -------------------------------------
+  // The first gap is simple arithmetic: how many more answers we need for the
+  // score to be worth trusting.
   //
-  // gap_b: a cheap, honest proxy for "are we still learning new things from
-  // new testers, or have we saturated". We are not clustering open-text
-  // themes yet (see OPEN TEXT below) so this cannot detect a genuinely new
-  // *theme* in the NLP sense — it checks whether the last 3 testers said
-  // something (a categorical unclear_reason, or any open-text answer) that
-  // no earlier tester said verbatim. That will trigger often while the
-  // sample is small (everything looks "new" when there's little history to
-  // compare against), which is the correct behavior: it's exactly the
-  // testers we have the least signal on where recruiting more matters most.
+  // The second is a cheap but honest stand-in for "are we still learning
+  // anything new, or have we heard it all". We do not group written answers by
+  // theme yet (see the open text section below), so this cannot spot a new
+  // THEME in any clever sense. It checks whether the last 3 testers said
+  // something — a reason they picked, or any written answer — that no earlier
+  // tester said word for word.
+  //
+  // That will fire often while we have few testers, because everything looks
+  // new when there is little to compare against. That is the right behaviour:
+  // those are exactly the testers we know least about, and where recruiting
+  // more matters most.
   const sortedByCreatedAt = [...realTesterRows].sort(
     (a, b) => new Date(a.created_at) - new Date(b.created_at),
   )
@@ -810,11 +825,11 @@ export default async function handler(req, res) {
     }),
   }
 
-  // ── 9. OPEN TEXT ───────────────────────────────────────────────────────
-  // Raw, unclustered free-text answers, grouped only by which question they
-  // came from. Deliberately not summarized or theme-tagged here — that's
-  // real analysis work a human (or a separate pass) should do by reading
-  // them, not a number this route should quietly decide for you.
+  // -- 9. WHAT PEOPLE WROTE --------------------------------------------
+  // The written answers, exactly as given, grouped only by which question they
+  // answered. Deliberately not summarised or tagged by theme here. That is real
+  // analysis work for a person, or a separate pass, to do by reading them — not
+  // a number this route should quietly decide for you.
   function openTextEntries(field) {
     return realTesterRows
       .filter((row) => typeof row[field] === 'string' && row[field].trim())
@@ -828,28 +843,28 @@ export default async function handler(req, res) {
     OPEN_TEXT_FIELDS.map((field) => [field, openTextEntries(field)]),
   )
 
-  // ── 10. WHAT TO FIX ───────────────────────────────────────────────────
-  // A ranked list of concrete problems, built only from things we can
-  // already count — not from clustering open-text themes (we don't do that
-  // yet, same reasoning as OPEN TEXT above). Three kinds of evidence feed
-  // this:
-  //   1. Each unclear_reason option is its own candidate problem — we
-  //      already know how many testers picked it, and unclear_note answers
-  //      from those same testers attach as supporting quotes, because
-  //      unclear_reason and unclear_note are collected together in the same
-  //      moment (see report/[id].jsx's tour-exit handler).
-  //   2. The single biggest raw drop between two consecutive funnel steps —
-  //      the step where testers most concretely stopped continuing.
-  //   3. A funnel integrity_warning, if present, becomes its own problem: it
-  //      isn't a UX issue to fix, it's a reason not to trust the funnel
-  //      numbers at all until it's fixed — so its tester_count is set to
-  //      every real tester, which naturally ranks it at or near the top.
-  // Every other open-text answer (validation_note, pmf_main_benefit,
-  // pmf_improvement, not_disappointed_reason, and any unclear_note that
-  // didn't attach to an unclear_reason problem above) lands in one
-  // ungrouped bucket rather than being force-fit into a category we didn't
-  // actually detect. Ranked by tester_count, descending — the problem
-  // touching the most people sorts first.
+  // -- 10. WHAT TO FIX --------------------------------------------------
+  // A ranked list of concrete problems, built only from things we can already
+  // count. Not from grouping written answers by theme — we do not do that yet,
+  // for the same reason as the section above.
+  //
+  // Three kinds of evidence feed it:
+  //   1. Each reason a tester could pick for "this was unclear" is its own
+  //      candidate problem. We already know how many people picked it, and the
+  //      notes those same people wrote attach as supporting quotes, because the
+  //      reason and the note are collected in the same moment (see the tour-exit
+  //      handler in report/[id].jsx).
+  //   2. The single biggest drop between two steps of the funnel — where
+  //      testers most clearly stopped.
+  //   3. A funnel that does not add up, if we found one. That is not a design
+  //      problem to fix; it is a reason not to trust the funnel numbers at all
+  //      until it is sorted. So we count it against every real tester, which
+  //      naturally puts it at or near the top.
+  //
+  // Every other written answer lands in one ungrouped pile rather than being
+  // forced into a category we did not actually detect.
+  //
+  // Ranked by how many testers each problem touched, most first.
   const whatToFix = []
 
   for (const [reason, count] of unclearCounts.entries()) {
@@ -876,10 +891,10 @@ export default async function handler(req, res) {
     })
   }
 
-  // Only a real, positive drop counts as a "problem" here — if the funnel
-  // isn't monotonic (funnelIntegrityWarning is set), a negative "drop" is a
-  // data bug, not a UX finding, and is surfaced separately below instead of
-  // being reported as attrition that didn't actually happen.
+  // Only a genuine drop counts as a problem here. If the funnel counts go UP
+  // between steps, that is a data bug, not a finding about users. We report that
+  // separately below rather than dressing it up as people dropping out when they
+  // did not.
   let biggestDrop = null
   for (let i = 1; i < FUNNEL_STEPS.length; i++) {
     const fromStep = FUNNEL_STEPS[i - 1]
@@ -932,8 +947,9 @@ export default async function handler(req, res) {
         ungroupedQuotes.push({ email, text: value })
       }
     }
-    // unclear_note only lands here if it didn't already attach to an
-    // unclear_reason problem above (i.e. this tester had no unclear_reason).
+    // A written note only lands here if it did not already attach to one of the
+    // reasons above — that is, this tester wrote something but picked no
+    // reason.
     if (
       row.unclear_reason == null &&
       typeof row.unclear_note === 'string' &&
@@ -958,11 +974,11 @@ export default async function handler(req, res) {
     })
   }
 
-  // ── Model accuracy failure candidates ───────────────────────────────────
-  // Same population and per-metric sample sizes as modelAccuracy above.
-  // Thresholds are deliberately more permissive than "any drift at all" —
-  // some correction is expected and healthy; these fire only once the model
-  // is systematically wrong, not merely imperfect.
+  // -- Problems with our model's accuracy ---------------------------------
+  // Same people and same sample sizes as the accuracy section above. The
+  // thresholds are deliberately looser than "any correction at all": some
+  // correcting is expected and healthy. These only fire once the model is
+  // consistently wrong, not merely imperfect.
   if (
     modelAccuracy.workflows_kept_pct.value != null &&
     modelAccuracy.workflows_kept_pct.value < 80
@@ -1024,7 +1040,7 @@ export default async function handler(req, res) {
     })
   }
 
-  // ── Trust delta failure candidate ───────────────────────────────────────
+  // -- A problem if trust went down --------------------------------------
   if (trust.delta.value != null && trust.delta.value < 0) {
     whatToFix.push({
       id: 'trust-delta-negative',
@@ -1038,7 +1054,7 @@ export default async function handler(req, res) {
     })
   }
 
-  // ── Tester experience failure candidates ────────────────────────────────
+  // -- Problems with how the experience felt ------------------------------
   if (
     experience.intake_ease.value != null &&
     experience.intake_ease.value < 3
@@ -1071,10 +1087,10 @@ export default async function handler(req, res) {
     })
   }
 
-  // ── PMF failure candidate ────────────────────────────────────────────────
-  // Gated on the trustworthy-sample floor so this doesn't duplicate the
-  // "need more surveys" signal already carried by gap_a — it only fires once
-  // the score itself is reliable enough to act on.
+  // -- A problem if product-market fit is weak ----------------------------
+  // Only fires once the sample is big enough to trust, so it does not repeat
+  // the "we need more survey answers" message the recruiting section already
+  // carries.
   if (
     completedSurveys >= PMF_MIN_SAMPLE &&
     pmf.segmented_pmf.value != null &&
@@ -1092,15 +1108,16 @@ export default async function handler(req, res) {
     })
   }
 
-  // ── Rank by severity, not just reach ────────────────────────────────────
-  // Tester count only breaks ties *within* a severity tier. If the data
-  // itself is lying (integrity), nothing else on this page can be trusted;
-  // if the model is wrong (model_accuracy), no UI polish saves the product;
-  // a trust delta that goes negative means the one moment we ask testers to
-  // trust us is actively working against us. Everything below that is
-  // progressively closer to polish than substance. `open_text` sits last
-  // because it is explicitly ungrouped, uncounted feedback (see its push()
-  // above) rather than a specific, measured problem.
+  // -- Rank by how serious it is, not just how many people it touched -----
+  // The number of testers only breaks ties WITHIN a severity level.
+  //
+  // If the data itself is lying, nothing else on this page can be trusted. If
+  // the model is wrong, no amount of design polish saves the product. If trust
+  // went DOWN, the one moment we ask testers to trust us is working against us.
+  // Everything below that is progressively closer to polish than substance.
+  //
+  // The written answers sit last, because they are deliberately ungrouped and
+  // uncounted feedback rather than a specific, measured problem.
   const SEVERITY_ORDER = [
     'integrity',
     'model_accuracy',
@@ -1117,11 +1134,11 @@ export default async function handler(req, res) {
     return tierDiff !== 0 ? tierDiff : b.tester_count - a.tester_count
   })
 
-  // A low-confidence candidate (sample < 5) can still appear in the ranked
-  // list — it just cannot be the single headline item a reader sees first.
-  // Promote the first reliable-enough candidate to the top instead; if every
-  // candidate is low-confidence, there is nothing safer to promote to, so
-  // the severity ordering above stands as-is.
+  // A problem based on fewer than five testers can still appear in the list. It
+  // just cannot be the headline item a reader sees first. So we move the first
+  // well-supported one to the top instead. If every problem is thinly
+  // supported, there is nothing safer to promote, and the ordering above stands
+  // as it is.
   if (whatToFix.length > 0 && whatToFix[0].confidence === 'low') {
     const promoteIndex = whatToFix.findIndex(
       (item) => item.confidence !== 'low',

@@ -1,11 +1,11 @@
 import { useState, useEffect, useCallback } from 'react'
 
-// ── Design tokens ────────────────────────────────────────────────────────
-// Layout/card language and the status palette (green/amber/red/gray) follow
-// the imported Claude Design mockup ("LyRise Readiness Dashboard") as-is.
-// Type and purple come from styles/tokens instead: this panel used to pull
-// IBM Plex off Google Fonts (a third typeface, loaded per-page) and hardcode
-// the pre-rebrand purple #5B48F8.
+// -- Design values ---------------------------------------------------------
+// The layout, the card style and the status colours (green, amber, red, grey)
+// come straight from the design mockup, unchanged.
+// The typeface and the purple come from our own design tokens instead. This
+// panel used to load a third typeface from Google Fonts on every page, and had
+// the old pre-rebrand purple written into it by hand.
 const SANS = 'var(--font-sans)'
 const MONO = 'var(--font-mono)'
 
@@ -69,10 +69,10 @@ const fmtDate = (iso) => {
   })
 }
 
-// Every number on this page comes wrapped as { value, unit, label, explains,
-// formula, sample, caveat, confidence, healthy } from GET /api/alpha/dashboard.
-// This is the only place that turns `unit` into a display string — nothing
-// else on this page re-derives what a number means.
+// Every number on this page arrives from the server already wrapped up with its
+// label, unit, explanation, formula, sample size, caveat, confidence and which
+// direction is good. This is the only place that turns the unit into text on
+// screen. Nothing else here works out what a number means.
 function formatMetricValue(metric, { signed = false } = {}) {
   if (!metric || metric.value == null) return '—'
   const { value, unit } = metric
@@ -82,12 +82,11 @@ function formatMetricValue(metric, { signed = false } = {}) {
   return `${sign}${value}`
 }
 
-// Confidence is intentionally never re-derived from thresholds here — the
-// route already computed it from `sample`. This only maps the route's three
-// tiers ('reliable'|'building'|'low') to a color, and separately notices
-// sample === 0 to say "No data" instead of "Low signal" — a wording choice
-// only, not a new tier (a metric with 0 respondents is still 'low' per the
-// route; this just reads more honestly than "Low signal" for a true zero).
+// We deliberately never work confidence out again here. The server already did
+// that from the sample size. This only turns its three levels into a colour, and
+// separately notices a sample of zero so it can say "No data" rather than "Low
+// signal". That is a wording choice, not a fourth level — the server still calls
+// it low — but it reads more honestly when the true answer is nobody.
 function confidenceMeta(metric) {
   const sample = metric?.sample ?? 0
   if (sample === 0) {
@@ -102,7 +101,8 @@ function confidenceMeta(metric) {
   return { label: 'Low signal', dot: GRAY_DOT, fg: GRAY_TEXT, bg: GRAY_BG }
 }
 
-// Full pill — dot + label + sample — for headline, card-level numbers.
+// The full badge — dot, label and sample size — for the big numbers on a
+// card.
 function ConfidenceChip({ metric }) {
   const c = confidenceMeta(metric)
   return (
@@ -119,12 +119,12 @@ function ConfidenceChip({ metric }) {
   )
 }
 
-// Compact dot + sample only, for numbers inside dense lists/grids where a
-// full pill on every row would be more noise than signal. Every number still
-// gets confidence + sample this way — no exceptions, just two visual weights
-// for headline vs. supporting numbers (the design itself does the same:
-// full chips on hero cards, a bare dot + "n=" in the tight model-accuracy
-// grid).
+// A small dot and the sample size only, for numbers packed into tight lists
+// where a full badge on every row would be more noise than help. Every number
+// still carries its confidence and sample size this way — no exceptions, just
+// two weights, one for headline numbers and one for supporting ones. The design
+// does the same: full badges on the big cards, a bare dot and "n=" in the
+// dense accuracy grid.
 function ConfidenceDot({ metric }) {
   const c = confidenceMeta(metric)
   return (
@@ -141,12 +141,12 @@ function ConfidenceDot({ metric }) {
   )
 }
 
-// Carries a metric's explains/formula/caveat behind a hover popover. This is
-// the one place any of those three fields are allowed to render — call sites
-// stopped printing them inline; see MetricStat, GateCard, and the ReadinessTab
-// PMF card, which used to duplicate this text as always-visible prose.
-// `metric` doesn't have to be a full route metric — a plain `{ explains }`
-// shape works too, e.g. GateCard's hint text.
+// Puts a number's explanation, formula and caveat behind a hover pop-up. This is
+// the only place those three are allowed to appear on screen. Everywhere else
+// stopped printing them inline; three components used to repeat the same text as
+// always-visible prose.
+// It does not need a full server metric — a plain object with just an
+// explanation works too.
 function InfoIcon({ metric }) {
   if (!metric?.explains && !metric?.formula && !metric?.caveat) return null
   return (
@@ -198,12 +198,13 @@ function MetricLabel({ metric, className = '' }) {
   )
 }
 
-// The one building block for a metric readout, used everywhere on this page:
-// label (+ info icon revealing explains/formula/caveat), a confidence chip or
-// dot carrying sample size, the value itself, and the `healthy` caption. This
-// is what makes "every number gets its confidence chip and sample size, no
-// exceptions" true by construction rather than by remembering to add it at
-// each call site.
+// The single building block for showing a number, used everywhere on this page:
+// the label with its info icon, a confidence badge or dot carrying the sample
+// size, the number itself, and the caption saying which direction is good.
+//
+// This is what makes "every number carries its confidence and sample size, with
+// no exceptions" true by construction, instead of true only when someone
+// remembers to add it.
 function MetricStat({
   metric,
   valueClassName = 'text-3xl font-bold',

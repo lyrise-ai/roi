@@ -1,6 +1,7 @@
 // ─────────────────────────────────────────────────────────────────────────────
-// renderTemplate — fills {{$json.display.*}} placeholders in the HTML template
-// Extracted from pages/api/roi-report.js for shared use by agent + email routes
+// renderTemplate — fills the {{$json.display.*}} gaps in the HTML template.
+// Pulled out of pages/api/roi-report.js so the agent and the email route can
+// both use it.
 // ─────────────────────────────────────────────────────────────────────────────
 
 import fs from 'fs'
@@ -20,11 +21,11 @@ function wrapIfRtl(text: string): string {
   return `<span dir="rtl" style="font-family:'Cairo',sans-serif;unicode-bidi:embed;">${escapeHtml(text)}</span>`
 }
 
-// Fields whose values are plain names (not HTML blobs) and may contain Arabic
+// Fields that hold plain names rather than HTML, and may be in Arabic
 const NAME_FIELDS = new Set(['recipientDisplay'])
 
-// The only two report templates that exist. Whitelisted rather than trusted,
-// so no caller can ever steer this path anywhere but public/.
+// The only two report templates there are. Listed explicitly rather than
+// trusted, so no caller can ever point this at a file outside public/.
 const TEMPLATES = new Set(['roi-template.html', 'roi-exec-template.html'])
 
 export function loadTemplate(filename = 'roi-template.html'): string {
@@ -38,9 +39,9 @@ export function renderTemplate(
   assembled: AssembleReportOutput,
 ): string {
   let out = templateHtml
-  // Replace all {{$json.display.<key>}} placeholders
+  // Fill in every {{$json.display.<key>}} gap
   Object.entries(assembled.display).forEach(([key, value]) => {
-    // `key` is an AssembleReportOutput field name, not caller-supplied input.
+    // The key is one of our own field names, never anything a caller passed in.
     // eslint-disable-next-line security/detect-non-literal-regexp
     const placeholder = new RegExp(
       `\\{\\{\\s*\\$json\\.display\\.${key}\\s*\\}\\}`,
@@ -49,7 +50,7 @@ export function renderTemplate(
     const raw = String(value ?? '')
     out = out.replace(placeholder, NAME_FIELDS.has(key) ? wrapIfRtl(raw) : raw)
   })
-  // Top-level fields
+  // The few gaps that are not under display
   out = out.replace(
     /\{\{\s*\$json\.roi_data\.company\s*\}\}/g,
     wrapIfRtl(String(assembled.roi_data?.company ?? '')),

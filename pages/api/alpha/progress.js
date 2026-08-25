@@ -1,13 +1,17 @@
-// POST /api/alpha/progress — the only write path into alpha_feedback.
-// alpha_feedback is RLS-locked (service-role only, no client-facing
-// policies), so every question answer and funnel flag the tour records has
-// to come through here instead of a client-side supabase.from(...) call.
+// POST /api/alpha/progress — the only way to write into the alpha feedback
+// table.
 //
-// The client sends { session_token, ...fields }. The server, not the client,
-// resolves identity: user_id from the authenticated session, invite_id from
-// that session's user_metadata (set once at invite-creation time, see
-// pages/api/admin/alpha-invites/index.js). Only whitelisted fields are ever
-// merged into the upsert — arbitrary client input never reaches the row.
+// That table is locked to the server's admin key, with no rules that let the
+// browser touch it. So every answer and every "reached this step" flag the tour
+// records has to come through here rather than straight from the browser.
+//
+// The browser sends a session id and some fields. The SERVER, not the browser,
+// works out who they are: the user from their signed-in session, and the invite
+// from that user's own account record, set once when the invite was created
+// (see pages/api/admin/alpha-invites/index.js).
+//
+// Only fields on a fixed list are ever written. Nothing else the browser sends
+// reaches the row.
 
 import { createClient, createAdminClient } from '@/src/lib/supabase-server'
 

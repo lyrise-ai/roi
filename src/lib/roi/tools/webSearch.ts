@@ -1,42 +1,43 @@
 // ─────────────────────────────────────────────────────────────────────────────
-// webSearch — the single web-search provider layer for the whole app.
+// webSearch — the one place the whole app talks to a search engine.
 //
-// Two things about this file are deliberate and were not true before LYR-221.
+// Two things here are deliberate, and neither was true before LYR-221.
 //
-// ── It fails over on the RESULT, not on the key ──────────────────────────────
+// -- It falls back on the RESULT, not on the key -----------------------------
 //
-// The previous version read:
+// The old version was:
 //
 //     if (process.env.TAVILY_API_KEY) return tavilySearch(query, maxResults)
 //     if (process.env.BRAVE_API_KEY)  return braveSearch(query, maxResults)
 //
-// which is key-presence ROUTING wearing a cascade's clothes. `tavilySearch`
-// swallows its own errors and returns an empty result set, so a Tavily 401,
-// 429 or timeout returned "no results" and Brave was never tried — even with
-// the Brave key sitting right there in the environment. The fallback existed
-// on paper and could not fire. Engines are now tried in order until one
-// returns something, and an engine that throws is the next engine's cue.
+// That picks an engine by which key exists, while looking like a fallback
+// chain. `tavilySearch` swallowed its own errors and returned an empty list, so
+// a Tavily rejection, rate limit or timeout came back as "no results" and Brave
+// was never tried — even with the Brave key sitting right there. The fallback
+// existed on paper and could never fire.
 //
-// ── There is one cascade, not two ────────────────────────────────────────────
+// Now we try each engine in order until one returns something, and an engine
+// that fails is the signal to try the next.
 //
-// `research/search.ts` used to carry its own private copy of the Tavily and
-// Brave adapters with a different timeout and a different failover rule. Two
-// implementations of one thing drift, and they had: the research copy fell
-// over correctly and this one didn't. This module owns the providers; research
-// adapts the result down to its own narrower shape.
+// -- There is one chain, not two ---------------------------------------------
 //
-// Jina (`s.jina.ai`) was a third tier here, documented as "free, no key
-// needed". It has since moved behind an API key and returns 401 to every
-// request — measured across 25 domains, 25 401s. It is removed rather than
-// left in place looking like a safety net that is really a no-op. If a free
-// last-resort tier is wanted again, add it here as an ENGINES entry; nothing
-// else has to change.
+// `research/search.ts` used to keep its own private copy of the Tavily and
+// Brave code, with a different timeout and a different fallback rule. Two
+// copies of one thing drift apart, and these had: the research copy failed over
+// correctly and this one did not. This file now owns the engines; research
+// takes the result and narrows it to what it needs.
 //
-// A caller that gets no results gets an empty list, never a synthetic one. The
-// old Jina catch block returned a fabricated "Search unavailable" row, which
-// `agent.ts` then wrote into the evidence store as a `benchmarked` fact with
-// an empty URL — an unsourced claim entering the report path, which is the
-// exact failure the research subsystem exists to prevent.
+// Jina (`s.jina.ai`) used to be a third engine here, described as "free, no key
+// needed". It has since moved behind a key and now rejects every request — 25
+// domains tested, 25 rejections. It is removed rather than left sitting there
+// looking like a safety net that does nothing. If we want a free last-resort
+// engine again, add it to ENGINES; nothing else has to change.
+//
+// A caller that gets no results gets an empty list, never a made-up one. The
+// old Jina error handler returned an invented "Search unavailable" row, which
+// `agent.ts` then filed as a benchmarked fact with an empty URL — an unsourced
+// claim walking straight into the report. That is the exact failure the
+// research subsystem exists to prevent.
 // ─────────────────────────────────────────────────────────────────────────────
 
 import { roiLog } from '@/src/lib/roi/debug'
@@ -55,9 +56,9 @@ export interface SearchResponse {
 
 const EMPTY: SearchResponse = { answer: null, results: [] }
 
-/* The research scouts run inside a 20s budget and cannot afford two 15s
-   engine attempts; the older ROI agent has no such ceiling. Callers pass what
-   they can afford rather than sharing one compromise value. */
+/* The research scouts have 20 seconds in total and cannot afford two 15-second
+   attempts. The older ROI agent has no such limit. So each caller passes what
+   it can afford, rather than everyone sharing one compromise. */
 export const DEFAULT_TIMEOUT_MS = 15_000
 
 type Engine = {
@@ -91,9 +92,9 @@ const tavily: Engine = {
       signal: AbortSignal.timeout(timeoutMs),
     })
     if (!res.ok) {
-      /* Thrown, not returned as empty: an upstream failure must reach the
-         cascade as a failure so the next engine is tried. Returning EMPTY here
-         is precisely the bug described in the header. */
+      /* We throw here rather than returning an empty list. A failure has to
+         arrive as a failure, or the next engine is never tried. Returning empty
+         is exactly the bug described at the top of this file. */
       throw new Error(`tavily HTTP ${res.status}`)
     }
     const data = await res.json()
@@ -156,8 +157,9 @@ export async function webSearch(
   maxResults = 3,
   timeoutMs = DEFAULT_TIMEOUT_MS,
 ): Promise<SearchResponse> {
-  /* No key is a miss, not an error — the same rule every research tier
-     follows, and what keeps CI and a fresh clone working unconfigured. */
+  /* Having no key is a miss, not an error. Every research step follows the same
+     rule, and it is what lets CI and a fresh checkout run with nothing set
+     up. */
   const available = ENGINES.map((engine) => ({
     engine,
     key: providerKey(engine.requiresKey),
@@ -177,9 +179,9 @@ export async function webSearch(
         )
         return response
       }
-      /* A clean empty result is still a reason to ask the next engine: the
-         engines disagree often enough on long-tail firms that the second one
-         earns its place. */
+      /* Even a clean "no results" is worth asking the next engine about. They
+         disagree often enough on smaller firms that the second one earns its
+         keep. */
       roiLog(
         'tool:web_search',
         `${engine.name} returned 0 results for query="${query.slice(0, 120)}" — trying next engine`,

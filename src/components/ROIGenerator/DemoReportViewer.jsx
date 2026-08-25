@@ -71,7 +71,8 @@ function popoverPositionFor(placement, rect) {
       left: Math.max(16, rect.left - w - gap),
     }
   }
-  // Popover inside the spotlight area, top-right corner — used for large targets
+  // A pop-up inside the highlighted area, in its top-right corner. Used when the
+  // thing being pointed at is large.
   if (placement === 'inside-top-right') {
     return {
       top: rect.top + 20,
@@ -171,7 +172,8 @@ export default function DemoReportViewer({
     },
   ]
 
-  // Load base variant on mount, then silently pre-fetch alt
+  // Load the first version straight away, then quietly fetch the second in the
+  // background
   useEffect(() => {
     let mounted = true
     trackEvent('demo_tour_started')
@@ -200,18 +202,18 @@ export default function DemoReportViewer({
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [])
 
-  // Auto-switch tabs at relevant tour steps
+  // Switch tabs automatically at the tour steps that need it
   useEffect(() => {
     if (tourStep === 2) setActiveTab('full')
     else if (tourStep <= 1) setActiveTab('exec')
   }, [tourStep])
 
-  // Scroll chat to bottom when history changes
+  // Scroll the chat to the bottom whenever a message is added
   useEffect(() => {
     messagesEndRef.current?.scrollIntoView({ behavior: 'smooth' })
   }, [chatHistory, chipLoading])
 
-  // Recompute spotlight rect whenever tour step changes
+  // Work out where the highlight goes again each time the tour moves on
   useEffect(() => {
     if (tourStep < 0 || tourStep >= TOUR_LENGTH) {
       setTourRect(null)
@@ -237,7 +239,8 @@ export default function DemoReportViewer({
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [tourStep])
 
-  // When the tour completes, open the Sentry feedback form before generating the report
+  // When the tour finishes, show the feedback form before generating the
+  // report
   useEffect(() => {
     if (tourStep !== -1 || !tourCompletedRef.current) return undefined
     tourCompletedRef.current = false
@@ -474,7 +477,8 @@ export default function DemoReportViewer({
             </button>
           </div>
 
-          {/* Disabled action buttons — visible so users know the feature exists */}
+          {/* Buttons that do nothing here, shown so people know the feature
+              exists */}
           <div ref={actionButtonsRef} style={{ display: 'flex', gap: 6 }}>
             <button
               type="button"

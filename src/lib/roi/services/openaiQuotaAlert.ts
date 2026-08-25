@@ -4,9 +4,10 @@ import { APICallError } from 'ai'
 import { notifyDevTeam } from '@/src/lib/notifyError'
 import { captureServerException, flushPostHog } from '@/src/lib/posthog-server'
 
-// OpenAI returns 429 + code "insufficient_quota" when credits run out.
-// "rate_limit_exceeded" is a different 429 — transient, not a billing crisis.
-// 402 (payment required) is the other billing surface.
+// When our OpenAI credit runs out, they refuse the request with the code
+// "insufficient_quota". A refusal marked "rate_limit_exceeded" is a different
+// thing: it passes on its own and is not a billing problem. "Payment required"
+// is the other way billing trouble shows up.
 const QUOTA_STATUS_CODES = new Set([402, 429])
 const QUOTA_SIGNAL_RE =
   /insufficient.quota|billing|credit|quota.exceeded|exceeded.your.current.quota/i
@@ -14,12 +15,12 @@ const QUOTA_SIGNAL_RE =
 export function isOpenAIQuotaError(err: unknown): boolean {
   if (!(err instanceof Error)) return false
 
-  // Direct message match for any error type
+  // Check the error text itself, whatever kind of error it is
   if (QUOTA_SIGNAL_RE.test(err.message)) return true
 
   if (APICallError.isInstance(err)) {
     if (!QUOTA_STATUS_CODES.has(err.statusCode ?? 0)) return false
-    // Rate-limit 429s that are not billing-related — skip
+    // A plain rate limit with nothing about billing in it — ignore
     if (err.statusCode === 429 && !QUOTA_SIGNAL_RE.test(err.message)) {
       const body = typeof err.responseBody === 'string' ? err.responseBody : ''
       if (!QUOTA_SIGNAL_RE.test(body)) return false
@@ -36,8 +37,8 @@ export async function alertOpenAIQuotaError(
 ): Promise<void> {
   if (!(err instanceof Error)) return
 
-  // Sentry: gives the team visibility in the Sentry dashboard and fires any
-  // configured Sentry alerts (e.g. the Sentry → Slack integration).
+  // Sentry, so the team can see it on the dashboard and any Sentry alerts fire
+  // — for example the one that posts to Slack.
   try {
     Sentry.captureException(err, {
       tags: { kind: 'openai_quota_exhausted' },
@@ -53,9 +54,9 @@ export async function alertOpenAIQuotaError(
     console.error('[openai-quota-alert] Sentry capture failed:', sentryErr)
   }
 
-  // PostHog too: this is the failure that stops every report at once, so it
-  // needs to be in the issue list that raises the Linear ticket, not only in
-  // Sentry. captureServerException never throws.
+  // PostHog as well. This is the failure that stops every report at once, so it
+  // has to appear in the list that creates the Linear ticket, not only in
+  // Sentry. This call never throws.
   captureServerException(err, {
     kind: 'openai_quota_exhausted',
     company: context?.company ?? null,
@@ -63,8 +64,9 @@ export async function alertOpenAIQuotaError(
   })
   await flushPostHog()
 
-  // Immediate email: fire without waiting on Sentry flush. A failed alert
-  // must never propagate — the goal is best-effort, not blocking the caller.
+  // Send the email straight away, without waiting for Sentry to finish. A
+  // failed alert must never be passed on to the caller: we try our best and
+  // never block.
   try {
     const statusCode = APICallError.isInstance(err)
       ? (err.statusCode ?? null)

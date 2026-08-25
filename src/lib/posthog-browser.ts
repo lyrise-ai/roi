@@ -1,23 +1,25 @@
 // ─────────────────────────────────────────────────────────────────────────────
-// posthog-browser — the browser PostHog client. Named to match
-// supabase-browser.js.
+// posthog-browser — the analytics client that runs in the browser. Named to
+// match supabase-browser.js.
 //
-// Two things this exists to solve:
+// It exists to solve two problems:
 //
-// 1. **Bundle size.** posthog-js is ~68kB of the main chunk if imported
-//    statically, on every page. The dynamic import below moves it into its own
-//    async chunk. Kicked off immediately from instrumentation-client.ts, so in
-//    practice it lands within a few hundred ms of first paint — the cost is
-//    the first moments of the session recording, not the recording.
+// 1. **Download size.** The PostHog library is about 68kB. Imported the normal
+//    way, that lands in the main bundle for every page. Loading it separately,
+//    as we do below, puts it in its own file. We start that load immediately,
+//    so in practice it arrives a few hundred milliseconds after the page
+//    appears. What that costs us is the first moment of the session recording,
+//    not the recording itself.
 //
-// 2. **The init race.** Callers (identify on auth, capture on user action) can
-//    fire before the SDK has finished loading. Guarding each call site on
-//    `__loaded` would silently drop those — an anonymous session that never
-//    gets linked to its user. Everyone awaits the same promise instead, so
-//    calls queue behind init rather than racing it.
+// 2. **Calls that arrive before it has loaded.** Identifying a user on sign-in,
+//    or recording an action, can happen before the library is ready. Checking
+//    "is it loaded yet" at each call site would quietly throw those away — and
+//    an anonymous session that never gets tied to its user is exactly what we
+//    are trying to avoid. So every caller waits on the same promise, and calls
+//    line up behind loading instead of racing it.
 //
-// Resolves to null when NEXT_PUBLIC_POSTHOG_PROJECT_TOKEN is unset, which is
-// how CI and un-opted-in dev environments stay out of the production project.
+// It gives back nothing at all when the PostHog token is unset, which is how CI
+// and any dev machine that has not opted in stay out of the real project.
 // ─────────────────────────────────────────────────────────────────────────────
 
 import type { PostHog } from 'posthog-js'
@@ -53,43 +55,46 @@ export function getPostHog(): Promise<PostHog | null> {
       posthog.init(token, {
         api_host: host,
 
-        // Lets posthog-js propagate its current distinct and session ids to
-        // this same-origin Next.js API. Server handlers may use those headers
-        // as analytics context, but must continue to authenticate separately.
+        // Lets the library pass its current person and session ids through to
+        // our own API on the same domain. Server code may use those as
+        // analytics context, but must still check who someone is
+        // separately.
         tracing_headers: [window.location.hostname],
 
-        // Pins the whole defaults bundle to a dated set rather than "whatever
-        // this SDK version thinks today", so an npm upgrade can't quietly
-        // change what we collect. Among other things this makes
-        // capture_pageview 'history_change', which is what makes Pages Router
-        // client-side navigations register — the previous init captured only
-        // the first pageview per hard load.
+        // Pins all the defaults to one dated set, rather than "whatever this
+        // version of the library thinks today". That way an npm upgrade cannot
+        // quietly change what we collect.
         //
-        // This is the value PostHog's own Next.js guide ships. Newer sets
-        // exist in the SDK's types; don't bump it without checking their
-        // changelog for what the newer set changes.
+        // Among other things, this set counts a page view every time the app
+        // moves between pages. Before it, we only counted the first page of
+        // each full browser load.
+        //
+        // This is the value PostHog's own Next.js guide uses. Newer sets exist;
+        // do not move to one without reading their changelog for what
+        // changes.
         defaults: '2026-05-30',
 
-        // Client-side exception autocapture. Sentry sees these too; PostHog is
-        // where they get triaged.
+        // Record browser errors automatically. Sentry sees them too, but
+        // PostHog is where we actually work through them.
         capture_exceptions: true,
 
         session_recording: {
-          // The privacy line for this app. Reports carry a named prospect's
-          // financials, and a replay is worthless if it can't show them — so
-          // rendered text stays visible. Everything *typed* is masked, which
-          // covers the login form and the ROI intake form.
+          // Where we draw the privacy line. Reports contain a named prospect's
+          // finances, and a session recording is useless if it cannot show
+          // them, so text on the page stays visible. Everything TYPED is
+          // hidden, which covers the login form and the intake form.
           maskAllInputs: true,
-          // Escape hatches: `ph-mask` hides an element's text, `ph-no-capture`
-          // blocks the element entirely.
+          // Two ways out: add `ph-mask` to hide an element's text, or
+          // `ph-no-capture` to leave the element out of the recording
+          // entirely.
           maskTextClass: 'ph-mask',
           blockClass: 'ph-no-capture',
         },
 
-        // The two settings that make a replay debuggable rather than just a
-        // video: what the console said, and which request was slow. The ROI
-        // pipeline logs its progress over SSE, so this replays the generation
-        // log in sync with what the user was looking at.
+        // The two settings that turn a recording into something you can debug
+        // rather than just watch: what the console said, and which request was
+        // slow. The ROI pipeline reports its progress as it goes, so this plays
+        // the generation log back in step with what the user was looking at.
         enable_recording_console_log: true,
         capture_performance: true,
       })

@@ -1,44 +1,48 @@
 // ─────────────────────────────────────────────────────────────────────────────
-// S2 — job postings (LYR-187 R3 / LYR-196). The crown jewel.
+// S2 — job postings (LYR-187 R3 / LYR-196). The best source we have.
 //
-// A job description is the only source that describes a company's work in its
-// own words, dated and verbatim. It enumerates the tasks — "reconcile 200+
-// invoices weekly", "chase outstanding documents from clients", "maintain
-// matter records in 3E". Those verbs are a direct readout of manual work.
-// Everything else the research system gathers is inference; this is testimony.
+// A job advert is the only place a company describes its own work, in its own
+// words, with a date on it. It lists the actual tasks: "reconcile 200+ invoices
+// weekly", "chase outstanding documents from clients", "maintain matter records
+// in 3E". Those are a direct read on what is being done by hand. Everything
+// else the research system collects is us working things out. This is the
+// company telling us.
 //
-// The cascade, all of it internal to this file:
+// We try four ways to find postings, in order, all inside this file:
 //
-//   L0   slug candidates  domain → up to 3 guesses          deterministic
-//   L1   direct ATS       6 platforms, public no-auth JSON   concurrent
-//   L1.5 search discovery ask where the jobs are, then fetch
-//   L2   careers page     /careers, /jobs, … via the cache
-//   →    NONE
+//   L0   guess the name   domain -> up to 3 guesses at their board name
+//   L1   hiring platforms 6 of them, public, no login needed, all at once
+//   L1.5 search           ask a search engine where the jobs are, then fetch
+//   L2   careers page     /careers, /jobs, ... through the shared page cache
+//   ->   NONE
 //
-// L1.5 exists because L0/L1/L2 all GUESS. Measured across 22 real
-// professional-services firms they produced usable postings for one of them:
-// most law and accountancy careers pages are recruitment-marketing prose with
-// no vacancy list and no links to job detail pages, and the ATS boards that do
-// exist sit on hosts nobody can guess (`{tenant}.wd5.myworkdayjobs.com`).
-// Searching first found a vacancy URL for 20 of the same 22.
+// L1.5 exists because L0, L1 and L2 are all guesses. We measured them across
+// 22 real professional-services firms and they found usable postings for ONE.
+// Most law and accountancy careers pages are marketing text with no vacancy
+// list and no links to individual jobs, and the hiring platforms that do exist
+// sit on addresses nobody could guess
+// (`{tenant}.wd5.myworkdayjobs.com`). Searching first found a real vacancy URL
+// for 20 of the same 22.
 //
-// `getJobPostings(domain, region)` is the whole public surface. Keeping the
-// cascade private is what lets Ever Jobs — the open-source aggregator that
-// covers Bayt and Naukri, deferred post-POC because it needs a container —
-// slot in as another tier without a single downstream change.
+// `getJobPostings(domain, region)` is the only thing this file exports.
+// Keeping the four steps private is what will let Ever Jobs — an open-source
+// aggregator covering Bayt and Naukri, put off until after the POC because it
+// needs a container — drop in as another step with no change anywhere else.
 //
-// Two rules, both load-bearing:
+// Two rules that everything rests on:
 //
-//   NONE is a success. A firm that genuinely isn't hiring returns NONE, not
-//   ERROR and not invented postings. Downstream then leans on the interview.
-//   This is the exact rule the old system broke, and why its output could not
-//   be trusted. The distinction is visible in the endpoints themselves: a
-//   Greenhouse board that 200s with an empty array is NONE, a board that 404s
-//   is a wrong slug and merely a miss.
+//   Finding nothing is a SUCCESS. A firm that genuinely is not hiring gives
+//   back NONE — not an error, and never invented postings. Everything
+//   downstream then leans on what the user tells us instead. This is the exact
+//   rule the old system broke, and why nobody could trust its output.
 //
-//   LinkedIn is never called, from any path. Proxycurl was shut down in July
-//   2025 after LinkedIn's federal lawsuit over unauthorised scraping. We sell
-//   to law firms; the exposure is not worth any amount of coverage.
+//   The difference is visible in the responses themselves: a Greenhouse board
+//   that answers with an empty list means "not hiring". A board that answers
+//   404 means we guessed the wrong name.
+//
+//   We never call LinkedIn, by any route. Proxycurl was shut down in July 2025
+//   after LinkedIn sued them in federal court over scraping. We sell to law
+//   firms. No amount of extra coverage is worth that risk.
 // ─────────────────────────────────────────────────────────────────────────────
 
 import { generateObject, jsonSchema } from 'ai'
@@ -71,26 +75,26 @@ export type JobPostingFact = {
   title: string
   /* What this record actually is.
 
-       'posting' — one dated, individual role. The real thing: quotable,
-                   countable, and what every downstream consumer assumes.
-       'page'    — a careers or vacancy LISTING we could read but could not
-                   break into roles. One web page, not one job.
+       'posting' — one real, dated job. Quotable, countable, and what
+                   everything downstream assumes it is getting.
+       'page'    — a careers or vacancy LIST we could read but could not split
+                   into individual jobs. One web page, not one job.
 
-     The distinction exists because collapsing it overstates what we know. 13
-     of 22 ICP firms in the coverage run reported exactly one "posting" that
-     was really a marketing page, 11 of them with no task verbs at all — and a
-     panel rendering "1 job posting" off that shows a prospect something we
-     cannot point at. Anything counting or ranking roles must filter to
-     'posting'. */
+     We keep them apart because treating them the same overstates what we know.
+     In the coverage run, 13 of 22 target firms reported exactly one "posting"
+     that was really a marketing page, and 11 of those listed no tasks at all.
+     A panel saying "1 job posting" off the back of that is showing a prospect
+     something we cannot point at. Anything that counts or ranks jobs must use
+     only 'posting'. */
   kind: 'posting' | 'page'
   postedAt?: string
   location?: string
   seniority?: string
   sourceUrl: SourceUrl
-  /* ≤200 chars, verbatim. This is what lets the observation quote rather than
-     paraphrase, which is the difference between "your postings mention
-     document review" and "your posting from 3 March lists 'chasing outstanding
-     client documents' as the first duty". */
+  /* 200 characters or fewer, word for word. This is what lets us quote instead
+     of rephrase — the difference between "your postings mention document
+     review" and "your posting from 3 March lists 'chasing outstanding client
+     documents' as the first duty". */
   excerpt: string
   taskVerbs: string[]
   namedSystems: { name: string; category: string }[]
@@ -113,9 +117,10 @@ const EMPTY_FACTS: S2Facts = {
   functionDistribution: {},
 }
 
-/* What every ATS response is reduced to before extraction, so platform quirks
-   stay inside their own adapter. `body` is the JD text — the entire value of
-   this scout — and never leaves this file unextracted. */
+/* Every hiring platform's response is cut down to this shape first, so each
+   platform's oddities stay inside its own small adapter. `body` is the advert
+   text itself — the whole value of this scout — and it never leaves this file
+   without being read first. */
 type RawPosting = {
   title: string
   body: string
@@ -128,22 +133,24 @@ type RawPosting = {
 
 const ATS_TIMEOUT_MS = 8_000
 
-/* Cap the work, not the truth. A firm with 400 open roles is real, but
-   extracting all of them costs 400 model calls for a signal that saturates
-   long before that. Newest first, so the cap keeps the most quotable ones. */
+/* Limit the work, not the truth. A firm really can have 400 open roles, but
+   reading all of them costs 400 model calls for something we already know
+   after a dozen. Newest first, so the limit keeps the most useful ones. */
 const MAX_POSTINGS_EXTRACTED = 12
 
-/* Wall-clock ceiling for the whole careers-page sweep. The orchestrator caps a
-   full run at ~30s, so one scout's fallback tier cannot be allowed to spend
-   more than a fraction of that. */
+/* A hard time limit for the whole careers-page sweep. A full research run is
+   capped at about 30 seconds, so one fallback step inside one scout cannot be
+   allowed to eat more than a slice of that. */
 const L2_BUDGET_MS = 20_000
 
-/* How many discovered pages to fetch and extract per company. Each one is a
-   cache fetch plus one extraction call, so this is the tier's cost knob. */
+/* How many found pages we fetch and read per company. Each one costs a page
+   fetch plus one model call, so this is the dial that sets what this step
+   costs. */
 const MAX_DISCOVERED_PAGES = 4
 
-/* Individual job pages followed from a listing. Each is a cache fetch plus one
-   extraction call, so this is the other half of the tier's cost knob. */
+/* How many individual job pages we follow from a list page. Each one costs a
+   page fetch plus one model call, so this is the other half of the cost
+   dial. */
 const MAX_JOB_LINKS = 6
 
 async function fetchJson(url: string): Promise<unknown | null> {
@@ -159,8 +166,8 @@ async function fetchJson(url: string): Promise<unknown | null> {
   }
 }
 
-/* Strips tags from the HTML-bodied platforms. The extraction model reads text,
-   and paying tokens for markup is paying for nothing. */
+/* Strips HTML tags from platforms that send us markup. The model reads text,
+   and paying to send it tags is paying for nothing. */
 function stripHtml(html: string): string {
   if (typeof html !== 'string') return ''
   return html
@@ -176,13 +183,14 @@ function stripHtml(html: string): string {
     .trim()
 }
 
-// ── L1 adapters ──────────────────────────────────────────────────────────────
-// Every field name below was read off a live response, not a doc page. All six
-// endpoints are public and unauthenticated for reads.
+// -- The six hiring platforms ------------------------------------------------
+// Every field name below was read off a real live response, not from a
+// documentation page. All six can be read publicly, with no login.
 //
-// Each adapter returns null for "no such board" and [] for "board exists, no
-// open roles". That difference is the whole NONE-vs-miss distinction, so it
-// must survive all the way up.
+// Each one gives back null for "no such board here" and an empty list for
+// "the board exists and has no open jobs". That difference is the whole
+// point — "not hiring" versus "we guessed wrong" — so it has to survive all
+// the way to the top.
 
 type AtsAdapter = {
   platform: string
@@ -193,8 +201,8 @@ type AtsAdapter = {
 const ATS: AtsAdapter[] = [
   {
     platform: 'greenhouse',
-    /* content=true is not optional. Without it the response is titles only,
-       and the JD body is the entire point of this scout. */
+    /* content=true is not optional. Without it we get job titles only, and
+       the advert text is the entire point of this scout. */
     url: (slug) =>
       `https://boards-api.greenhouse.io/v1/boards/${slug}/jobs?content=true`,
     parse: (body: any) => {
@@ -246,10 +254,11 @@ const ATS: AtsAdapter[] = [
   {
     platform: 'workable',
     url: (slug) => `https://apply.workable.com/api/v1/widget/accounts/${slug}`,
-    /* The envelope — {name, description, jobs} — is verified; every Workable
-       account reachable from here had an empty `jobs`, so the per-job field
-       names are read defensively rather than from a sampled response. A wrong
-       guess here degrades to a miss, never to a fabricated posting. */
+    /* The outer shape — {name, description, jobs} — is confirmed. But every
+       Workable account we could reach had an empty `jobs` list, so the field
+       names inside each job are read carefully rather than copied from a real
+       response. If we guessed one wrong we simply find nothing; we never
+       invent a posting. */
     parse: (body: any) => {
       if (!body || !Array.isArray(body.jobs)) return null
       return body.jobs.map((job: any) => ({
@@ -269,7 +278,7 @@ const ATS: AtsAdapter[] = [
   },
   {
     platform: 'recruitee',
-    /* Trailing slash matters — without it the endpoint 404s even for a real
+    /* The trailing slash matters. Without it we get a 404 even for a real
        board. */
     url: (slug) => `https://${slug}.recruitee.com/api/offers/`,
     parse: (body: any) => {
@@ -285,9 +294,9 @@ const ATS: AtsAdapter[] = [
   },
 ]
 
-/* Personio publishes XML rather than JSON, so it sits outside the JSON adapter
-   list. Parsed with a tag scan, not a DOM: the feed is flat and adding an XML
-   dependency to read six fields is not worth it. */
+/* Personio publishes XML rather than JSON, so it sits outside the list above.
+   We read it by scanning for tags rather than parsing it properly: the feed is
+   flat, and adding an XML library to read six fields is not worth it. */
 const PERSONIO_TIMEOUT_MS = ATS_TIMEOUT_MS
 
 function personioUrl(slug: string): string {
@@ -295,9 +304,9 @@ function personioUrl(slug: string): string {
 }
 
 function tagValue(block: string, tag: string): string | undefined {
-  /* Plain index scan rather than a built regex. The tags are our own literals,
-     but constructing a pattern per field per position is both slower and the
-     kind of thing that quietly becomes user-controlled later. */
+  /* A plain search rather than a built-up pattern. The tag names are our own
+     text, but building a pattern per field per position is slower, and it is
+     the kind of code that quietly starts taking user input later on. */
   const open = `<${tag}>`
   const close = `</${tag}>`
   const start = block.indexOf(open)
@@ -332,11 +341,11 @@ function parsePersonio(xml: string, slug: string): RawPosting[] | null {
 
 type BoardHit = { postings: RawPosting[]; platform: string; slug: string }
 
-/* Every candidate against every platform, all at once. Most combinations 404,
-   which is expected and cheap — these are free public endpoints and the whole
-   fan-out finishes in one round trip's worth of wall time.
-   `Promise.allSettled`, so one platform being down cannot take the sweep with
-   it. */
+/* Try every guessed name against every platform, all at the same time. Most
+   combinations come back 404, which is expected and costs nothing — these are
+   free public endpoints, and the whole spread finishes in about the time of one
+   request. We wait for all of them to settle either way, so one platform being
+   down cannot take the whole sweep with it. */
 async function runL1(
   slugs: string[],
   attempts: SourceAttempt[],
@@ -396,14 +405,14 @@ async function runL1(
     .map((r) => r.value)
 }
 
-/* L1.5 — ask where the jobs are instead of guessing.
-   Everything discovered is fetched through the shared artifact cache, so a page
+/* L1.5 — ask a search engine where the jobs are, instead of guessing.
+   Everything we find is fetched through the shared page cache, so a page
    another scout already read costs nothing, and a page that blocks a plain
-   request still gets one Firecrawl attempt.
+   request still gets one attempt through Firecrawl.
 
-   `rankHits` has already dropped LinkedIn, the scraped-content aggregators, and
-   any host that cannot be tied to this company — so nothing unattributable can
-   reach the fetch below. */
+   `rankHits` has already thrown out LinkedIn, the sites that just republish
+   other people's listings, and any domain we cannot tie to this company. So
+   nothing we cannot attribute reaches the fetch below. */
 async function runDiscovery(
   domain: string,
   vertical: string | undefined,
@@ -445,8 +454,8 @@ async function runDiscovery(
         outcome: usable ? 'hit' : 'miss',
         ms: Date.now() - fetchedAt,
       })
-      /* The search result's own title is a far better label than "Careers
-         page" — it is usually the role or the board name. */
+      /* The search result's own title is a much better label than "Careers
+         page" — it is usually the job title or the board name. */
       return usable
         ? {
             page: {
@@ -466,8 +475,8 @@ async function runDiscovery(
     links: string[]
   }[]
 
-  /* Follow the listing through to the individual roles. A board index names
-     the jobs; only the detail pages describe the work, and the work is the
+  /* Follow the list through to the individual jobs. A list page only names
+     them; only the job pages describe the actual work, and the work is the
      entire point of this scout. */
   const detailUrls = [...new Set(found.flatMap((f) => f.links))].slice(
     0,
@@ -489,15 +498,15 @@ async function runDiscovery(
   )
   const realPostings = details.filter(Boolean) as RawPosting[]
 
-  /* Prefer real roles. Fall back to the listing pages only when following them
-     produced nothing, so a firm whose board we could read is never reported as
-     having no postings at all. */
+  /* Prefer real jobs. Fall back to the list pages only if following them found
+     nothing, so a firm whose board we could read is never reported as having no
+     postings at all. */
   return realPostings.length > 0 ? realPostings : found.map((f) => f.page)
 }
 
-/* `/en/uae/jobs/legal-assistant-1100020087` → "Legal Assistant". The slug is
-   the only title available before extraction runs, and it beats a generic
-   label for anything that later quotes the role. */
+/* Turns `/en/uae/jobs/legal-assistant-1100020087` into "Legal Assistant". The
+   URL is the only job title we have before the model reads the page, and it
+   beats a generic label for anything that quotes the role later. */
 function titleFromUrl(url: string): string {
   try {
     const last = new URL(url).pathname.split('/').filter(Boolean).pop() ?? ''
@@ -513,21 +522,21 @@ function titleFromUrl(url: string): string {
   }
 }
 
-/* L2 — the tier that matters more than L1 for our actual customers. Most law
-   and accountancy firms don't run Greenhouse; they have a careers page with
-   three roles in plain HTML. This catches exactly the firms L1 misses, and it
-   works identically in the GCC where ATS adoption is thinnest.
-   Routed through the shared artifact cache, so a page S1 or S3 already read
+/* L2 — the step that matters more than L1 for our actual customers. Most law
+   and accountancy firms do not use Greenhouse; they have a careers page with
+   three jobs in plain HTML. This catches exactly the firms L1 misses, and it
+   works just as well in the Gulf, where hiring platforms are least used.
+   It goes through the shared page cache, so a page another scout already read
    costs nothing here. */
 async function runL2(
   domain: string,
   attempts: SourceAttempt[],
 ): Promise<{ text: string; url: string } | null> {
-  /* Sequential, so a firm whose /careers works never costs five fetches — but
-     bounded, because sequential and unbounded is how one company took 153
-     seconds in the first live run. Paths are tried in priority order until the
-     budget is gone, and running out is recorded as a miss rather than passed
-     off as "no careers page". */
+  /* One at a time, so a firm whose /careers page works never costs five
+     fetches. But with a time limit, because one at a time with no limit is how
+     a single company took 153 seconds in the first live run. We try the paths
+     in order until the time is gone, and running out is recorded as "we did not
+     get to look", never as "they have no careers page". */
   const deadline = Date.now() + L2_BUDGET_MS
 
   for (const path of CAREERS_PATHS) {
@@ -540,9 +549,10 @@ async function runL2(
       const artifact = await getArtifact(url)
       const text = artifact ? stripHtml(artifact.content) : ''
 
-      /* A careers page that renders but says almost nothing is a page we read,
-         not a page we found jobs on. The threshold keeps a nav-only shell or a
-         soft-404 from being mistaken for content. */
+      /* A careers page that loads but says almost nothing is a page we read,
+         not a page we found jobs on. This length check stops a menu-only shell,
+         or a "not found" page that returns 200, from being mistaken for real
+         content. */
       const usable = text.length > 400
       attempts.push({
         source: `careers${path}`,
@@ -555,23 +565,23 @@ async function runL2(
   return null
 }
 
-// ── Extraction ───────────────────────────────────────────────────────────────
-// Raw JD bodies never travel downstream. A cheap model turns each posting into
-// typed fields — this runs once per posting per company, so a frontier model
-// here would be indefensible.
+// -- Reading the adverts -----------------------------------------------------
+// The raw advert text never goes any further than this file. A cheap model
+// turns each posting into a few clean fields. This runs once per posting per
+// company, so using an expensive model here would be impossible to justify.
 
 const EXTRACTION_SCHEMA = {
   type: 'object',
   additionalProperties: false,
-  /* Every property must appear in `required`. OpenAI's structured-output mode
-     rejects a schema with `additionalProperties: false` and an optional key —
-     it returns "'required' is required to be supplied and to be an array
-     including every key in properties", and the call fails outright. An
-     optional field is therefore expressed as a nullable required one, which is
-     the shape OpenAI documents for exactly this case.
-     This was not theoretical: with `seniority` merely absent from `required`,
-     every extraction call in the first live run failed and every company came
-     back with no task verbs at all. */
+  /* Every field has to be listed as required. OpenAI's structured-answer mode
+     refuses a shape that forbids extra fields but leaves one optional — it
+     answers "'required' is required to be supplied and to be an array
+     including every key in properties" and the call fails outright. So a field
+     that may be missing is written as required-but-allowed-to-be-null, which is
+     the form OpenAI documents for exactly this case.
+     This is not theory: with `seniority` simply left out of the required list,
+     every single call in the first live run failed, and every company came back
+     with no tasks at all. */
   required: [
     'taskVerbs',
     'namedSystems',
@@ -646,9 +656,10 @@ async function extractPosting(
   raw: RawPosting,
   verifiedUrl: SourceUrl,
 ): Promise<JobPostingFact | null> {
-  /* A posting with no body still counts as a posting — the title and date are
-     real and quotable — it just yields no verbs. Skipping the model call here
-     is both cheaper and more honest than asking it to read nothing. */
+  /* A posting with no text still counts as a posting: the title and date are
+     real and quotable. It just tells us nothing about the tasks. Skipping the
+     model call is cheaper and more honest than asking it to read an empty
+     page. */
   const body = raw.body.slice(0, 12_000)
   if (body.length < 80) {
     return {
@@ -679,9 +690,9 @@ async function extractPosting(
       statedVolumes?: string[]
     }
 
-    /* The excerpt is only worth having if it is genuinely verbatim, so it is
-       checked against the body rather than trusted. A model that paraphrased
-       loses the quote and keeps the posting. */
+    /* A quote is only worth having if it really is word for word, so we check
+       it against the original text rather than trusting it. If the model
+       rephrased, we drop the quote and keep the posting. */
     const claimed = (out.excerpt ?? '').trim()
     const verbatim =
       claimed !== '' && body.includes(claimed) ? claimed : raw.title
@@ -700,10 +711,10 @@ async function extractPosting(
       statedVolumes: Array.isArray(out.statedVolumes) ? out.statedVolumes : [],
     }
   } catch (error) {
-    /* Extraction failing loses the verbs, not the posting. Logged under
-       ROI_DEBUG because a silent fallback here looks identical to a company
-       whose postings genuinely describe no manual work, and those two need to
-       be distinguishable when the coverage test says verbs are thin. */
+    /* If reading the advert fails we lose the task list, not the posting. We
+       log it under ROI_DEBUG, because failing quietly here looks exactly like a
+       company whose adverts genuinely describe no manual work — and we need to
+       tell those two apart when the coverage test says the tasks look thin. */
     if (process.env.ROI_DEBUG) {
       console.error(
         `[S2] extraction failed for "${raw.title}": ${error?.message ?? error}`,
@@ -732,8 +743,8 @@ function newestFirst(a: RawPosting, b: RawPosting): number {
 function buildFacts(postings: JobPostingFact[], boardUrl: SourceUrl): S2Facts {
   const retrievedAt = new Date().toISOString()
 
-  /* Rankings are Facts in their own right, and their source is the board they
-     were counted from — a reader can open it and count again. */
+  /* A ranking is a fact in its own right, and its source is the board we
+     counted it from — a reader can open it and count again. */
   const topTaskVerbs = rankTaskVerbs(postings)
     .map(({ verb }) =>
       fact(verb, {
@@ -768,16 +779,16 @@ function buildFacts(postings: JobPostingFact[], boardUrl: SourceUrl): S2Facts {
   }
 }
 
-/* The scout's entire public surface. `region` is accepted because S1 gates on
-   it and a later tier (Ever Jobs, Bayt, Naukri) will route on it; the current
-   cascade is region-independent, and pretending otherwise would be worse than
-   taking the argument and saying so. */
+/* The only function this file exports. It takes `region` because S1 uses it,
+   and because a later step (Ever Jobs, Bayt, Naukri) will need it. Nothing in
+   the current steps looks at it. Taking the argument and saying so plainly
+   beats pretending otherwise. */
 export async function getJobPostings(
   domainInput: string,
   region?: Region,
   vertical?: string,
-  /* Both from S1, both optional — see `runDiscovery`. Absent means this scout
-     behaves exactly as it did before LYR-221. */
+  /* Both come from S1 and both may be missing — see `runDiscovery`. Without
+     them this scout behaves exactly as it did before LYR-221. */
   companyName?: string,
   canonicalDomain?: string,
 ): Promise<ScoutResult<S2Facts>> {
@@ -806,8 +817,9 @@ export async function getJobPostings(
   const withRoles = hits.filter((hit) => hit.postings.length > 0)
 
   if (withRoles.length > 0) {
-    /* Several boards can answer for one firm — an old Lever board alongside a
-       live Greenhouse one. Take the richest rather than the first to reply. */
+    /* More than one board can answer for the same firm — an abandoned Lever
+       board next to a live Greenhouse one. Take the one with the most on it,
+       not the one that replied first. */
     const best = withRoles.sort(
       (a, b) => b.postings.length - a.postings.length,
     )[0]
@@ -816,9 +828,9 @@ export async function getJobPostings(
       ATS.find((a) => a.platform === best.platform)?.url(best.slug) ??
       personioUrl(best.slug)
   } else if (hits.length > 0) {
-    /* A board exists and is empty. That is the company telling us it isn't
-       hiring, which is a finding — and the one case the old system turned into
-       invention. */
+    /* The board exists and is empty. That is the company telling us it is not
+       hiring, which is a real finding — and it is the exact case the old system
+       used to turn into invented postings. */
     notes.push(
       `${hits.map((h) => h.platform).join(', ')} board found with no open roles`,
     )
@@ -838,9 +850,10 @@ export async function getJobPostings(
   if (raw.length === 0) {
     const careers = await runL2(domain, sourcesAttempted)
     if (careers) {
-      /* One page, many roles: the page becomes a single pseudo-posting and the
-         extraction model reads the duties off it. Less precise than an ATS
-         record, and marked as such by carrying the page's own URL. */
+      /* One page holding many jobs: we treat the page as a single stand-in
+         posting and let the model read the duties off it. Less precise than a
+         real record from a hiring platform, and marked as such by carrying the
+         page's own URL. */
       raw = [
         {
           kind: 'page',
@@ -856,8 +869,9 @@ export async function getJobPostings(
   const verifiedBoard = boardUrl ? sourceUrl(boardUrl) : null
 
   if (raw.length === 0 || !verifiedBoard) {
-    /* Nothing anywhere. NONE when we successfully looked and the company has
-       no postings; ERROR only when every attempt failed to complete. */
+    /* Nothing anywhere. That is NONE when we managed to look and the company
+       has no postings, and ERROR only when every single attempt failed to
+       finish. */
     const looked = sourcesAttempted.some((a) => a.outcome !== 'error')
     return {
       scout: 'S2',
@@ -899,10 +913,10 @@ export async function getJobPostings(
 
   const facts = buildFacts(postings, verifiedBoard)
 
-  /* FULL means we got postings with real duty signal out of them. PARTIAL
-     means postings exist but the verbs didn't survive — a title-only board, or
-     extraction that came back empty. Both are honest; only the first supports
-     a quoted observation. */
+  /* FULL means we got postings and could read real duties out of them.
+     PARTIAL means the postings exist but the duties did not survive — a board
+     with titles only, or a read that came back empty. Both are honest answers;
+     only the first lets us quote anything back to the prospect. */
   const status: ScoutStatus =
     facts.topTaskVerbs.length > 0 || facts.namedSystems.length > 0
       ? 'FULL'
@@ -914,8 +928,8 @@ export async function getJobPostings(
     facts,
     sourcesAttempted,
     durationMs: Date.now() - startedAt,
-    /* gpt-4o-mini, one call per extracted posting. Priced by the caller's
-       usage tracker rather than guessed at here. */
+    /* gpt-4o-mini, one call per posting read. The caller's usage tracker works
+       out what it cost; we do not guess at it here. */
     costUsd: 0,
     ...(notes.length ? { notes: notes.join('; ') } : {}),
   }

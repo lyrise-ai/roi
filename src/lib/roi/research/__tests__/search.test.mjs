@@ -1,10 +1,11 @@
-// Tests for search discovery and, mostly, for its identity guards
-// (LYR-187 R9 / LYR-212).
+// Tests for finding job pages by search, and mostly for the checks that stop us
+// using the wrong company's pages (LYR-187 R9 / LYR-212).
 //
-// A search result is a GUESS about identity. Acting on the wrong one is worse
-// than finding nothing: it attaches another company's job postings to this
-// prospect and states them as fact, with a working source link. Every pair
-// asserted below was observed in the real measurement run against 22 firms.
+// A search result is a GUESS about who a page belongs to. Acting on a wrong
+// guess is worse than finding nothing: it attaches another company's job
+// postings to this prospect and states them as fact, with a working link
+// underneath. Every pair checked below actually happened in the measurement run
+// against 22 firms.
 //
 //   Run:  node --test src/lib/roi/research/__tests__/search.test.mjs
 //
@@ -53,7 +54,7 @@ afterEach(() => {
   globalThis.fetch = realFetch
 })
 
-// ── the wrong-company guard ──────────────────────────────────────────────────
+// -- the check that keeps other companies out --------------------------------
 
 test('a different company on a shared ATS host is rejected', () => {
   /* Observed: searching for stalawfirm.com returned Simpson Thacher &

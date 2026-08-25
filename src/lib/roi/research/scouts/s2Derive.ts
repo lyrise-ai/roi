@@ -1,25 +1,26 @@
 // ─────────────────────────────────────────────────────────────────────────────
-// s2Derive — the deterministic core of the job-postings scout (LYR-187 R3 /
+// s2Derive — the counting half of the job-postings scout (LYR-187 R3 /
 // LYR-196).
 //
-// Pure functions: no I/O, no LLM. The extraction model turns a job description
-// into typed fields, and everything computed *from* those fields lives here —
-// counts, rankings, set differences. R4 of the parent card is explicit that an
-// LLM must never compute a ratio, because an LLM computing a ratio is
-// untestable and drifts between runs.
+// Plain functions: no network, no model calls. The model turns a job advert
+// into clean fields, and everything worked out FROM those fields lives here —
+// counting, ranking, comparing. R4 of the parent card says plainly that a model
+// must never work out a ratio, because you cannot test it and it changes
+// between runs.
 //
-// The distinction that matters: "this posting mentions chasing documents" is a
-// reading, and the model does it. "Three of their last five postings mention
-// chasing documents" is arithmetic, and this file does it.
+// The line that matters: "this posting mentions chasing documents" is reading,
+// and the model does that. "Three of their last five postings mention chasing
+// documents" is arithmetic, and this file does that.
 // ─────────────────────────────────────────────────────────────────────────────
 
-/* Second-level public suffixes we actually meet, so `acmelaw.co.uk` yields the
-   slug `acmelaw` rather than `co`. Not a full public-suffix list: this is a
-   slug guesser, and a wrong guess costs one 404 against a free endpoint. */
+/* The two-part domain endings we actually run into, so `acmelaw.co.uk` gives us
+   `acmelaw` rather than `co`. This is not the full official list of them: we
+   are only guessing a board name, and a wrong guess costs one failed request
+   against a free endpoint. */
 const SECOND_LEVEL = new Set(['co', 'com', 'org', 'net', 'gov', 'ac', 'edu'])
 
-/* Legal-entity and descriptor suffixes that appear in a domain but usually not
-   in the ATS board slug — `acmelawllp.com` is nearly always `acmelaw`. */
+/* Company-form and filler endings that appear in a domain but usually not in
+   the hiring board's name — `acmelawllp.com` is nearly always `acmelaw`. */
 const TRIM_SUFFIXES = [
   'llp',
   'llc',
@@ -58,20 +59,21 @@ export function baseLabel(domain: string): string | null {
   return labels[index] ?? null
 }
 
-/* L0 of the cascade. Real ATS slugs vary — `acmelaw.com` might be registered
-   as `acmelaw`, `acme-law` or `acmelawgroup` — so we try a handful rather than
-   one. Deterministic and free: every candidate is a 404 against a public
-   endpoint at worst, and generating them costs nothing.
-   Ordered most to least likely, deduped, capped at three so a long domain
-   can't fan out into a dozen requests per platform. */
+/* The first step: guess the board name. Real ones vary — `acmelaw.com` might be
+   registered as `acmelaw`, `acme-law` or `acmelawgroup` — so we try a few
+   rather than one. It is plain code and it is free: at worst each guess is one
+   failed request against a public endpoint, and making the guesses costs
+   nothing.
+   Sorted most likely first, duplicates removed, capped at three so a long
+   domain cannot turn into a dozen requests per platform. */
 export function slugCandidates(domain: string): string[] {
   const base = baseLabel(domain)
   if (!base) return []
 
   const candidates: string[] = [base]
 
-  /* Hyphens are the single most common difference between a domain and its
-     board slug, in both directions. */
+  /* A hyphen is the single most common difference between a domain and its
+     board name, in both directions. */
   if (base.includes('-')) candidates.push(base.replace(/-/g, ''))
 
   for (const suffix of TRIM_SUFFIXES) {
@@ -84,8 +86,9 @@ export function slugCandidates(domain: string): string[] {
   return [...new Set(candidates.filter((c) => c.length >= 2))].slice(0, 3)
 }
 
-/* L2's target pages, in the order worth trying. Most small professional
-   services firms have exactly one of these and nothing resembling an ATS. */
+/* The careers pages we try, in the order worth trying them. Most small
+   professional-services firms have exactly one of these and nothing resembling
+   a hiring platform. */
 export const CAREERS_PATHS = [
   '/careers',
   '/jobs',
@@ -94,10 +97,10 @@ export const CAREERS_PATHS = [
   '/about/careers',
 ]
 
-/* Rough function buckets from a job title. Deliberately coarse: the point is
-   "where is this firm adding people", not an org chart. Order matters — the
-   first bucket whose keyword appears wins, so specific titles sit above
-   generic ones. */
+/* Sorts a job title into a rough department. Deliberately rough: the question
+   is "where is this firm adding people", not what their org chart looks like.
+   Order matters — the first match wins, so specific titles sit above general
+   ones. */
 const FUNCTION_KEYWORDS: { fn: string; keywords: string[] }[] = [
   {
     fn: 'finance',
@@ -186,10 +189,10 @@ export function functionForTitle(title: string): string {
   return 'other'
 }
 
-/* Strips seniority, location and req-number noise so "Senior Paralegal (Dubai)"
-   and "Paralegal - 2 positions" collapse to the same role. Without this, a firm
-   re-posting the same job reads as two different jobs and the turnover signal
-   disappears. */
+/* Strips out seniority, location and reference numbers, so "Senior Paralegal
+   (Dubai)" and "Paralegal - 2 positions" come down to the same role. Without
+   this, a firm re-advertising the same job looks like two different jobs, and
+   the sign that people keep leaving disappears. */
 export function normalizeRole(title: string): string {
   if (typeof title !== 'string') return ''
   return title
@@ -209,26 +212,25 @@ export function normalizeRole(title: string): string {
     .replace(/\s+/g, ' ')
 }
 
-/* Verbs that appear in every job description ever written. They describe
-   seniority, judgement or ambition rather than repetition, so they say nothing
-   about how the work is actually done — and an observation built on them
-   ("your postings mention driving outcomes") is exactly the generic output the
-   redesign exists to kill.
+/* Verbs that appear in every job advert ever written. They describe seniority,
+   judgement or ambition rather than repeated work, so they tell us nothing
+   about how the job is actually done. A sentence built on them — "your postings
+   mention driving outcomes" — is exactly the generic output this redesign
+   exists to kill.
 
-   The extraction prompt already asks the model to skip these. It does not
-   reliably comply: across a live run, gpt-4o-mini returned "lead", "drive",
-   "build" and "partner" for senior roles even when told not to, because a
-   posting with no clerical duties still leaves it feeling obliged to fill the
-   array. So the prompt asks and this set enforces. A set difference is
-   deterministic, testable and cannot drift between runs — which is exactly the
-   kind of work R4 of the parent card says belongs in code rather than in a
-   model.
+   The prompt already asks the model to skip these. It does not reliably obey:
+   in a live run, gpt-4o-mini returned "lead", "drive", "build" and "partner"
+   for senior roles even when told not to, because a posting with no clerical
+   duties still leaves it feeling it has to fill the list in. So the prompt
+   asks, and this list enforces. Removing a fixed set of words is exact,
+   testable and cannot change between runs — which is exactly the kind of work
+   R4 of the parent card says belongs in code, not in a model.
 
-   Note this is an English stoplist. A Dutch posting returns Dutch verbs and
-   passes straight through; the ICP is GCC, UK and US, so that is a known
-   ceiling rather than a bug.
-   ponytail: single-language stoplist, revisit if R8 finds non-English boards
-   in the ICP. */
+   Note this list is English only. A Dutch posting returns Dutch verbs and
+   passes straight through. Our customers are in the Gulf, the UK and the US, so
+   that is a known limit rather than a bug.
+   ponytail: one language only, revisit if R8 finds non-English boards among our
+   customers. */
 export const GENERIC_VERBS = new Set([
   'assist',
   'build',
@@ -270,9 +272,9 @@ export const GENERIC_VERBS = new Set([
   'work',
 ])
 
-/* Normalises and drops the generic ones. Gerunds are folded to base form so
-   "chasing" and "chase" rank as one verb — the extraction prompt asks for base
-   forms, and this makes it true rather than hoped for. */
+/* Tidies the verbs and drops the generic ones. "Chasing" is folded to "chase"
+   so the two rank as one verb. The prompt asks for the plain form; this makes
+   it actually true rather than something we hope for. */
 export function filterTaskVerbs(verbs: unknown): string[] {
   if (!Array.isArray(verbs)) return []
   const out: string[] = []
@@ -285,16 +287,16 @@ export function filterTaskVerbs(verbs: unknown): string[] {
   return out
 }
 
-/* Below this, two postings of the same role are concurrent vacancies rather
-   than a role being refilled. Two weeks is comfortably shorter than any real
-   hire-and-leave cycle and comfortably longer than a batch of roles posted
-   across a few days. */
+/* Closer together than this, two adverts for the same role are two open seats
+   at once, not the same seat being refilled. Two weeks is comfortably shorter
+   than any real hire-and-leave cycle, and comfortably longer than a batch of
+   roles posted over a few days. */
 const MIN_REPEAT_GAP_DAYS = 14
 
-/* Drops listing pages. Verbs and named systems read off a careers page are
-   still real and still quotable, so `rankTaskVerbs` and `rankNamedSystems`
-   deliberately keep them — it is only the ROLE-shaped derivations, which
-   assume one entry is one job, that must not count a page. */
+/* Removes list pages. Tasks and system names read off a careers page are still
+   real and still quotable, so the ranking functions deliberately keep them.
+   It is only the counts that treat one entry as one job that must not count a
+   page. */
 export function realPostings<T extends { kind?: 'posting' | 'page' }>(
   postings: T[],
 ): T[] {
@@ -305,23 +307,24 @@ export function realPostings<T extends { kind?: 'posting' | 'page' }>(
 
 export type CountedPosting = {
   title: string
-  /* 'page' entries are a careers or listing page we could read but not split
-     into roles. Every derivation below assumes one entry is one role, so they
-     are filtered out rather than counted — a single entry called "Careers
-     page" would otherwise be a role with a turnover history and a function. */
+  /* A 'page' entry is a careers or list page we could read but could not split
+     into individual jobs. Everything below assumes one entry is one job, so
+     these are filtered out rather than counted. Otherwise a single entry called
+     "Careers page" would end up looking like a job with its own department and
+     hiring history. */
   kind?: 'posting' | 'page'
   postedAt?: string
   taskVerbs?: string[]
   namedSystems?: { name: string; category: string }[]
 }
 
-/* A turnover proxy: the same role advertised 2+ times inside twelve months
-   suggests the work grinds people down. It is one of the strongest observations
-   available, and it is pure counting — which is exactly why it must not be a
-   model's opinion.
+/* A stand-in for staff turnover: the same job advertised twice or more within
+   twelve months suggests the work wears people down. It is one of the strongest
+   things we can say, and it is pure counting — which is exactly why it must not
+   be a model's opinion.
 
-   `months` is the span between the first and last posting of that role, so a
-   reader can say "twice in five months" rather than the vaguer "twice". */
+   `months` is the gap between the first and last advert for that role, so we
+   can say "twice in five months" rather than just "twice". */
 export function repeatPostings(
   postings: CountedPosting[],
 ): { role: string; count: number; months: number }[] {
@@ -334,8 +337,8 @@ export function repeatPostings(
     if (role !== '') {
       const entry = byRole.get(role) ?? { title: posting.title, dates: [] }
       const at = posting.postedAt ? Date.parse(posting.postedAt) : NaN
-      /* An undated posting cannot contribute to a twelve-month window, so it
-         is kept as a role but never as evidence of repetition. */
+      /* A posting with no date cannot help with a twelve-month window, so we
+         keep it as a job but never count it as a repeat. */
       if (Number.isFinite(at)) entry.dates.push(at)
       byRole.set(role, entry)
     }
@@ -348,12 +351,12 @@ export function repeatPostings(
       const spanMs = dates[dates.length - 1] - dates[0]
       const months = Math.round(spanMs / (30 * 24 * 60 * 60 * 1000))
       const days = spanMs / (24 * 60 * 60 * 1000)
-      /* Only within twelve months, and only if the postings are actually
-         spread out. Two postings three years apart is a firm that grew; two on
-         the same day is a firm filling two seats at once. Neither is churn.
-         bakertilly.com produced exactly the second case on a live run —
-         "consultant it advisory" twice with months: 0 — which would have read
-         as a turnover signal when it is just a double vacancy. */
+      /* Only within twelve months, and only if the two adverts are actually
+         spread apart. Two adverts three years apart is a firm that grew; two on
+         the same day is a firm filling two seats at once. Neither is turnover.
+         bakertilly.com produced exactly the second case in a live run —
+         "consultant it advisory" twice, zero months apart — which would have
+         read as turnover when it was simply two open seats. */
       if (months <= 12 && days >= MIN_REPEAT_GAP_DAYS) {
         out.push({ role, count: dates.length, months })
       }
@@ -375,10 +378,10 @@ export function functionDistribution(
   return out
 }
 
-/* Ranks the verbs the postings actually used, most frequent first. Ties break
-   alphabetically so the output is stable between runs — an unstable ranking
-   makes the eval harness useless and makes two reports for the same company
-   disagree for no reason. */
+/* Ranks the task words the postings actually used, most common first. Ties are
+   broken alphabetically so the order never changes between runs. An unstable
+   order makes the eval harness useless and makes two reports for the same
+   company disagree for no reason. */
 export function rankTaskVerbs(
   postings: CountedPosting[],
 ): { verb: string; count: number }[] {
@@ -386,8 +389,9 @@ export function rankTaskVerbs(
   if (!Array.isArray(postings)) return []
 
   for (const posting of postings) {
-    /* Per posting, not per mention: a JD repeating "chase" six times is one
-       posting that cares about chasing, not six signals. */
+    /* Counted once per posting, not once per mention. An advert that says
+       "chase" six times is one job that involves chasing, not six separate
+       pieces of evidence. */
     const seen = new Set<string>()
     for (const verb of filterTaskVerbs(posting?.taskVerbs)) {
       if (!seen.has(verb)) {
@@ -402,8 +406,9 @@ export function rankTaskVerbs(
     .sort((a, b) => b.count - a.count || a.verb.localeCompare(b.verb))
 }
 
-/* Same shape for named systems, keyed on the system name so "3E" and "3e"
-   don't split. Keeps the first-seen spelling and category for display. */
+/* The same again for the software the postings name, matched without regard to
+   capitalisation so "3E" and "3e" do not become two entries. We keep the first
+   spelling we saw, and its category, for display. */
 export function rankNamedSystems(
   postings: CountedPosting[],
 ): { name: string; category: string; count: number }[] {

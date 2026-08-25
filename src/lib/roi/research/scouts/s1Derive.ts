@@ -1,25 +1,26 @@
 // ─────────────────────────────────────────────────────────────────────────────
-// s1Derive — the deterministic core of the pre-flight scout (LYR-187 R2 /
+// s1Derive — the decision-making half of the first scout (LYR-187 R2 /
 // LYR-195).
 //
-// Pure functions only: no I/O, no provider objects, no LLM. Everything S1 has
-// to *decide* rather than *read* lives here, so it can be unit tested against
-// known inputs instead of against a live API. R4 of the parent card — ratios,
-// counts and set differences are code — starts at this file.
+// Plain functions only. No network, no provider objects, no model calls.
+// Everything S1 has to DECIDE, rather than simply read, lives here, so it can
+// be tested against known inputs instead of against a live API. R4 of the
+// parent card — counts and comparisons are code, not model output — starts in
+// this file.
 //
-// Every function returns null rather than a guess when the input doesn't
-// support an answer. A wrong country routes every downstream scout at the
-// wrong sources, which is worse than an honest 'OTHER'.
+// Every function returns nothing rather than a guess when the input does not
+// support an answer. A wrong country sends every other scout to the wrong
+// sources, which is worse than honestly saying "unknown".
 // ─────────────────────────────────────────────────────────────────────────────
 
 import { companyToken, slugMatchesCompany } from '../search'
 
 export type Region = 'US' | 'UK' | 'EU' | 'GCC' | 'OTHER'
 
-/* Strips a user-typed website down to a bare registrable hostname.
-   "https://WWW.AcmeLaw.com/about?x=1" → "acmelaw.com". Returns null for
-   anything that isn't plausibly a domain, so a typo fails loudly at the top of
-   the scout rather than becoming a fetch of a nonsense URL. */
+/* Cuts whatever the user typed down to a plain domain.
+   "https://WWW.AcmeLaw.com/about?x=1" becomes "acmelaw.com". Returns nothing
+   for anything that could not be a domain, so a typo fails at the top of the
+   scout rather than turning into a request for a nonsense address. */
 export function normalizeDomain(input: string): string | null {
   if (typeof input !== 'string') return null
   let value = input.trim().toLowerCase()
@@ -31,11 +32,11 @@ export function normalizeDomain(input: string): string | null {
   value = value.split('@').pop()
   value = value.split(':')[0]
 
-  /* Validated label by label rather than with one regex over the whole name.
-     The obvious pattern for this — a quantified group of quantified groups —
-     backtracks catastrophically on a long hostile string, and this function
-     sits on a trust boundary: `domainInput` is whatever the prospect typed.
-     Splitting first makes the check linear and unfoolable. */
+  /* Checked piece by piece rather than with one big pattern over the whole
+     name. The obvious pattern for this can take exponentially long on a long
+     hostile string, and this function sits on the boundary where outside input
+     comes in: the domain is whatever the prospect typed. Splitting it first
+     makes the check fast and impossible to trip up. */
   if (value.length > 253) return null
   const labels = value.split('.')
   if (labels.length < 2) return null
@@ -53,12 +54,12 @@ function isValidLabel(label: string): boolean {
   return true
 }
 
-/* ccTLD → ISO 3166-1 alpha-2. Only the countries we actually route on: the
-   GCC (the deliberately over-weighted segment in the coverage test), the
-   US/UK/EU core, and the handful of others that show up in professional
-   services. A ccTLD is strong evidence of country but not proof — a UK firm
-   can sit on a .com — so callers treat this as medium confidence and let a
-   real enrichment record override it. */
+/* Domain endings mapped to country codes. Only the countries we actually route
+   on: the Gulf (deliberately over-represented in the coverage test), the US, UK
+   and EU core, and the handful of others that turn up in professional services.
+   A country domain ending is strong evidence but not proof — a UK firm can sit
+   on a .com — so callers treat it as medium confidence and let a real data
+   provider overrule it. */
 const TLD_COUNTRY: Record<string, string> = {
   ae: 'AE',
   sa: 'SA',
@@ -99,9 +100,9 @@ const TLD_COUNTRY: Record<string, string> = {
   no: 'NO',
 }
 
-/* Generic TLDs carry no country signal at all. Returning null for these is the
-   point: it sends the caller to the page text instead of letting ".com" quietly
-   mean "American", which would misroute most of the GCC book. */
+/* Endings like .com say nothing about country. Returning nothing for these is
+   the point: it sends the caller to read the page instead of letting ".com"
+   quietly mean "American", which would misroute most of our Gulf pipeline. */
 const GENERIC_TLDS = new Set([
   'com',
   'org',
@@ -129,8 +130,8 @@ export function countryFromDomain(domain: string): string | null {
   const labels = normalized.split('.')
   const tld = labels[labels.length - 1]
 
-  /* Second-level ccTLDs — co.uk, com.sa, ae.org and friends. The country lives
-     one label further left than usual. */
+  /* Two-part endings like co.uk, com.sa and ae.org. The country sits one step
+     further left than usual. */
   if (labels.length >= 3 && GENERIC_TLDS.has(labels[labels.length - 2])) {
     const mapped = TLD_COUNTRY[tld]
     if (mapped) return mapped
@@ -171,9 +172,10 @@ const EU = new Set([
   'SE',
 ])
 
-/* The routing decision every other scout depends on. 'OTHER' is a real answer,
-   not a failure: it means "use default sources and mark confidence low", which
-   is what the card asks for when country is undeterminable. */
+/* The decision every other scout depends on. 'OTHER' is a real answer, not a
+   failure. It means "use the default sources and mark our confidence low",
+   which is exactly what the card asks for when the country cannot be worked
+   out. */
 export function regionForCountry(country: string | null): Region {
   if (!country) return 'OTHER'
   const code = country.trim().toUpperCase()
@@ -184,9 +186,9 @@ export function regionForCountry(country: string | null): Region {
   return 'OTHER'
 }
 
-/* The bands the enrichment providers already use (PDL's `size` field is
-   exactly this vocabulary), so a provider band passes through untouched and a
-   raw headcount lands in the same buckets. One vocabulary downstream. */
+/* The size bands the data providers already use — PDL's `size` field is exactly
+   this wording — so a band from a provider passes through untouched, and a raw
+   staff count lands in the same buckets. One set of words downstream. */
 const SIZE_BANDS: { max: number; band: string }[] = [
   { max: 10, band: '1-10' },
   { max: 50, band: '11-50' },
@@ -208,8 +210,8 @@ export function sizeBandForHeadcount(headcount: number): string | null {
   return '10001+'
 }
 
-/* Providers spell their bands inconsistently — "11-50", "11 - 50", "11to50".
-   Anything that doesn't reduce to a known band is dropped rather than coerced
+/* Providers write their bands inconsistently: "11-50", "11 - 50", "11to50".
+   Anything that does not come down to a band we know is dropped, never forced
    into the nearest one. */
 export function normalizeSizeBand(raw: string): string | null {
   if (typeof raw !== 'string') return null
@@ -224,14 +226,14 @@ export function normalizeSizeBand(raw: string): string | null {
   return match ?? null
 }
 
-/* ICP-first vocabulary. The order matters: the first vertical with a keyword
-   hit wins, so the more specific terms sit above the general ones — a firm
-   describing both "practice areas" and "advisory" is a law firm that also
-   advises, not a consultancy.
+/* Words that identify each kind of business, our target customers first. The
+   order matters: the first match wins, so the more specific words sit above the
+   general ones. A firm that says both "practice areas" and "advisory" is a law
+   firm that also advises, not a consultancy.
 
-   These feed S3's extraction vocabulary as well as S2's source choice, which
-   is why a wrong answer is expensive: hunting a law firm's site for "service
-   lines" instead of "practice areas" returns vague extraction. */
+   These decide both what S3 looks for and where S2 looks, which is why a wrong
+   answer is expensive: searching a law firm's site for "service lines" instead
+   of "practice areas" brings back vague results. */
 const VERTICAL_KEYWORDS: { vertical: string; keywords: string[] }[] = [
   {
     vertical: 'legal',
@@ -338,8 +340,8 @@ const VERTICAL_KEYWORDS: { vertical: string; keywords: string[] }[] = [
   },
 ]
 
-/* Keyword match, not inference. If the text doesn't say it, we don't know it —
-   which is a supported answer, and the interview asks instead. */
+/* A keyword match, not a guess. If the text does not say it, we do not know it
+   — which is a perfectly good answer, and the questions ask instead. */
 export function verticalFromText(text: string): string | null {
   if (typeof text !== 'string' || text.trim() === '') return null
   const haystack = text.toLowerCase()
@@ -349,9 +351,10 @@ export function verticalFromText(text: string): string | null {
   return null
 }
 
-/* Country names as they appear in a footer address, mapped to ISO codes. Used
-   only when the TLD is generic. Longest names are checked first so "United
-   Arab Emirates" can't be shadowed by a shorter substring match. */
+/* Country names as they appear in a footer address, mapped to country codes.
+   Only used when the domain ending says nothing. Longest names are checked
+   first, so "United Arab Emirates" cannot be hidden by a shorter match inside
+   it. */
 const COUNTRY_NAMES: { name: string; code: string }[] = [
   { name: 'united arab emirates', code: 'AE' },
   { name: 'saudi arabia', code: 'SA' },
@@ -391,10 +394,10 @@ const COUNTRY_NAMES: { name: string; code: string }[] = [
   { name: 'ksa', code: 'SA' },
 ]
 
-/* City names that pin a country hard enough to be worth checking when no
-   country name appears — a footer often reads "Dubai, UAE" but just as often
-   reads only "Dubai". Deliberately short: only cities where the mapping is
-   unambiguous for professional-services firms. */
+/* Cities that identify a country clearly enough to be worth checking when no
+   country is named. A footer often reads "Dubai, UAE", but just as often it
+   reads only "Dubai". Deliberately a short list: only cities where there is no
+   doubt, for the kinds of firms we deal with. */
 const CITY_COUNTRY: { city: string; code: string }[] = [
   { city: 'abu dhabi', code: 'AE' },
   { city: 'dubai', code: 'AE' },
@@ -428,19 +431,19 @@ const ISO_CODES = new Set([
   ...COUNTRY_NAMES.map((c) => c.code),
 ])
 
-/* Every distinct country the text mentions, by name or by unambiguous city.
-   Exported because ambiguity is the interesting signal, not an inconvenience:
-   a footer naming six countries is a multi-office firm, and knowing that is
-   what stops us picking one at random. */
+/* Every different country the text mentions, by name or by an unmistakable
+   city. Exported on purpose, because finding several is useful information, not
+   a nuisance: a footer naming six countries is a firm with six offices, and
+   knowing that is what stops us picking one at random. */
 export function countryCandidates(text: string): string[] {
   if (typeof text !== 'string' || text.trim() === '') return []
 
-  /* Every run of non-alphanumerics becomes one space, and the result is padded
-     at both ends. A whole-word match is then a plain substring search for the
-     space-wrapped term — no per-term RegExp construction, and no way for "uae"
-     to fire inside "nuance" or "ksa" inside a hashed asset filename. Multi-word
-     names survive because punctuation between their words collapses to the
-     single space they're written with. */
+  /* Turn every run of punctuation into a single space, and put a space at each
+     end. Then matching a whole word is just searching for that word with
+     spaces around it. No pattern building per word, and no way for "uae" to
+     match inside "nuance" or "ksa" inside a jumbled filename. Names of several
+     words still work, because the punctuation between them becomes the single
+     space they are normally written with. */
   const haystack = ` ${text.toLowerCase().replace(/[^a-z0-9]+/g, ' ')} `
   const found = new Set<string>()
 
@@ -453,23 +456,28 @@ export function countryCandidates(text: string): string[] {
   return [...found]
 }
 
-/* One country named, or none. Ambiguity resolves to null.
-   This rule exists because of two real misreads on live sites: morganlewis.com
-   (Philadelphia) resolved to AE and hlbhamt.com (Dubai) resolved to IN, both
-   because a global office list in the footer was scanned first-match-wins. A
-   confidently wrong country is far worse than an absent one — it routes every
-   downstream scout at the wrong sources, while null routes to 'OTHER' at low
-   confidence and lets the interview fill the gap. */
+/* Exactly one country named, or none at all. If it is unclear, we answer
+   nothing.
+
+   This rule exists because of two real misreadings on live sites:
+   morganlewis.com (Philadelphia) came out as UAE, and hlbhamt.com (Dubai) came
+   out as India. Both because a global office list in the footer was scanned and
+   the first match won.
+
+   Being confidently wrong about the country is far worse than not knowing it. A
+   wrong country sends every other scout to the wrong sources. No answer sends
+   them to the defaults at low confidence, and lets the questions fill the
+   gap. */
 export function countryFromText(text: string): string | null {
   const candidates = countryCandidates(text)
   return candidates.length === 1 ? candidates[0] : null
 }
 
-/* Schema.org PostalAddress, as JSON-LD or as a microdata attribute. This is the
-   company declaring its own address in machine-readable form, so it beats any
-   amount of prose — and a multi-office firm still publishes exactly one
-   `addressCountry` for its headquarters. Highest-precision signal available
-   without an enrichment provider. */
+/* The company's address in machine-readable form, in either of the two standard
+   formats. This is the company stating its own address for machines to read, so
+   it beats any amount of prose. Even a firm with many offices publishes exactly
+   one country for its head office. This is the most reliable signal we can get
+   without paying a data provider. */
 export function countryFromStructuredData(html: string): string | null {
   if (typeof html !== 'string' || html === '') return null
 
@@ -486,15 +494,15 @@ export function countryFromStructuredData(html: string): string | null {
     if (code) found.add(code)
   }
 
-  /* Several distinct addressCountry values means several offices marked up,
-     with no way to tell which is the HQ. Same rule as prose: ambiguous is
-     null. */
+  /* Several different countries marked up means several offices, with no way
+     to tell which is head office. Same rule as with prose: if it is unclear, we
+     answer nothing. */
   return found.size === 1 ? [...found][0] : null
 }
 
-/* "Registered in England and Wales", "registered office ... Dubai". A
-   registration statement names the country of incorporation specifically,
-   which is what we want, rather than wherever the firm happens to have a desk. */
+/* Catches "Registered in England and Wales", "registered office ... Dubai". A
+   registration line names the country the company is legally based in, which is
+   what we want, rather than wherever it happens to rent a desk. */
 export function countryFromRegistration(text: string): string | null {
   if (typeof text !== 'string' || text === '') return null
   const match = text
@@ -504,9 +512,10 @@ export function countryFromRegistration(text: string): string | null {
   return countryFromText(match[1])
 }
 
-/* Reduces fetched HTML to the text a human would read, for keyword matching.
-   Script and style bodies go first — a bundled JS blob is full of words that
-   mean nothing about the business and would produce false vertical hits. */
+/* Cuts a fetched page down to the text a person would actually read, so we can
+   match keywords against it. Scripts and styles go first: a bundle of
+   JavaScript is full of words that say nothing about the business and would
+   cause false matches. */
 export function htmlToText(html: string): string {
   if (typeof html !== 'string') return ''
   return html
@@ -520,33 +529,33 @@ export function htmlToText(html: string): string {
     .trim()
 }
 
-/* The company's own name, as a human would write it (LYR-221).
+/* The company's own name, written the way a person would write it (LYR-221).
 
-   This exists because the search query was being built from the domain label.
-   `gowlingwlg.com` became the query `"gowlingwlg" careers ...`, which Tavily
-   answered with a German packaging company four times; `farrer.co.uk` became
-   `"farrer"`, which pulled six unrelated US firms. Measured over the 25-domain
-   set, six firms yielded no usable URL at all, and swapping the token for the
-   real name — `"Gowling WLG"`, `"Farrer & Co"` — took two of those six from
-   zero usable hits to four each. Nobody writes their firm's name the way a
-   hostname spells it, and search engines match on how people write.
+   This exists because the search was being built from the domain name.
+   `gowlingwlg.com` became the search "gowlingwlg" careers, which Tavily
+   answered with a German packaging company four times. `farrer.co.uk` became
+   "farrer", which pulled six unrelated US firms. Measured over 25 domains, six
+   firms produced no usable URL at all — and swapping the domain for the real
+   name, "Gowling WLG" and "Farrer & Co", took two of those six from zero usable
+   results to four each. Nobody writes their firm's name the way a domain spells
+   it, and search engines match how people write.
 
-   Three sources, in descending order of how deliberately the company chose the
-   string: og:site_name is authored for exactly this purpose, schema.org `name`
-   is authored for machines, and <title> is authored for humans and therefore
-   carries a tagline we have to cut.
+   Three places to look, in order of how deliberately the company chose the
+   wording: the social-sharing name is written for exactly this purpose, the
+   machine-readable name is written for machines, and the page title is written
+   for people and therefore usually has a tagline we have to cut off.
 
-   The result is VALIDATED against the domain before it is returned, because a
-   wrong name is worse than no name: it would search for a different company
-   and attach their vacancies to this prospect. `slugMatchesCompany` is the
-   same check the ATS tier uses, so "Kingsley Napley" (→ kingsleynapley) and
-   "Farrer & Co" (→ farrerco) pass against their domains while a page whose
-   title is a parent brand or a CMS default does not.
+   We CHECK the result against the domain before returning it, because a wrong
+   name is worse than no name: it would search for a different company and
+   attach their vacancies to this prospect. We use the same check the hiring-
+   platform step uses, so "Kingsley Napley" and "Farrer & Co" pass against their
+   own domains, while a page whose title is a parent brand or a website-builder
+   default does not.
 
-   ponytail: an acronym domain whose name expands to something longer —
-   `bsabh.com` is "BSA Ahmad Bin Hezeem" — fails validation and falls back to
-   the token, which is what it does today. Fixing it means matching initials,
-   and that accepts far more wrong names than it rescues right ones. */
+   ponytail: a domain that is an acronym of a longer name — `bsabh.com` is "BSA
+   Ahmad Bin Hezeem" — fails the check and falls back to the domain, which is
+   what it does today. Fixing it means matching initials, and that would let
+   through far more wrong names than it would rescue right ones. */
 export function companyNameFromHtml(
   html: string,
   domain: string,
@@ -580,10 +589,10 @@ export function companyNameFromHtml(
   return null
 }
 
-/* A <title> is `Name | Tagline`, `Name - Tagline`, `Tagline — Name`. Every
-   segment is a candidate because the name is not reliably first: several firms
-   in the measured set lead with the tagline. Longest-first so a segment that
-   is merely the brand's first word loses to the full name. */
+/* A page title is usually "Name | Tagline", "Name - Tagline" or "Tagline —
+   Name". We consider every piece, because the name is not reliably first —
+   several firms we measured lead with the tagline. Longest piece first, so a
+   piece that is only the first word of the brand loses to the full name. */
 function splitTitle(raw: string): string[] {
   const decoded = raw
     .replace(/&amp;/g, '&')
@@ -598,15 +607,15 @@ function splitTitle(raw: string): string[] {
   return [decoded, ...parts].sort((a, b) => b.length - a.length)
 }
 
-/* Trailing corporate-form noise and leading filler that a search engine does
-   not need and that hurts an exact-phrase match. `Farrer & Co LLP` searches
-   better as `Farrer & Co`. */
+/* Strips company-form endings and leading filler that a search engine does not
+   need, and that hurt an exact-phrase match. `Farrer & Co LLP` searches better
+   as `Farrer & Co`. */
 function cleanCompanyName(raw: string): string | null {
   const cleaned = raw
-    /* Two passes with a single `\s` each rather than `\s+(?:the\s+)?`: the
-       quantifier and the optional group both match whitespace, which is the
-       ambiguity that backtracks. `splitTitle` has already collapsed runs of
-       whitespace, so one character is all there is to eat anyway. */
+    /* Two passes, each matching a single space, rather than one pattern with a
+       repeat and an optional group. Both of those can match spaces, and that
+       overlap is what makes a pattern take exponentially long. `splitTitle` has
+       already squashed runs of spaces, so one space is all there is anyway. */
     .replace(/^(?:welcome to|home|homepage)\s/i, '')
     .replace(/^the\s/i, '')
     /* One separator character, not `[\s,]+`. The quantified class followed by

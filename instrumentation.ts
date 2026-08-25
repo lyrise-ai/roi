@@ -9,9 +9,9 @@ export async function register() {
   }
 }
 
-// Errors from Server Components, middleware, API routes and proxies. Both
-// tools get every one: Sentry for the source-mapped stack trace, PostHog so it
-// lands in the issue list that raises the Linear ticket.
+// Errors from everything running on the server. Both tools get every one:
+// Sentry for the readable stack trace, PostHog so it lands in the error list
+// that creates the Linear ticket.
 export async function onRequestError(
   err: unknown,
   request: Parameters<typeof Sentry.captureRequestError>[1],
@@ -19,8 +19,8 @@ export async function onRequestError(
 ) {
   Sentry.captureRequestError(err, request, context)
 
-  // posthog-node is a Node-only module — importing it in the edge runtime
-  // throws at module load, which would turn every edge error into two errors.
+  // PostHog's server library only runs under Node. Importing it in the lighter
+  // edge runtime fails at load, which would turn every edge error into two.
   if (process.env.NEXT_RUNTIME !== 'nodejs') return
 
   try {
@@ -34,10 +34,10 @@ export async function onRequestError(
       route: context?.routePath,
       route_type: context?.routeType,
     })
-    // The lambda can freeze the moment the response is sent, so push it now
-    // rather than trusting a batch timer that may never fire.
+    // The server can be frozen the moment the response is sent, so send this now
+    // rather than trusting a timer that may never fire.
     await flushPostHog()
   } catch {
-    // Reporting an error must never itself become an error.
+    // Reporting an error must never itself cause one.
   }
 }

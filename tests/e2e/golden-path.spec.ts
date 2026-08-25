@@ -1,22 +1,21 @@
 /**
- * Golden-path test — runs in the `authenticated` project, LOCAL ONLY.
+ * The main-path test. Runs signed in, and only on a developer's machine.
  *
- * Every other spec in this suite tests a fragment (form renders, dashboard
- * renders, login renders). None of them chain into "does the product's
- * actual core loop work" — generate a report, land in the validation
- * wizard, reach the report view. This test walks that chain for real,
- * using the same "Fast mock preview" dev-mock path production uses to
- * demo the flow without spending on real research/LLM calls
- * (pages/api/roi-agent.js's useDevMock, gated by devOptions.skipLLM).
+ * Every other test in this suite checks one piece: the form draws, the
+ * dashboard draws, login draws. None of them join up into "does the actual
+ * core loop work" — generate a report, land in the wizard, reach the report.
+ * This test walks that whole chain for real, using the same fast fake-data
+ * path we use to demo the flow without paying for real research and model
+ * calls.
  *
- * That gate is `NODE_ENV === 'development'`-only (see IS_DEV in
- * pages/api/roi-agent.js and pages/roi-report.jsx) — it's a mock-data
- * escape hatch, so it deliberately can't be reached against the production
- * build CI runs (`npm start`). Rather than loosen a real gate for test
- * convenience, this test is CI-skipped and runs when a developer executes
- * the suite locally against `npm run dev`. report-access.spec.ts covers the
- * higher-risk access-control logic and does run in CI, by seeding report
- * fixtures directly instead of going through generation.
+ * That path only works when running in development mode. It is an escape hatch
+ * for fake data, so it deliberately cannot be reached against the production
+ * build that CI runs. Rather than loosen a real safety check for the
+ * convenience of a test, this test is skipped in CI and runs when a developer
+ * runs the suite locally against `npm run dev`.
+ *
+ * report-access.spec.ts covers the riskier access-control logic and DOES run in
+ * CI, by creating report data directly instead of going through generation.
  */
 import { test, expect } from '@playwright/test'
 import { adminClient, deleteReport } from './utils/reportFixtures'
@@ -38,9 +37,9 @@ test('generate (mocked) → validate wizard → report view', async ({ page }) =
   await page.goto('/roi-report')
   await expect(page).toHaveURL('/roi-report', { timeout: 15_000 })
 
-  // Alpha accounts see an intro splash first (auto-dismisses after 8s —
-  // see SplashScreen's setTimeout in pages/roi-report.jsx). Dismiss it
-  // immediately rather than relying on action timeouts to outlast it.
+  // Alpha accounts get an opening screen first, which clears itself after 8
+  // seconds. We dismiss it straight away rather than hoping our timeouts
+  // outlast it.
   const skipSplash = page.getByRole('button', { name: 'Skip →' })
   if (await skipSplash.isVisible().catch(() => false)) {
     await skipSplash.click()
@@ -50,7 +49,8 @@ test('generate (mocked) → validate wizard → report view', async ({ page }) =
   await page.getByPlaceholder('e.g. Acme Corp').fill(companyName)
   await page.getByRole('button', { name: /continue/i }).click()
 
-  // Step 2 — email/currency, whatever isn't already prefilled from session.
+  // Step 2: email and currency, whatever is not already filled in from the
+  // session.
   const emailInput = page.getByPlaceholder(/work email/i)
   if (await emailInput.isVisible().catch(() => false)) {
     const existing = await emailInput.inputValue()
@@ -59,10 +59,9 @@ test('generate (mocked) → validate wizard → report view', async ({ page }) =
 
   await page.getByRole('button', { name: /fast mock preview/i }).click()
 
-  // Alpha accounts land on a completion screen and navigate manually via
-  // "Open my Profit Map →" (see the isAlpha branch of the COMPLETE
-  // viewState effect in pages/roi-report.jsx) — everyone else auto-redirects
-  // ~400ms after generation finishes. Wait for whichever applies.
+  // Alpha accounts land on a "finished" screen and move on themselves, using
+  // the "Open my Profit Map" button. Everyone else is redirected automatically
+  // about 400ms after generation ends. Wait for whichever happens.
   const openButton = page.getByRole('button', { name: /open my profit map/i })
   try {
     await openButton.waitFor({ state: 'visible', timeout: 20_000 })

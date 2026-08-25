@@ -1,7 +1,7 @@
-// Smoke test for buildReportViewModel — this file had zero test coverage
-// before it was rewired to source from reportModel.ts (PR3 of the canonical
-// report-model refactor). Not exhaustive: just enough to catch a broken
-// import, a thrown exception, or a shape regression on the live report page.
+// A quick check on buildReportViewModel. This file had no tests at all before
+// it was changed to read from the shared report model. Not thorough: just enough
+// to catch a broken import, a thrown error, or a change in shape that would
+// break the live report page.
 //
 //   Run:  node --test src/components/ROIGenerator/Report/__tests__/reportViewModel.test.mjs
 //
@@ -82,9 +82,9 @@ test('company snapshot revenue estimate uses the real currency symbol, not a har
     r.text.includes('Revenue estimated'),
   )
   assert.ok(row, 'expected a revenue-estimate snapshot row')
-  // globals.currency in the fixture is fixed to USD regardless of normInput,
-  // so this just confirms the symbol comes from globals.currency and isn't
-  // a literal "$" baked into the template string.
+  // The test data always uses US dollars, whatever the form said. So this only
+  // confirms the symbol comes from the report's own currency setting, and is not
+  // a "$" typed into the sentence.
   assert.match(row.text, /Revenue estimated \$6M annually/)
 })
 
@@ -98,7 +98,7 @@ test('sources includes a clickable link for an evidence-backed rate', () => {
 test('the worked-example arithmetic in the workflow formula reconciles to valueLabel', () => {
   const vm = buildReportViewModel(buildState())
   const wf = vm.workflows[0]
-  // formula ends with "= <valueLabel>/mo" — the whole point of the reconciling
-  // adoption-ramp-factor fix is that this always matches valueLabel exactly.
+  // The formula ends with the same value shown beside it. The whole point of the
+  // reconciling factor fix is that these two always match exactly.
   assert.ok(wf.formula.endsWith(`= ${wf.valueLabel}/mo`))
 })

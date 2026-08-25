@@ -1,7 +1,7 @@
-// Smoke test for formatReportSection — the read_report_section chat tool's
-// formatter. Not exhaustive: catches a thrown exception or empty output
-// across all 11 section keys, and checks two sections' content directly
-// (the ones the "9 invisible fields" gap was about).
+// A quick check on formatReportSection, which writes out a report section for
+// the chat tool. Not thorough: it catches a thrown error or empty output across
+// all 11 sections, and checks the contents of two of them directly — the two
+// the "9 invisible fields" gap was about.
 //
 //   Run:  node --test src/lib/roi/__tests__/formatReportSection.test.mjs
 //
@@ -47,8 +47,8 @@ before(async () => {
     outfile: agentOut,
     alias: { '@': repoRoot },
     logLevel: 'silent',
-    // agent.ts pulls in server-only tool implementations we never call here;
-    // stub anything that might touch env/network at import time.
+    // agent.ts pulls in server-only tools we never call here. Replace anything
+    // that might read settings or hit the network at import time.
     external: [],
   })
   ;({ formatReportSection } = await import(pathToFileURL(agentOut).href))

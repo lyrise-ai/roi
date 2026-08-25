@@ -1,16 +1,17 @@
 // POST /api/linear/triage
-// Creates a Linear issue in the team's Triage state from in-app feedback.
+// Creates a Linear issue in the team's Triage column from in-app feedback.
 //
-// Errors do NOT come through here — PostHog's built-in Linear destination talks
-// to Linear directly, no code in this repo. This route is feedback only.
+// Errors do NOT go through here. PostHog talks to Linear directly, with no code
+// in this repo. This route is for feedback only.
 //
-// NOTE: this route currently has no callers in the app. It is kept because the
-// feedback-prompt UI that used it is expected back, but it is now behind the
-// same shared secret as the PostHog webhook — it creates issues in our Linear
-// workspace, and it was previously reachable by anyone who knew the URL.
-// If the feedback prompt returns as browser-side code, swap this check for the
-// Supabase session check used in pages/api/analytics/*, since a browser cannot
-// hold a shared secret.
+// NOTE: nothing in the app calls this route at the moment. We keep it because
+// the feedback prompt that used it is expected to come back. It now sits behind
+// the same shared secret as the PostHog webhook: it creates issues in our real
+// Linear workspace, and it used to be reachable by anyone who knew the URL.
+//
+// If the feedback prompt comes back as browser code, swap this check for the
+// signed-in check used in pages/api/analytics/*, because a browser cannot keep
+// a secret.
 
 import { createLinearIssue } from '@/src/lib/linear'
 

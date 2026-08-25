@@ -1,54 +1,58 @@
 // ─────────────────────────────────────────────────────────────────────────────
-// aggregate — derived facts and the confidence model (LYR-187 R5 / LYR-198).
+// aggregate — works out how much we actually know (LYR-187 R5 / LYR-198).
 //
-// Pure functions, zero LLM, no I/O. Everything here counts scout statuses. R4
-// of the parent card is explicit that an LLM must never compute a ratio: it is
-// untestable and it drifts between runs, so two reports for the same company
-// would disagree for no reason.
+// Plain functions. No model calls, no network. Everything here just counts what
+// each scout came back with. R4 of the parent card says plainly that a model
+// must never work out a ratio: you cannot test it, and it changes between runs,
+// so two reports for the same company would disagree for no reason.
 //
-// What this file deliberately no longer does is judge LANGUAGE. It used to
-// carry a `MANUAL_WORK_VERBS` set and intersect it with the verbs the postings
-// used, which was the wrong tool for the question: `review` is document review
-// at a law firm and performance review at a consultancy, and a bare verb
-// stripped of its posting cannot carry that. That judgement now belongs to
-// `researchAnalyst.ts`, which reads the postings themselves (LYR-216).
+// What this file deliberately no longer does is judge WORDS. It used to keep a
+// list of verbs that supposedly meant manual work and compare it against the
+// verbs in the job postings. That was the wrong tool for the question: "review"
+// is document review at a law firm and performance review at a consultancy, and
+// a verb pulled out of its posting cannot carry that difference. That judgement
+// now belongs to `researchAnalyst.ts`, which reads the postings themselves
+// (LYR-216).
 //
-// `confidenceTier` here is still computed and still useful, but it is now
-// EVIDENCE HANDED TO THE ANALYST rather than the final word — the analyst can
-// see what the scouts actually returned and may disagree with what the status
-// counts imply.
+// The confidence level below is still worked out here and still useful, but it
+// is now EVIDENCE WE HAND TO THE ANALYST rather than the final answer. The
+// analyst can see what the scouts actually returned and may disagree with what
+// the counts suggest.
 //
-// `confidenceTier` is the most important output in this file, and arguably in
-// the whole subsystem. The previous system had no notion of how much it knew,
-// so it wrote with the same confidence whether it had found three dated job
-// postings or nothing at all. This makes "we do not know enough to say
-// something specific" a computed, enforceable state rather than a hope.
+// That confidence level is the most important thing this file produces, and
+// arguably the most important thing in the whole subsystem. The old system had
+// no idea how much it knew, so it wrote with the same confidence whether it had
+// found three dated job postings or nothing at all. This turns "we do not know
+// enough to say anything specific" into a state we can calculate and
+// enforce.
 // ─────────────────────────────────────────────────────────────────────────────
 
 import type { ScoutId, ScoutResult, ScoutStatus } from './types'
 
 export type ConfidenceTier = 'RICH' | 'MODERATE' | 'THIN'
 
-/* S2 is weighted heaviest because job postings are testimony — a company
-   describing its own work, dated and quotable — where everything else is
-   inference. A run with S2 and nothing else knows more that is worth saying
-   than a run with everything except S2. */
+/* S2 counts for the most, because job postings are the company describing its
+   own work, with a date on it, in words we can quote. Everything else is us
+   working things out. A run with only S2 knows more worth saying than a run
+   with everything except S2. */
 const SCOUT_WEIGHTS: Partial<Record<ScoutId, number>> = {
   S1: 1,
   S2: 3,
   S3: 1.5,
 }
 
-/* NONE and ERROR must score differently, and NONE must score ABOVE nothing.
-   NONE means we established the company isn't hiring — real information a
-   writer may use ("they're not hiring right now, so this is about the team
-   they already have"). ERROR means we couldn't look, which supports no
-   sentence at all. Scoring them the same is how the old system lost the
-   distinction and started inventing.
+/* "Nothing found" and "error" must score differently, and "nothing found" must
+   score above zero.
 
-   NONE deliberately does not score as high as FULL: knowing there is nothing
-   is useful, but it gives a writer far less to work with than three dated
-   postings do. */
+   "Nothing found" means we established the company is not hiring. That is real
+   information the report can use: "they are not hiring right now, so this is
+   about the team they already have." An error means we could not look at all,
+   which supports no sentence whatsoever. Scoring the two the same is how the
+   old system lost the difference and started inventing things.
+
+   "Nothing found" deliberately scores lower than a full result. Knowing there
+   is nothing is useful, but it gives a writer far less to work with than three
+   dated job postings. */
 const STATUS_SCORES: Record<ScoutStatus, number> = {
   FULL: 1,
   PARTIAL: 0.6,
@@ -58,9 +62,9 @@ const STATUS_SCORES: Record<ScoutStatus, number> = {
 
 export type Coverage = Partial<Record<ScoutId, ScoutStatus>>
 
-/* 0–1, weighted by scout. Only scouts that actually ran are in the
-   denominator, so adding S3 later does not retroactively make every past run
-   look worse than it was. */
+/* A score from 0 to 1, weighted per scout. Only scouts that actually ran are
+   counted, so adding S3 later does not make every past run look worse than it
+   was. */
 export function coverageScore(coverage: Coverage): number {
   const entries = Object.entries(coverage) as [ScoutId, ScoutStatus][]
   if (entries.length === 0) return 0
@@ -75,15 +79,16 @@ export function coverageScore(coverage: Coverage): number {
   return possible === 0 ? 0 : Number((earned / possible).toFixed(4))
 }
 
-/* The gate on how assertive every downstream writer is allowed to be:
-     RICH     — may be specific and may quote a source verbatim
-     MODERATE — hedges, leans on what the user told us
-     THIN     — makes no external claim at all
+/* Decides how boldly the report is allowed to speak:
+     rich     — may be specific, and may quote a source word for word
+     moderate — hedges, and leans on what the user told us
+     thin     — makes no claim about the company at all
 
-   Deliberately keyed on what S2 returned rather than on the score alone. A
-   high score built entirely from firmographics still cannot support a specific
+   This deliberately depends on what S2 found, not on the score alone. A high
+   score built entirely from company details still cannot support a specific
    observation, because "you are a 30-person law firm in Dubai" is not a
-   sentence that makes anyone feel seen. RICH requires testimony. */
+   sentence that makes anyone feel understood. Rich needs the company's own
+   words. */
 export function confidenceTier(
   coverage: Coverage,
   score = coverageScore(coverage),
@@ -97,8 +102,8 @@ export function confidenceTier(
 
   if (coverage.S2 === 'FULL' && otherHasFacts) return 'RICH'
 
-  /* Anything at all was found, by anyone. NONE counts here: "they aren't
-     hiring" is a usable premise, just not a quotable one. */
+  /* Did anyone find anything at all? "Not hiring" counts here: it is something
+     we can build a sentence on, just not something we can quote. */
   const anythingFound = (Object.values(coverage) as ScoutStatus[]).some(
     (status) => status === 'FULL' || status === 'PARTIAL' || status === 'NONE',
   )
@@ -112,7 +117,7 @@ export type ResearchSummary = {
   coverageScore: number
   confidenceTier: ConfidenceTier
   /* Everything that failed, so a thin result can be explained rather than
-     mistaken for an empty world. */
+     mistaken for a company with nothing going on. */
   gaps: { scout: ScoutId; reason: string }[]
 }
 

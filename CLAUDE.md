@@ -1,47 +1,47 @@
 # CLAUDE.md
 
-Guidance for Claude (and other AI coding agents) working in this repository.
-Read this before making changes so your work matches how this codebase is already built.
+Notes for Claude, and any other AI agent working in this repo.
+Read this before changing anything, so your work matches how the code is already
+written.
 
 ## What this is
 
-The LyRise ROI app: an AI pipeline that researches a prospect company, models the
-financial impact of automating their manual workflows, and produces a branded ROI
-business case — web report, PDF, and a shareable link with a chat panel for editing
-the model. A **Next.js 15 app using the Pages Router** (not the App Router).
+The LyRise ROI app. It researches a company, works out what automating their
+manual work would be worth, and produces a business case: a web report, a PDF, and
+a shareable link with a chat panel for editing the numbers. It is a **Next.js 15
+app on the Pages Router**, not the App Router.
 
-Numbers in these reports go in front of prospects' CFOs. Treat the generation path
-as a money path.
+The numbers in these reports are shown to prospects' finance directors. Treat
+everything on the generation path as money.
 
 ## Stack notes
 
-Read `package.json` for versions. What it won't tell you:
+Read `package.json` for versions. Three things it will not tell you:
 
-- TypeScript runs with `strict: false` — typing is loose; don't introduce
-  strict-mode assumptions.
-- Supabase is the auth provider. **There is no NextAuth here.**
-- Resend is called over REST — there is deliberately no SDK dependency.
+- TypeScript runs with its strict checks OFF. Types here are loose. Do not write
+  code that assumes strict mode.
+- Supabase handles sign-in. **There is no NextAuth in this repo.**
+- We call Resend over plain HTTP. There is deliberately no SDK installed.
 
 ## The ROI pipeline (`src/lib/roi/`)
 
-The most actively developed area. `pages/api/roi-agent.js` handles generation
-**and** chat editing over SSE with `maxDuration: 300`. A gold-set eval harness
-lives under `evals/roi/` (see `evals/roi/README.md`) — run it after changing
-prompts or scoring logic.
+The part of the app that changes most. `pages/api/roi-agent.js` does both
+building a report **and** editing it through chat, over one long-lived
+connection, with a 5-minute limit.
 
-Two rules specific to this directory:
+There is a scoring harness under `evals/roi/` (see `evals/roi/README.md`). Run it
+after changing a prompt or any scoring logic.
 
-- **The LLM never does arithmetic.** Research, workflow modeling, and narrative
-  copy are LLM work; every number comes from `pipeline/roiCalculator.ts` and
-  `pipeline/assembleReport.ts`, which are pure and deterministic. Keep that line.
-- **`ReportState` has single sources of truth** (`company`, `globals`,
-  `workflows`, `copy`) and derived fields (`calcOutput`, `assembled`,
-  `renderedHtml`, `renderedFullHtml`) that must be recomputed, never cached as
-  authoritative. Most "my edit didn't change the number" bugs are a violation of
-  this.
+One rule that belongs to this directory:
 
-The header comments in this directory explain _why_, not just what. Read them
-before changing the code they sit above.
+- **Four fields on `ReportState` hold the truth**: `company`, `globals`,
+  `workflows` and `copy`. Everything else — `calcOutput`, `assembled`,
+  `renderedHtml`, `renderedFullHtml` — is worked out FROM those four and must be
+  recalculated, never stored as the truth. Most "my edit didn't change the
+  number" bugs come from breaking this.
+
+The header comments in this directory explain WHY, not just what. Read the one
+above any code you are about to change.
 
 ## Conventions
 
@@ -51,54 +51,56 @@ before changing the code they sit above.
   There is no `@assets` or `@services` alias. Aliases are declared **twice** in
   `next.config.js` — once for webpack, once for turbopack (`npm run dev` uses
   turbopack, `npm run build` uses webpack). Add new aliases to both.
-- **Formatting** is Prettier's, enforced by the pre-commit hook. Run
-  `npm run prettier` if unsure.
+- **Formatting** is whatever Prettier does, enforced by the pre-commit hook. Run
+  `npm run prettier` if you are unsure.
 - A **Husky pre-commit hook** runs `lint-staged`: `eslint --fix` then Prettier on
   staged JS/TS, Prettier on staged JSON/CSS/MD. Don't bypass it. The hook exports
   `ESLINT_USE_FLAT_CONFIG=false` because this repo still uses `.eslintrc.js`.
-- CI (`.github/workflows/e2e.yml`) has two jobs: `checks` (`npm run lint` +
-  `npm test`, ~1 min) and `e2e` (Playwright). **ESLint is clean — 0 errors, 0
-  warnings — and `next build` compiles with no warnings.** Both were a ~260-item
-  backlog until LYR-181; leave them at zero. A rule that fires on correct code
-  gets turned off in `.eslintrc.js` with a comment saying why, never suppressed
-  file-by-file. Prettier violations are errors, so they fail CI.
-- **Design system:** tokens are CSS custom properties in `styles/tokens/*.css`;
-  `tailwind.config.js` maps them to utilities by `var()` reference and never
-  restates a value. Use the semantic utilities (`bg-surface-card`, `text-ink-muted`,
-  `rounded-card`, `shadow-glass`) over arbitrary values, and change a token in CSS
-  rather than in the config. One typeface — Figtree, via `--font-sans`. See the
-  `lyrise-design` skill in `.claude/skills/` for the full brand system.
-- **Observability: PostHog is the front door, Sentry is the deep dive.**
-  PostHog owns product analytics, session replay, the error list you triage, and
-  the Linear tickets (via PostHog's built-in Linear alert destination — no code
-  in this repo, configured in the PostHog dashboard).
-  Sentry owns source-mapped stack traces and tracing, and is linked _from_
-  PostHog. Three rules that are easy to break by accident:
-  - **Never re-add `captureConsoleIntegration` to a Sentry config.** It promotes
-    every `console.error` — most of which are deliberate, already-handled catch
-    blocks — into an issue, and therefore a Linear ticket.
-  - **Only PostHog creates Linear issues.** Sentry's native Linear integration
-    is switched off in its dashboard. Turning it back on doubles every ticket.
-  - **Sentry replay stays at 0.** PostHog records sessions; paying two vendors
-    for one recording is the thing this split exists to avoid.
-- **Adding telemetry:** the ROI pipeline's own event names live in `EVENTS`
-  (`src/lib/analytics.ts`) — never a string literal at the call site. Events
-  mirrored from `pages/api/analytics/*` and `share-event.js` are named by those
-  routes' own `VALID_TYPES` sets instead; don't restate them in `EVENTS`.
-  Everything else (pageviews, clicks, exceptions) is autocaptured by the browser
-  SDK and needs no name. Captures go through `captureServer()` in
-  `src/lib/posthog-server.ts` and **must** be followed by `flushPostHog()`
-  before the handler returns, or Vercel freezes the lambda with the event still
-  buffered. It no-ops without `NEXT_PUBLIC_POSTHOG_PROJECT_TOKEN` — that's how
-  CI stays out of the production project, and
-  `src/lib/__tests__/posthog-server.test.mjs` locks it in. Dashboard-side setup,
-  and why the browser half can't be tested by automation, are in
-  `docs/observability-setup.md`.
-- Components branch on `process.env.NEXT_PUBLIC_ENV` (`production` / `ci` /
-  unset) to switch behavior such as links, redirects, and alert suppression.
-  Preserve this when editing.
-- Anything on the report-generation path must **never throw** — degrade to a
-  partial result instead. See `pipeline/validationBaseline.ts` for the pattern.
+- CI (`.github/workflows/e2e.yml`) runs two jobs: `checks` — lint plus unit
+  tests, about a minute — and the browser tests. **Lint is completely clean: no
+  errors and no warnings, and the build compiles with none either.** Both used to
+  be a backlog of around 260 items until LYR-181. Keep them at zero. If a rule
+  complains about correct code, switch that rule off in `.eslintrc.js` with a
+  comment saying why — never silence it file by file. A formatting mistake is an
+  error too, and fails CI.
+- **Design system:** every value lives as a CSS variable in
+  `styles/tokens/*.css`. `tailwind.config.js` only gives those variables Tailwind
+  names; it never repeats a value. Use the named utilities — `bg-surface-card`,
+  `text-ink-muted`, `rounded-card`, `shadow-glass` — rather than writing values
+  by hand, and change a value in the CSS, not in the config. One typeface only:
+  Figtree. The full brand system is in the `lyrise-design` skill under
+  `.claude/skills/`.
+- **Watching production: PostHog is the front door, Sentry is the detail.**
+  PostHog owns product analytics, session recordings, the error list we work
+  through, and the Linear tickets — created by PostHog's own Linear alert
+  setting, configured in its dashboard, with no code in this repo.
+  Sentry owns readable stack traces and performance traces, and you reach it
+  FROM PostHog. Three rules that are easy to break by accident:
+  - **Never turn console capture back on in a Sentry config.** It turns every
+    `console.error` in the repo — most of them deliberate, inside catch blocks
+    that already handled the problem — into an issue, and therefore a ticket.
+  - **Only PostHog creates Linear issues.** Sentry's own Linear integration is
+    switched off in its dashboard. Turning it back on doubles every ticket.
+  - **Sentry session recording stays at zero.** PostHog records sessions. Paying
+    two companies to record the same thing is exactly what this split avoids.
+- **Adding tracking:** the ROI pipeline's own event names live in `EVENTS`
+  (`src/lib/analytics.ts`). Never type an event name in at the call site. Events
+  that come from `pages/api/analytics/*` and `share-event.js` are named by those
+  routes' own allowed-types lists instead — do not repeat them in `EVENTS`.
+  Everything else — page views, clicks, errors — is recorded automatically by the
+  browser library and needs no name.
+  Send events through `captureServer()` in `src/lib/posthog-server.ts`, and you
+  **must** call `flushPostHog()` before the handler returns, or Vercel freezes
+  the server with the event still sitting in a buffer.
+  It all does nothing without the PostHog token, which is how CI stays out of the
+  real project; `src/lib/__tests__/posthog-server.test.mjs` locks that in.
+  Dashboard setup, and why the browser half cannot be tested automatically, are
+  in `docs/observability-setup.md`.
+- Components check `process.env.NEXT_PUBLIC_ENV` — `production`, `ci`, or unset
+  — to change behaviour such as links, redirects and whether alerts are sent.
+  Keep that when editing them.
+- Nothing on the report-generation path may **ever throw**. Give back a partial
+  result instead. `pipeline/validationBaseline.ts` shows the pattern.
 
 ## Commands
 
@@ -114,33 +116,40 @@ npm run deadcode       # knip; clean today, keep it that way
 ```
 
 `knip.json` lists `src/lib/roi/research/**` and `src/lib/roi/v2/*` as **entry
-points**, not because anything imports them but because nothing statically
-does: the research tests and the coverage harness reach them through esbuild at
-runtime. Drop those globs and knip declares the whole research subsystem dead.
-knip rejects unknown keys, so that note cannot live in the config itself.
+points**. Not because anything imports them — because nothing imports them in a
+way a tool can see. The research tests and the coverage harness reach them by
+bundling at run time. Remove those two lines and knip declares the whole research
+subsystem dead code. knip refuses unknown settings, so this note cannot live
+inside the config file.
 
 ## Environment variables
 
-`.env.example` is the canonical list and marks required vs. optional. Secrets live
-in `.env.local` (gitignored) — never commit them. `NEXT_PUBLIC_*` is exposed to the
-browser; everything else is server-only.
+`.env.example` is the full list, and marks which are required. Secrets go in
+`.env.local`, which git ignores — never commit them. Anything starting with
+`NEXT_PUBLIC_` is visible in the browser; everything else is server-only.
 
-Two things the list won't tell you:
+Two things the list will not tell you:
 
-- `SUPABASE_SERVICE_ROLE_KEY` is server-only, grants full DB access, and bypasses
-  RLS. Handle with care.
-- Supabase is a **single shared project** across local, CI, and production. There
-  is no staging database — be deliberate with destructive queries.
+- `SUPABASE_SERVICE_ROLE_KEY` is server-only, gives full access to the database,
+  and ignores every access rule. Handle it carefully.
+- There is **one shared Supabase project** for local, CI and production. There is
+  no staging database, so be careful with anything that deletes.
 
 ## Working norms
 
-- **Stay within the scope of the request.** This is a production app — don't
-  refactor unrelated code, rename things, or change styling systems unless asked.
-- **Match the surrounding file's style** (JS vs TS, naming).
-- **Never commit secrets** or real client data (the ROI evals are redaction-only —
-  see `evals/roi/README.md`).
-- After meaningful changes, run `npm run lint` and `npm test` and report results
-  honestly, including failures.
-- Make focused commits and open a pull request for review — do not push directly
-  to `main`. Branch naming follows Linear's generated names
-  (`yousef/lyr-146-short-slug`).
+- **Do what was asked, and no more.** This is a live app. Do not tidy unrelated
+  code, rename things, or change how styling works unless you were asked to.
+- **Match the file you are in** — JavaScript or TypeScript, and its naming.
+- **Never commit secrets** or real client data. The ROI evals hold redacted data
+  only; see `evals/roi/README.md`.
+- After any real change, run `npm run lint` and `npm test`, and report what
+  happened honestly, failures included.
+- Keep commits focused and open a pull request. Never push straight to `main`.
+  Branch names follow Linear's own, like `yousef/lyr-146-short-slug`.
+
+## Writing style
+
+Write in plain, simple English — in code comments, commit messages, PR
+descriptions and replies. Short sentences. Common words. Explain a term the first
+time you use it, and point at the real thing in the repo it refers to. Depth is
+good; difficulty is not.

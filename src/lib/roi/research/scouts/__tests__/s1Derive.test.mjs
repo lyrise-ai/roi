@@ -1,8 +1,9 @@
-// Unit tests for S1's deterministic core (LYR-187 R2 / LYR-195).
+// Tests for S1's decision-making half (LYR-187 R2 / LYR-195).
 //
-// These are the decisions that route every other scout: get `region` wrong and
-// S2 queries US job boards for a Riyadh firm. They're pure functions precisely
-// so they can be pinned to known inputs here rather than to a live API.
+// These decisions send every other scout somewhere. Get the region wrong and S2
+// searches US job boards for a firm in Riyadh. They are plain functions
+// precisely so they can be tested against fixed inputs here, rather than
+// against a live API.
 //
 //   Run:  node --test src/lib/roi/research/scouts/__tests__/s1Derive.test.mjs
 //
@@ -86,8 +87,8 @@ test('countryFromDomain reads a second-level ccTLD', () => {
 })
 
 test('a generic TLD yields null rather than defaulting to the US', () => {
-  /* The load-bearing case. Most GCC firms sit on .com, so treating .com as
-     American would misroute the segment the coverage test over-weights. */
+  /* The case that matters most. Most Gulf firms use .com, so treating .com as
+     American would misroute exactly the group the coverage test focuses on. */
   for (const domain of [
     'altamimi.com',
     'acmelaw.org',

@@ -1,6 +1,7 @@
 // ─────────────────────────────────────────────────────────────────────────────
-// normalize — port of the Normalize Input n8n node
-// Handles both questionnaire (processes[]) and legacy flat fields
+// normalize — a rewrite of the old n8n "Normalize Input" step.
+// Handles both the current form, which sends a list of processes, and the older
+// flat field names.
 // ─────────────────────────────────────────────────────────────────────────────
 
 import type {
@@ -32,7 +33,7 @@ export function normalizeInput(
   let processes: ProcessInput[] = []
 
   if (Array.isArray(src.processes) && src.processes.length > 0) {
-    // Questionnaire path — already structured
+    // The current form: already in the right shape
     processes = src.processes.map((p) => ({
       name: p.name ?? '',
       department: p.department ?? 'Operations',
@@ -46,7 +47,7 @@ export function normalizeInput(
       steps: p.steps ?? [],
     }))
   } else {
-    // Legacy flat-field path
+    // The older form: flat field names
     const primary = src['Biggest time drain on your team'] ?? ''
     const primVol = src['Monthly volume of this process (approx.)'] ?? null
     const primTime = src['Primary process time per item'] ?? null

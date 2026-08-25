@@ -1,15 +1,15 @@
-// Regression tests for the two LYR-146 fixes in roiCalculator.ts:
-//   1. Rate-ceiling clamp direction (Rule 6A) — an outlier rate must clamp to
-//      the 1.5x "headroom" boundary it actually crossed, not the bare
-//      band-top, or a requested rate *increase* can render as a decrease.
-//   2. The revenue guardrail (Rule 6B) must never re-run on post-generation
-//      edits — otherwise every edit gets rescaled back to ~the same TFG,
-//      which is the exact symptom LYR-146 reported ("workflow edits don't
-//      recalculate TFG").
+// Tests that the two LYR-146 fixes in roiCalculator.ts stay fixed:
+//   1. Which limit a too-high rate comes back to (Rule 6A). It must come back
+//      to the stretched limit it actually crossed, not to the plain top of the
+//      band — otherwise asking for a HIGHER rate can show up as a lower one.
+//   2. The revenue check (Rule 6B) must never run again on later edits.
+//      Otherwise every edit gets scaled back to roughly the same total, which
+//      is exactly what LYR-146 reported: "workflow edits don't change the
+//      total".
 //
-// No test-runner dependency: uses Node's built-in `node:test` + `node:assert`.
-// The TypeScript source (with `@/` path aliases) is bundled on the fly by
-// esbuild into a temp ESM module, which we then import.
+// No test framework needed: this uses Node's own `node:test` and `node:assert`.
+// The TypeScript source uses `@/` path shortcuts, so esbuild bundles it into a
+// temporary module first, and we import that.
 //
 //   Run:  node --test src/lib/roi/pipeline/__tests__/roiCalculator.test.mjs
 //
@@ -101,7 +101,8 @@ function baseWorkflow(over = {}) {
 
 describe('roiCalculator — Rule 6A ceiling clamp (LYR-146)', () => {
   test('an outlier rate above the headroom boundary clamps TO that boundary, not the bare band-top', () => {
-    // DEFAULT region, mid tier band is [40, 60] -> headroom ceiling = 60*1.5 = 90.
+    // For the default region, the mid-level band is 40 to 60, so the stretched
+    // limit is 60 x 1.5 = 90.
     const out = roiCalculator(
       [baseWorkflow({ rateOverride: 130 })],
       baseGlobals(),
@@ -126,10 +127,11 @@ describe('roiCalculator — Rule 6A ceiling clamp (LYR-146)', () => {
 })
 
 describe('roiCalculator — revenue guardrail gating (LYR-146)', () => {
-  // Revenue small enough that the raw TFG from either rate below blows past
-  // the 20% ceiling, forcing the guardrail (when applied) to rescale both
-  // down to the same target — reproducing the exact "edits don't move the
-  // numbers" symptom when the guardrail wrongly re-runs on every edit.
+  // Revenue small enough that either rate below produces a total well past the
+  // 20% ceiling. That forces the revenue check, when it runs, to scale both
+  // down to the same target — which reproduces the exact "my edits don't change
+  // the numbers" symptom that happens when the check wrongly runs on every
+  // edit.
   const company = baseCompany({ revenueEstimateM: 0.1 }) // $100k revenue
   const globals = baseGlobals()
 

@@ -6,14 +6,13 @@ import {
 // ─────────────────────────────────────────────────────────────────────────────
 // GET /api/usage/engagement?days=30
 //
-// Employee-gated. Aggregates SHARE-LINK RECIPIENT behaviour from the `events`
-// table (chat_link_opened, chat_session_end, pdf_downloaded_share) plus the
-// existing chat_message_sent_share. Answers: who opened "Edit with chat", how
-// long they spent in the panel, whether they downloaded the PDF.
+// Staff only. Adds up what share-link recipients did, from the events table. It
+// answers: who opened "Edit with chat", how long they stayed, and whether they
+// downloaded the PDF.
 //
-// Joins report company/email for readability. Session duration comes from
-// chat_session_end.meta.durationMs when present, else is derived from the gap
-// between the open and end timestamps.
+// It also pulls in each report's company and email so the rows are readable.
+// Session length comes from the event itself when it carries one, and otherwise
+// from the gap between opening and closing.
 // ─────────────────────────────────────────────────────────────────────────────
 
 const SHARE_TYPES = [
@@ -23,13 +22,14 @@ const SHARE_TYPES = [
   'chat_message_sent_share',
 ]
 
-// Recipient-activity tracking (opens, session time, downloads) only became
-// complete on this date. Earlier `events` rows captured chat messages alone, so
-// they render misleading partial rows (chat counts with empty opens/time/
-// downloads). Floor the query here so the panel starts blank and fills in with
-// fully-tracked activity going forward. The old events are kept in the DB — they
-// still power other views (e.g. the dashboard Activity feed); we just exclude
-// them from this panel.
+// We only started recording opens, time spent and downloads on this date.
+// Before it, we recorded chat messages alone — so older rows show a chat count
+// with nothing next to it, which reads as if the person did nothing else.
+//
+// So this panel refuses to look further back than this date. It starts empty and
+// fills up with fully-tracked activity from here on. The older events stay in the
+// database and still feed other views, such as the dashboard activity feed. We
+// just leave them out of this one.
 const ENGAGEMENT_SINCE_FLOOR = '2026-06-10T00:00:00Z'
 
 export default async function handler(req, res) {
@@ -57,7 +57,8 @@ export default async function handler(req, res) {
   const days = Math.min(Math.max(parseInt(req.query.days, 10) || 30, 1), 365)
   const windowStart = new Date(Date.now() - days * 24 * 60 * 60 * 1000)
   const floor = new Date(ENGAGEMENT_SINCE_FLOOR)
-  // Never look further back than the floor, even on a wide "Last year" window.
+  // Never look further back than that date, even when someone picks "last
+  // year".
   const since = (windowStart > floor ? windowStart : floor).toISOString()
 
   const { data: events, error } = await admin
@@ -75,7 +76,8 @@ export default async function handler(req, res) {
 
   const rows = events || []
 
-  // Look up company/email for the reports referenced, for readable rows.
+  // Fetch each report's company and email, so the rows read as something other
+  // than ids.
   const reportIds = [...new Set(rows.map((e) => e.report_id).filter(Boolean))]
   let reportMap = new Map()
   if (reportIds.length) {
@@ -86,7 +88,7 @@ export default async function handler(req, res) {
     reportMap = new Map((reports || []).map((r) => [r.id, r]))
   }
 
-  // Group per report.
+  // Group everything by report.
   const perReportMap = new Map()
   const ensure = (id) => {
     if (!perReportMap.has(id)) {
@@ -101,7 +103,8 @@ export default async function handler(req, res) {
         totalDurationMs: 0,
         sessions: 0,
         lastActivity: null,
-        // Track the latest open without an end, to derive duration if needed.
+        // Remember the most recent open that has no matching close, so we can
+        // work out a duration if the close event has none.
         pendingOpenAt: null,
       })
     }

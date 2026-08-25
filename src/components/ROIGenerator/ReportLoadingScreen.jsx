@@ -42,14 +42,16 @@ const PHASES = [
 ]
 
 const MAX_LOG_LINES = 8
-// Only auto-advance phases on a timer when the pipeline is silent this long
+// Only move to the next stage on a timer if the pipeline has said nothing for
+// this long
 const PHASE_IDLE_ADVANCE_MS = 45000
 const MIN_LOG_GAP_MS = 2500
 
 const PIPELINE_MILESTONE_RE =
   /^(Research complete|Calibrating ROI|Refining model assumptions|3-year financial|Writing profit|Rendering financial)/i
 
-// Rotating messages from web_search pools in agent.ts — collapse to one summary line
+// The rotating search messages agent.ts produces. We collapse them into one
+// summary line.
 const SEARCH_POOL_RE =
   /^(Profiling company|Looking up company|Estimating headcount|Checking company footprint|Sourcing salary|Querying role-based|Cross-referencing wage|Collecting salary evidence)/i
 
@@ -94,9 +96,9 @@ export default function ReportLoadingScreen({
   const [intakeEase, setIntakeEase] = useState(0)
   const [intakeEaseNote, setIntakeEaseNote] = useState('')
 
-  // Alpha tour tracking — best-effort, fire-and-forget. Sends the current
-  // rating and note together every time either changes; never awaited, never
-  // blocks the generation wait it's shown alongside.
+  // Tracking for the alpha tour. We start it and move on. It sends the rating
+  // and the note together whenever either changes, and never holds up the
+  // waiting screen it sits on.
   const trackIntakeEase = (rating, note) => {
     if (!isAlpha) return
     try {
@@ -143,7 +145,8 @@ export default function ReportLoadingScreen({
   const isComplete = viewState === 'complete'
   const isDoneOrFinalising = isFinalising || isComplete
 
-  // Phase auto-advance — idle fallback only; real pipeline_log drives phases first
+  // Moving to the next stage on a timer. Only a fallback for when nothing is
+  // happening — real progress messages take priority.
   useEffect(() => {
     if (isDoneOrFinalising || sseEvents.length > 0) return () => {}
     if (phaseIndex >= PHASES.length - 1) return () => {}
@@ -153,7 +156,8 @@ export default function ReportLoadingScreen({
     return () => clearTimeout(t)
   }, [phaseIndex, isDoneOrFinalising, sseEvents.length])
 
-  // Drive phase from real pipeline_log / tool milestones (falls back to generationLog)
+  // Move between stages based on real progress messages and tool milestones,
+  // falling back to the generation log
   useEffect(() => {
     if (isDoneOrFinalising) return
     const signal = [...sseEvents.map((e) => e.text), generationLog]
@@ -178,7 +182,8 @@ export default function ReportLoadingScreen({
     }
   }, [generationLog, sseEvents, phaseIndex, isDoneOrFinalising])
 
-  // Process new pipeline_log events — parallel tool calls burst in the same second
+  // Handle new progress messages. Tools running side by side send several in the
+  // same second.
   useEffect(() => {
     if (!sseEvents.length || isDoneOrFinalising) return
 
@@ -203,8 +208,9 @@ export default function ReportLoadingScreen({
           return
         }
 
-        // Milestones always pass; non-milestones get spaced by MIN_LOG_GAP_MS
-        // even within the same batch so parallel bursts don't drop messages.
+        // Milestones always show. Everything else is spaced out by a minimum
+        // gap, even within one burst, so a rush of parallel messages does not
+        // lose any.
         if (kind !== 'milestone') {
           const earliestAllowed = lastAppendAt + MIN_LOG_GAP_MS
           if (now < earliestAllowed && lastAppendAt !== 0) return
@@ -231,7 +237,7 @@ export default function ReportLoadingScreen({
     })
   }, [sseEvents, activePhase, isDoneOrFinalising])
 
-  // Elapsed timer
+  // The "time so far" counter
   useEffect(() => {
     const start = Date.now()
     const t = setInterval(
@@ -241,7 +247,8 @@ export default function ReportLoadingScreen({
     return () => clearInterval(t)
   }, [])
 
-  // Idle placeholder — one line until real pipeline_log arrives; no cycling
+  // A single holding line until real progress messages arrive. It does not
+  // rotate.
   useEffect(() => {
     if (isDoneOrFinalising) {
       logId.current += 1
@@ -300,7 +307,7 @@ export default function ReportLoadingScreen({
     })
   }, [])
 
-  // When finalising or complete, all pipeline stages show as complete
+  // Once we are finishing up, or done, every stage shows as complete
   const pipelinePhaseIndex = isDoneOrFinalising ? PHASES.length : phaseIndex
 
   const { displayHeading, displaySubLabel } = useMemo(() => {

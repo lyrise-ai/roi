@@ -1,33 +1,39 @@
 // ─────────────────────────────────────────────────────────────────────────────
-// S1 — pre-flight resolver and firmographics (LYR-187 R2 / LYR-195).
+// S1 — works out the basics about a company before anything else runs
+// (LYR-187 R2 / LYR-195).
 //
-// Runs alone and first. Every other scout needs `region` and `vertical` before
-// it can choose its sources: a UAE firm's postings are not on the same boards
-// as a Chicago firm's, and a law firm's site says "practice areas" where a
-// consultancy says "capabilities". One fast call buys correct routing for all
-// of them, which is why the target is ~500ms rather than "as long as it takes".
+// It runs first, on its own. Every other scout needs to know the region and
+// the type of business before it can pick where to look: a UAE firm's jobs are
+// not on the same boards as a Chicago firm's, and a law firm's website says
+// "practice areas" where a consultancy says "capabilities". One fast call
+// gives all of them the right places to look, which is why we aim for about
+// half a second rather than "however long it takes".
 //
-// No LLM anywhere in this file. Enrichment responses are structured JSON and
-// the site fallback is keyword matching over page text — both are code, and
-// code is what can be unit tested. The decisions live in s1Derive.ts.
+// No model calls anywhere in this file. The data providers answer in
+// structured JSON, and the website fallback is keyword matching over page
+// text. Both are ordinary code, and ordinary code can be unit tested. The
+// decisions themselves live in s1Derive.ts.
 //
-// The cascade is PDL → site. Apollo and Explorium are the two providers the
-// card's original cascade named; we hold neither (Apollo gates its API to the
-// Organization plan, Explorium is enterprise-contract only), so they are not
-// implemented rather than implemented against a guessed request shape. Each is
-// one entry in TIERS away — see .env.example.
+// We try People Data Labs first, then the company's own website. Apollo and
+// Explorium were the two other providers the plan named. We have accounts with
+// neither — Apollo only opens its API on the Organization plan, Explorium is
+// enterprise contracts only — so they are simply not built, rather than built
+// against a guessed request shape. Each is one entry in TIERS away. See
+// .env.example.
 //
 // Two rules that are easy to break by accident:
 //
-//   Revenue never reaches a user-facing path. Providers return it and it is
-//   useful for internal qualification, so it is kept — but under `internal`,
-//   not wrapped in a Fact. Anything that renders facts iterates Fact-shaped
-//   values, so revenue is structurally excluded rather than merely undocumented.
+//   Revenue must never reach anything the user sees. The providers give it to
+//   us and it is useful for judging whether a company is worth pursuing, so we
+//   keep it — but under `internal`, not wrapped as a Fact. Everything that
+//   displays facts loops over Fact-shaped values, so revenue is left out by
+//   design rather than by us remembering not to show it.
 //
-//   NONE is not a valid status for S1. A company always has a country, so
-//   "we found nothing" can only mean we failed to look — which is ERROR. NONE
-//   here would tell a downstream writer "we established this company has no
-//   country", which is nonsense. FULL, PARTIAL or ERROR only.
+//   "Found nothing" is not a valid answer for S1. Every company has a country,
+//   so finding nothing can only mean we failed to look — which is an error.
+//   Reporting "nothing found" would tell the report writer "we established
+//   this company has no country", which is nonsense. Only full, partial or
+//   error.
 // ─────────────────────────────────────────────────────────────────────────────
 
 import { getArtifact } from '../artifactCache'
@@ -56,19 +62,20 @@ import {
   verticalFromText,
 } from './s1Derive'
 
-/* The four routing fields are `Fact<T> | null` rather than plain `Fact<T>`.
-   The card sketches them as always-present, but R1's binding rule is that
-   absence must be representable — a required `sizeBand` would force S1 to
-   invent one for a firm whose site doesn't say, which is precisely the
-   fabrication this subsystem exists to prevent. The keys are always present so
-   consumers can't forget a field; the values are nullable so we can't lie. */
+/* The four fields that decide where other scouts look can each be empty. The
+   plan drew them as always present, but the binding rule from R1 is that
+   "we don't know" has to be expressible. A required size band would force S1
+   to invent one for a firm whose site does not say — exactly the invention
+   this subsystem exists to stop. So the keys are always there, which means no
+   caller can forget one, and the values can be empty, which means we cannot
+   lie. */
 export type S1Facts = {
-  /* Optional rather than one of the four routing fields: a firm whose homepage
-     we could not read still routes on country and vertical, and S2's discovery
-     query falls back to the domain token when this is absent. */
+  /* Optional, not one of the four. A firm whose homepage we could not read
+     still gets routed by country and business type, and when this is missing
+     S2's search falls back to using the domain name. */
   name?: Fact<string>
-  /* Passed to S2 so a search hit on the company's real host is not discarded
-     as a different company. Not shown to a prospect. */
+  /* Passed to S2, so a search result on the company's real domain is not
+     thrown away as belonging to someone else. Never shown to a prospect. */
   canonicalDomain?: Fact<string>
   country: Fact<string> | null
   region: Fact<Region> | null
@@ -79,26 +86,27 @@ export type S1Facts = {
   locations?: Fact<string[]>
   founded?: Fact<number>
   industry?: Fact<string>
-  /* Never rendered, never quoted, never passed to a writer. Not Fact-shaped, so
-     it cannot travel through any path that displays facts. The prospect knows
-     their real revenue and ours will be wrong; being visibly wrong about it
-     poisons trust in every other number on the page. */
+  /* Never displayed, never quoted, never handed to the report writer. It is
+     deliberately not Fact-shaped, so it cannot travel down any path that shows
+     facts. The prospect knows their real revenue and ours will be wrong. Being
+     visibly wrong about that one number poisons trust in every other number on
+     the page. */
   internal?: { annualRevenueUsd?: number }
 }
 
-/* What every tier reduces to before facts are built, so provider quirks stay
-   inside their own adapter and there is exactly one place that turns data into
-   Facts. */
+/* Every source is cut down to this shape before we build facts from it. That
+   keeps each provider's oddities inside its own small adapter, and leaves
+   exactly one place where data turns into facts. */
 type RawRecord = {
-  /* The firm's name as it writes it — "Gowling WLG", not "gowlingwlg". Only
-     the site tier produces this; the enrichment adapters could, but PDL's
-     `name` is its own normalised spelling rather than the company's, and the
-     point of this field is how the company writes itself. See
-     `companyNameFromHtml` for why it is load-bearing (LYR-221). */
+  /* The firm's name the way the firm writes it — "Gowling WLG", not
+     "gowlingwlg". Only the website step produces this. The data providers could
+     too, but PDL's `name` is its own tidied-up spelling, not the company's, and
+     the whole point of this field is how the company writes itself. See
+     `companyNameFromHtml` for why this matters (LYR-221). */
   name?: string
-  /* A domain the company declares equivalent to the one we were given. Site
-     tier only — an enrichment record cannot tell us what a company's own
-     markup says. */
+  /* Another domain the company itself says is the same as the one we were
+     given. Website step only — a bought data record cannot tell us what the
+     company's own page says. */
   canonicalDomain?: string
   country?: string
   vertical?: string
@@ -109,8 +117,8 @@ type RawRecord = {
   locations?: string[]
   founded?: number
   annualRevenueUsd?: number
-  /* The provider's own timestamp for the DATA, where it publishes one. Absent
-     for every provider we currently call — see `retrievedAtFor`. */
+  /* The provider's own date for when the DATA was true, when they publish one.
+     None of the providers we currently call do — see `retrievedAtFor`. */
   dataAsOf?: string
 }
 
@@ -118,30 +126,35 @@ type TierResult = { record: RawRecord; url: string } | null
 
 type Tier = {
   source: string
-  /* Named rather than checked inline, so a tier that needs a key we don't hold
-     reports a miss instead of firing an unauthenticated request. */
+  /* Named here rather than checked further down, so a step that needs an API
+     key we do not have reports a clean miss instead of firing off a request
+     with no key on it. */
   requiresKey?: ProviderKey
   run: (domain: string) => Promise<TierResult>
 }
 
 const ENRICHMENT_TIMEOUT_MS = 3_000
 
-/* Enrichment providers rebuild their corpus on a schedule — PDL publishes a
-   `dataset_version` but no per-record date — so a lookup made this second may
-   describe the company as it was weeks ago. Where a provider gives a real
-   timestamp we use it; where it doesn't we fall back to our fetch time and cap
-   confidence at 'medium', because claiming high confidence in an undated
-   snapshot is the credibility damage the redesign exists to avoid.
+/* The data providers rebuild their whole database on a schedule. PDL publishes
+   a version number for the set but no date per record. So a lookup we make
+   this second may describe the company as it was weeks ago.
 
-   Site-derived facts are different: we read the live page, so our fetch time
-   IS the data's age and it can carry the confidence the match deserves. */
+   Where a provider gives a real date, we use it. Where it does not, we fall
+   back to the time we fetched it and cap our confidence at medium. Claiming
+   high confidence in an undated snapshot is exactly the credibility damage this
+   redesign exists to avoid.
+
+   Facts from the company's own site are different. We read the live page, so
+   the time we fetched it IS the age of the data, and it can carry whatever
+   confidence the match deserves. */
 function retrievedAtFor(record: RawRecord, fallback: string): string {
   return record.dataAsOf ?? fallback
 }
 
-// ── Tier 1 — People Data Labs ────────────────────────────────────────────────
-// GET /v5/company/enrich?website=<domain>, X-Api-Key header. 404 on no match,
-// which is a clean miss rather than an error: PDL looked and had nothing.
+// -- Step 1: People Data Labs ------------------------------------------------
+// GET /v5/company/enrich?website=<domain>, with the key in an X-Api-Key header.
+// A 404 means no match, which is a clean miss and not an error: PDL looked and
+// had nothing on this company.
 
 async function pdlTier(domain: string): Promise<TierResult> {
   const key = providerKey('PDL_API_KEY')
@@ -198,9 +211,9 @@ async function pdlTier(domain: string): Promise<TierResult> {
     : null
 }
 
-// ── Tier 2 — the company's own site ──────────────────────────────────────────
-// Always available, no key, and the source is a page a prospect can open. The
-// weakest tier on completeness and the strongest on verifiability.
+// -- Step 2: the company's own website ---------------------------------------
+// Always available, needs no API key, and the source is a page the prospect can
+// open themselves. It tells us the least, and it is the easiest to check.
 
 async function siteTier(domain: string): Promise<TierResult> {
   const homepage = `https://${domain}/`
@@ -210,21 +223,22 @@ async function siteTier(domain: string): Promise<TierResult> {
   const text = htmlToText(artifact.content)
   if (text === '') return null
 
-  /* Country signals in descending order of precision. Each one is either right
-     or absent; none of them guesses.
+  /* Ways to tell the country, most reliable first. Each one is either right or
+     silent. None of them guesses.
 
-       ccTLD              — a .ae is a UAE firm. Cheap and near-certain.
-       addressCountry     — the company's own schema.org markup of its HQ.
-       "registered in X"  — the country of incorporation, stated in prose.
-       footer prose       — last resort, and only when the footer names exactly
-                            one country. A global office list names several, and
-                            that resolves to null rather than to whichever
-                            matched first.
+       the domain ending  — a .ae is a UAE firm. Cheap and nearly certain.
+       address markup     — the company's own machine-readable head office.
+       "registered in X"  — the country of incorporation, written in prose.
+       footer text        — last resort, and only when the footer names exactly
+                            ONE country. A global office list names several, and
+                            in that case we answer "unknown" rather than
+                            picking whichever matched first.
 
-     The last rule is not theoretical: before it existed, morganlewis.com (a
-     Philadelphia firm) resolved to AE and hlbhamt.com (a Dubai firm) resolved
-     to IN, both off office lists. Null here costs us `region: 'OTHER'` and low
-     confidence; a wrong answer costs every downstream scout its sources. */
+     That last rule is not theoretical. Before it existed, morganlewis.com (a
+     Philadelphia firm) came out as UAE and hlbhamt.com (a Dubai firm) came out
+     as India, both from office lists. Answering "unknown" costs us a region of
+     'OTHER' and low confidence. Answering wrongly sends every other scout to
+     the wrong sources. */
   const country =
     countryFromDomain(domain) ??
     countryFromStructuredData(artifact.content) ??
@@ -233,23 +247,24 @@ async function siteTier(domain: string): Promise<TierResult> {
     undefined
 
   const record: RawRecord = {
-    /* Read from the raw HTML, not `text`: og:site_name and the schema.org
-       block live in markup that `htmlToText` has already stripped. */
+    /* Read from the raw HTML, not the plain text: the site name and the
+       machine-readable block both live in markup that `htmlToText` has already
+       stripped out. */
     name: companyNameFromHtml(artifact.content, domain) ?? undefined,
     canonicalDomain:
       canonicalDomainFromHtml(artifact.content, domain) ?? undefined,
     country,
     vertical: verticalFromText(text.slice(0, 20_000)) ?? undefined,
-    /* No headcount, no size band, no founding year. A homepage rarely states
+    /* No staff count, no size band, no founding year. A homepage rarely states
        them, and guessing from "we're a large firm" is exactly the invention the
-       interview is there to replace. PARTIAL is the honest outcome. */
+       questions are there to replace. Partial is the honest answer. */
   }
 
-  /* Returned even when nothing classified. Unlike an enrichment miss, reading
-     the page IS the finding: it means we looked and the site doesn't say, which
-     is PARTIAL with region 'OTHER' at low confidence. Treating it as a miss
-     would collapse "their site doesn't tell us" into "we couldn't reach them",
-     and ERROR would then claim a blind spot we don't have. */
+  /* We return this even when we worked nothing out. Unlike a provider miss,
+     reading the page IS the finding: we looked, and the site does not say. That
+     is partial, region 'OTHER', low confidence. Calling it a miss would mash
+     "their site doesn't tell us" together with "we couldn't reach them", and
+     then an error would claim a blind spot we do not actually have. */
   return { record, url: homepage }
 }
 
@@ -271,9 +286,9 @@ const EMPTY_FACTS: S1Facts = {
   sizeBand: null,
 }
 
-/* Enrichment is a cached snapshot, the site is live. That difference is what
-   the confidence ceiling encodes, and it is why `sourceType` is carried through
-   to the panel rather than flattened away. */
+/* A data provider gives us a stored snapshot; the website is live right now.
+   That difference is what the confidence limit above captures, and it is why we
+   carry `sourceType` all the way to the panel instead of dropping it. */
 function buildFacts(record: RawRecord, url: string, source: string): S1Facts {
   const verified = sourceUrl(url)
   if (!verified) return EMPTY_FACTS
@@ -300,12 +315,12 @@ function buildFacts(record: RawRecord, url: string, source: string): S1Facts {
 
   const country = make(record.country, 'high')
 
-  /* Region is derived, never read. It is a pure function of country, so it
-     inherits country's source: the page or record that told us the country is
-     the same evidence that puts the company in a region. With no country we
-     still emit 'OTHER' at low confidence — "we looked and couldn't tell" is a
-     usable routing answer, and it is sourced at whatever we did manage to
-     read. */
+  /* We work the region out; we never read it from anywhere. It follows
+     directly from the country, so it takes the country's source: the page or
+     record that told us the country is the same evidence that places the
+     company in a region. With no country we still answer 'OTHER' at low
+     confidence — "we looked and could not tell" is a useful answer for routing,
+     and it is credited to whatever we did manage to read. */
   const region = make<Region>(
     regionForCountry(record.country ?? null),
     record.country ? 'high' : 'low',
@@ -339,10 +354,11 @@ function buildFacts(record: RawRecord, url: string, source: string): S1Facts {
   }
 }
 
-/* FULL means all four routing fields landed. PARTIAL means some did — still
-   useful, still routes. ERROR means no tier produced a record at all: we failed
-   to look, and downstream must treat that as a blind spot rather than as a
-   finding. NONE is never returned; see the file header. */
+/* Full means all four routing fields came back. Partial means some did — still
+   useful, still enough to route on. Error means no step produced a record at
+   all: we failed to look, and everything downstream must treat that as a blind
+   spot rather than as a finding. We never answer "nothing found" here; see the
+   note at the top of the file. */
 function statusFor(facts: S1Facts, anyTierSucceeded: boolean): ScoutStatus {
   if (!anyTierSucceeded) return 'ERROR'
   const complete =
@@ -372,18 +388,19 @@ export async function runS1(
   let winner: { record: RawRecord; url: string; source: string } | null = null
   const notes: string[] = []
 
-  /* Sequential, not parallel, and that is deliberate: the tiers are ordered by
-     quality, so the moment one returns a usable record the rest are wasted
-     money and wasted milliseconds. Every attempt is logged either way —
-     coverage is declared, never hidden. */
+  /* One after another, not all at once, and that is on purpose. The steps are
+     in order of quality, so the moment one gives us a usable record the rest are
+     wasted money and wasted time. We log every attempt either way — what we
+     looked at is always declared, never hidden. */
   for (const tier of TIERS) {
     if (winner) break
 
     const tierStartedAt = Date.now()
 
-    /* An unconfigured tier is a logged miss, not a silent skip. The coverage
-       test needs to tell "we have no PDL key" apart from "PDL had no record" —
-       one is a decision we made, the other is a fact about the company. */
+    /* A step with no API key is recorded as a miss, not skipped quietly. The
+       coverage test has to tell "we have no PDL key" apart from "PDL had no
+       record": the first is a decision we made, the second is a fact about the
+       company. */
     if (tier.requiresKey && !providerKey(tier.requiresKey)) {
       sourcesAttempted.push({ source: tier.source, outcome: 'miss', ms: 0 })
       notes.push(`${tier.source}: no key configured`)
@@ -398,8 +415,8 @@ export async function runS1(
           sourcesAttempted.push({ source: tier.source, outcome: 'miss', ms })
         }
       } catch (error) {
-        /* Never throws — a provider being down degrades the cascade, it does
-           not fail the run. The next tier gets its turn. */
+        /* This never throws. A provider being down makes the result weaker; it
+           does not fail the run. The next step gets its turn. */
         sourcesAttempted.push({
           source: tier.source,
           outcome: 'error',
@@ -428,9 +445,9 @@ export async function runS1(
     facts,
     sourcesAttempted,
     durationMs: Date.now() - startedAt,
-    /* PDL's free tier charges nothing and only bills on a successful match;
-       the site tier is a plain fetch. Both are zero today. When a metered
-       provider lands, this is where its per-call price goes. */
+    /* PDL's free plan charges nothing, and only bills at all on a successful
+       match. Reading the website is just a fetch. So both are zero today. When
+       a paid provider is added, its per-call price goes here. */
     costUsd: 0,
     ...(notes.length ? { notes: notes.join('; ') } : {}),
   }

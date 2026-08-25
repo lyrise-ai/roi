@@ -1,8 +1,8 @@
 import { useCallback, useMemo, useReducer, useRef } from 'react'
 import { roiCalculator } from '@/src/lib/roi/pipeline/roiCalculator'
 
-// Steps: 0 overview, 1 confirm workflows, 2 volume, 3 duration, 4 context,
-// 5 feedback, 6 complete.
+// The steps, in order: overview, confirm the workflows, volume, duration,
+// anything else, feedback, done.
 
 function emptyDecision() {
   return {
@@ -118,10 +118,10 @@ function reducer(state, action) {
       return { ...state, budgetTiming: action.value }
     case 'SET_XP':
       return { ...state, xp: Math.max(state.xp, action.value) }
-    // A chat-panel edit (add_workflow / update_workflow) changed the
-    // authoritative workflow list mid-wizard. Rebase: new baseline = the
-    // fresh list, and reset any per-workflow % steppers so they compute
-    // against the new numbers instead of silently compounding.
+    // An edit made in the chat panel changed the real workflow list while the
+    // user is partway through the wizard. So we start again from the new list,
+    // and reset the per-workflow percentage steppers, so they adjust the new
+    // numbers rather than quietly stacking on top of the old ones.
     case 'REBASE_FROM_CHAT': {
       const nextDecisions = { ...state.decisions }
       action.workflows.forEach((w) => {
@@ -130,7 +130,7 @@ function reducer(state, action) {
           ? { ...cur, volumePct: 0, durationPct: 0 }
           : emptyDecision()
       })
-      // Drop decisions for workflows no longer present (removed via chat).
+      // Forget decisions about workflows that are gone, removed through chat.
       Object.keys(nextDecisions).forEach((name) => {
         if (!action.workflows.some((w) => w.name === name)) {
           delete nextDecisions[name]
@@ -152,10 +152,10 @@ export function useValidationWizard(initialWorkflows, globals, company) {
     [state.baseline, state.decisions],
   )
 
-  // Live-patched workflow list (baseline × decision %) — recomputed locally,
-  // no network round-trip. Mirrors the arithmetic applied server-side at
-  // finalize (pages/api/reports/[id]/validate-finalize.js) so the preview
-  // never disagrees with the saved result.
+  // The workflow list with the user's adjustments applied, worked out here in
+  // the browser with no trip to the server. It does the same arithmetic the
+  // server does at the end (pages/api/reports/[id]/validate-finalize.js), so
+  // the preview never disagrees with what gets saved.
   const liveWorkflows = useMemo(
     () =>
       keptWorkflows.map((w) => {
@@ -228,8 +228,8 @@ export function useValidationWizard(initialWorkflows, globals, company) {
     [],
   )
 
-  // Debounced draft autosave — refresh-resilience only, not correctness
-  // critical (see pages/api/reports/[id]/validation.js).
+  // Saves a draft in the background, a moment after typing stops. It only exists
+  // so a refresh does not lose work; nothing depends on it being right.
   const saveDraft = useCallback(
     (reportId) => {
       const payload = {

@@ -1,26 +1,27 @@
 // ─────────────────────────────────────────────────────────────────────────────
-// R8 — research coverage test (LYR-187 R8 / LYR-201).
+// R8 — measuring how much the research system actually finds (LYR-187 R8 /
+// LYR-201).
 //
-// A measurement, not a build. It runs the whole research pipeline against real
-// professional-services firms and reports what actually came back, because
-// every coverage number in the plan up to now has been a guess and vendors
-// publish marketing figures. Nobody knows how well any of this works on a
-// 30-person law firm in Riyadh until it is run.
+// This is a measurement, not a feature. It runs the whole research pipeline
+// against real professional-services firms and reports what came back. Every
+// coverage figure in the plan so far has been a guess, and vendors publish
+// marketing numbers. Nobody knows how well any of this works on a 30-person law
+// firm in Riyadh until we run it.
 //
-// Three decisions hang on the output: whether Ever Jobs is worth a container,
-// whether TheirStack is worth paying for, and whether GCC coverage is good
-// enough to run the product there at all.
+// Three decisions depend on the output: whether Ever Jobs is worth setting up,
+// whether TheirStack is worth paying for, and whether we can cover the Gulf well
+// enough to sell there at all.
 //
-//   npm run eval:research              all domains
-//   npm run eval:research -- --limit 5 first five, for a smoke run
+//   npm run eval:research              every domain
+//   npm run eval:research -- --limit 5 just the first five, for a quick check
 //
-// Writes evals/research/results.json next to this file and prints the summary
-// that goes onto the Linear card.
+// It writes results.json next to this file, and prints the summary that goes on
+// the Linear card.
 //
-// This costs real money and real credits: one fast-model extraction per
-// posting, one analyst call per scout that adds sources, and a Firecrawl credit
-// per careers page that blocks a plain fetch. It is not part of `npm test` for
-// that reason.
+// This costs real money and real credits: one cheap model call per job posting,
+// one analyst call per scout that adds sources, and one Firecrawl credit per
+// careers page that blocks a plain request. That is why it is not part of
+// `npm test`.
 // ─────────────────────────────────────────────────────────────────────────────
 
 import fs from 'node:fs'
@@ -32,8 +33,8 @@ import * as esbuild from 'esbuild'
 const here = path.dirname(fileURLToPath(import.meta.url))
 const root = path.resolve(here, '../..')
 
-/* Load .env.local the same way `next dev` would. The pipeline degrades without
-   keys, but the whole point of this run is to measure it configured. */
+/* Load .env.local the same way `next dev` does. The pipeline still runs without
+   keys, but the whole point of this measurement is to see it fully set up. */
 const envPath = path.join(root, '.env.local')
 if (fs.existsSync(envPath)) {
   for (const line of fs.readFileSync(envPath, 'utf8').split('\n')) {
@@ -46,17 +47,17 @@ if (fs.existsSync(envPath)) {
 
 const argLimit = process.argv.indexOf('--limit')
 const LIMIT = argLimit > -1 ? Number(process.argv[argLimit + 1]) : Infinity
-/* Modest concurrency: enough to finish in minutes, low enough that the
-   Firecrawl per-minute cap is never the thing being measured. */
+/* A few at a time: enough to finish in minutes, few enough that Firecrawl's
+   per-minute limit is never what we end up measuring. */
 const CONCURRENCY = 3
 
 const cacheRoot = path.join(root, 'node_modules/.cache')
 fs.mkdirSync(cacheRoot, { recursive: true })
 
-/* One entry re-exporting both, because the analyst is the thing this harness
-   now exists to read and it does not sit inside the orchestrator — the
-   orchestrator deliberately imports no model. Bundling them separately would
-   give each its own copy of the fact-store and cache modules. */
+/* One entry file re-exporting both. The analyst is what this harness now exists
+   to read, and it does not live inside the part that runs the scouts — that
+   part deliberately imports no model code. Bundling them separately would give
+   each its own private copy of the fact store and the page cache. */
 const entry = path.join(cacheRoot, 'r8-entry.ts')
 fs.writeFileSync(
   entry,
@@ -86,10 +87,10 @@ const targets = domains.slice(0, LIMIT)
 async function measure(entry) {
   const startedAt = Date.now()
   try {
-    /* The analyst runs off the same hook the scan panel will use, so what this
-       harness prints is what a prospect would have been shown — including the
-       order it arrived in. `firstFindingMs` is the number the ~3s first-paint
-       target is judged against. */
+    /* The analyst runs through the same callback the side panel uses, so what
+       this prints is exactly what a prospect would have seen, in the order they
+       would have seen it. The time to the first finding is the number our
+       "something on screen within about 3 seconds" target is judged on. */
     let firstFindingMs = null
     const analyst = createResearchAnalyst(entry.domain, {
       onFinding: () => {
@@ -108,16 +109,17 @@ async function measure(entry) {
         (a) => a.outcome === 'hit' && a.source.startsWith(prefix),
       )?.source ?? null
 
-    /* An ATS board that exists but is empty is a 'hit' at the transport level
-       and still contributed nothing. Attributing the run to L1 in that case
-       overstates ATS coverage — the postings, if any, came from the careers
-       page. `notes` is where S2 records an empty board. */
+    /* A hiring board that exists but is empty counts as a successful request and
+       still gave us nothing. Crediting the run to the hiring-platform step in
+       that case overstates how well those platforms cover us — any postings we
+       got came from the careers page instead. */
     const emptyBoard = /board found with no open roles/.test(s2?.notes ?? '')
-    /* `search` is the L1.5 discovery tier, not an ATS platform. Counting it as
-       one overstated direct-ATS coverage in the first run of this harness. */
-    /* `job-detail` is a page followed FROM a discovered listing, so it belongs
-       to the discovery tier. Counting it as an ATS platform overstated direct
-       ATS coverage — the same mistake empty Workable boards caused earlier. */
+    /* Search is the finding-by-search step, not a hiring platform. Counting it
+       as one overstated direct hiring-platform coverage in this harness's first
+       run. */
+    /* A job page we followed FROM a list we found by searching belongs to the
+       search step. Counting it as a hiring platform overstated direct coverage
+       — the same mistake empty Workable boards caused earlier. */
     const isAts = (a) =>
       a.outcome === 'hit' &&
       !a.source.startsWith('careers') &&
@@ -150,9 +152,9 @@ async function measure(entry) {
       },
       s2: {
         status: s2?.status ?? null,
-        /* Real dated roles only. A careers page we could read but not split
-           into roles is one web page, not one job, and counting it here is
-           how the measurement starts overstating what we know. */
+        /* Real, dated jobs only. A careers page we could read but not split
+           into individual jobs is one web page, not one job, and counting it
+           here is how this measurement starts overstating what we know. */
         postings: (s2?.facts?.postings ?? []).filter(
           (p) => (p?.kind ?? 'posting') !== 'page',
         ).length,
@@ -181,11 +183,10 @@ async function measure(entry) {
         repeats: s2?.facts?.repeatPostings ?? [],
         notes: s2?.notes ?? null,
       },
-      /* The old `manualWork` field was the verb-set intersection, deleted with
-         the set in LYR-216. What replaces it cannot be scored automatically —
-         the check is reading these findings for 5-10 firms and asking whether
-         each is true, specific to that company, and worth a prospect's
-         attention. */
+      /* The old field here came from the verb list, which was deleted in
+         LYR-216. What replaced it cannot be scored automatically. The check is a
+         person reading these findings for 5 to 10 firms and asking, of each one:
+         is it true, is it specific to this company, and would a prospect care. */
       analyst: {
         tier: assessment.confidenceTier,
         firstFindingMs,
@@ -206,8 +207,9 @@ async function measure(entry) {
   }
 }
 
-/* Fixed-size worker pool rather than a chunked barrier, so a slow domain does
-   not idle the other two workers behind it. */
+/* A fixed number of workers pulling from one queue, rather than processing in
+   batches. That way one slow domain does not leave the other two workers idle
+   waiting for it. */
 const results = []
 let cursor = 0
 await Promise.all(
@@ -239,7 +241,7 @@ fs.writeFileSync(
   `${JSON.stringify({ ranAt: new Date().toISOString(), results }, null, 2)}\n`,
 )
 
-// ── the four questions ───────────────────────────────────────────────────────
+// -- the four questions this whole run exists to answer ----------------------
 
 const icp = results.filter((r) => r.segment !== 'control')
 const pct = (n, d) => (d === 0 ? '—' : `${Math.round((n / d) * 100)}%`)

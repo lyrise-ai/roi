@@ -145,8 +145,9 @@ export async function maybeSendUsageCostAlert(args: {
   const allowInDev = process.env.ROI_USAGE_ALERTS_IN_DEV === 'true'
   if (process.env.NODE_ENV === 'development' && !allowInDev) return
 
-  // Recipients are env-driven so we don't bake the team's addresses into the
-  // repo. Prod must set ROI_USAGE_ALERT_EMAILS or alerts stay silent.
+  // Who gets the alert comes from settings, so the team's email addresses are
+  // not written into the repo. Production must set ROI_USAGE_ALERT_EMAILS or no
+  // alerts are sent at all.
   const recipients = parseEmailList(
     process.env.ROI_USAGE_ALERT_EMAILS ?? process.env.DEV_ALERT_EMAILS,
   )

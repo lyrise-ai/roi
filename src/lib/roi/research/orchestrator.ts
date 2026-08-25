@@ -1,29 +1,31 @@
 // ─────────────────────────────────────────────────────────────────────────────
-// orchestrator — runs the scouts and streams their results (LYR-187 R5 /
-// LYR-198).
+// orchestrator — runs the scouts and passes their results out as they arrive
+// (LYR-187 R5 / LYR-198).
 //
-//   S1 runs alone and first (~1s)   gates everything
-//        ↓ {region, vertical}
-//   S2 runs                          Promise.allSettled, never Promise.all
-//        ↓
-//   results stream into the fact store as each resolves
-//        ↓
-//   aggregation once everything settles
+//   S1 runs first, on its own (about 1s)   everything else waits on it
+//        v  region and business type
+//   S2 runs                                 we wait for all of them to
+//        v                                  settle, and never let one
+//                                           failure abort the rest
+//   each result is stored the moment it lands
+//        v
+//   we summarise once everything has settled
 //
-// S1 must finish before S2 dispatches because S2's later tiers pick sources by
-// region. Scope is S1 + S2 for the POC; S3 moved out (LYR-197). The registry
-// below is what makes adding S3–S7 a config change rather than a rewrite, but
-// it deliberately does not pretend to orchestrate scouts that do not exist.
+// S1 has to finish before S2 starts, because S2's later steps pick where to
+// look based on the region. The POC covers S1 and S2 only; S3 moved out to
+// LYR-197. The list below is what makes adding S3 to S7 a config change rather
+// than a rewrite — but it does not pretend to run scouts that do not exist yet.
 //
-// Two properties the scan panel depends on:
+// Two things the side panel depends on:
 //
-//   Results stream. Each scout writes to the store the moment it resolves, so
-//   the panel can render S1's firmographics while S2 is still crawling. Do not
-//   batch and write at the end — that turns a progressive panel into a spinner.
+//   Results arrive one at a time. Each scout writes its result the moment it
+//   finishes, so the panel can show S1's company details while S2 is still
+//   working. Never collect them and write at the end — that turns a panel that
+//   fills up into a spinner.
 //
-//   A slow scout degrades one row, never the panel. Everything is wrapped so
-//   that a scout which throws, hangs or times out becomes an ERROR result
-//   alongside its siblings rather than an exception that takes down the run.
+//   A slow scout costs one row, never the panel. Everything is wrapped so that
+//   a scout which throws, hangs or runs out of time becomes an error result
+//   next to its siblings, rather than an exception that kills the run.
 // ─────────────────────────────────────────────────────────────────────────────
 
 import { type ResearchSummary, summarize } from './aggregate'
@@ -33,31 +35,32 @@ import { getJobPostings } from './scouts/s2'
 import type { Region } from './scouts/s1Derive'
 import type { ScoutId, ScoutResult } from './types'
 
-/* Worst-case wall clock for a whole run, and deliberately the SUM of the
-   per-scout budgets below rather than a separate countdown they share. Anything
-   unresolved past its own budget becomes ERROR with a note, so a hung scout
-   costs one row rather than the run. The interview this sits behind lasts
-   minutes; nothing here should ever approach 30s. */
+/* The worst case for a whole run. It is deliberately the SUM of the per-scout
+   limits below, not a shared countdown they race each other for. A scout that
+   passes its own limit becomes an error with a note, so a stuck scout costs one
+   row rather than the run. The questions this sits behind take minutes;
+   nothing here should ever get near 30 seconds. */
 export const RUN_BUDGET_MS = 30_000
 
-/* Per-scout budgets, deliberately NOT a shared countdown.
+/* A time limit per scout, deliberately NOT one shared countdown.
 
-   The first version handed S1 the whole run budget and gave S2 whatever was
-   left, floored at 1s. When S1 hung for the full 30s, S2 was dispatched with
-   1s, timed out instantly and reported ERROR — so the company scored THIN
-   because *both* scouts failed, when only one had. `stalawfirm.com` in the
-   25-domain coverage run is exactly this:
+   The first version gave S1 the whole budget and handed S2 whatever was left,
+   with a floor of 1 second. So when S1 hung for the full 30 seconds, S2 started
+   with 1 second, timed out at once and reported an error — and the company was
+   scored thin because BOTH scouts had failed, when really only one had.
+   `stalawfirm.com` in the 25-domain coverage run is exactly this:
 
      gaps: [ { S1, 'exceeded 30000ms budget' },
              { S2, 'exceeded 1000ms budget'  } ]
 
-   S2's failure there was entirely an artifact of our own scheduling, and THIN
-   is the tier that tells the observation generator to say nothing at all. We
-   were staying silent about a company we could have spoken about.
+   S2's failure there was entirely caused by our own scheduling. And thin is the
+   level that tells the writer to say nothing at all. We were staying quiet
+   about a company we could have spoken about.
 
-   S1's own target is ~1s and its observed p90 is well under 5s, so 10s is
-   generous. S2 legitimately takes longer — it searches, then fetches several
-   pages, then extracts each one. The two sum to RUN_BUDGET_MS by design. */
+   S1 aims for about a second and almost always finishes well under five, so ten
+   is generous. S2 legitimately takes longer: it searches, fetches several
+   pages, then reads each one. The two add up to the whole-run limit on
+   purpose. */
 export const S1_BUDGET_MS = 10_000
 export const S2_BUDGET_MS = 20_000
 
@@ -71,9 +74,10 @@ const EMPTY_RESULT = (scout: ScoutId, notes: string): ScoutResult<null> => ({
   notes,
 })
 
-/* Wraps a scout so no failure mode can escape: a rejection, a hang, or a
-   scout that resolves after the deadline all become an ERROR result. ERROR and
-   not NONE — we failed to look, we did not establish there was nothing. */
+/* Wraps a scout so no kind of failure can escape. A thrown error, a hang, or a
+   scout that answers after its time is up all become an error result. An error,
+   never "nothing found" — we failed to look; we did not establish that there
+   was nothing there. */
 async function settle<T>(
   scout: ScoutId,
   work: Promise<ScoutResult<T>>,
@@ -113,9 +117,9 @@ export type ResearchRun = {
 }
 
 export type RunOptions = {
-  /* Called the moment a scout lands, before the run finishes. This is the hook
-     the scan panel streams from — waiting for the return value would defeat
-     the point. */
+  /* Called the moment a scout finishes, long before the run is over. This is
+     what the side panel fills itself from. Waiting for the final return value
+     would defeat the whole point. */
   onScoutResolved?: (result: ScoutResult<unknown>) => void
   budgetMs?: number
   store?: FactStore
@@ -134,14 +138,14 @@ export async function runResearch(
     try {
       options.onScoutResolved?.(result)
     } catch {
-      /* A consumer's callback throwing is the consumer's problem, not a reason
-         to fail the research run. */
+      /* If the caller's own callback throws, that is the caller's problem, not
+         a reason to fail the research run. */
     }
   }
 
-  /* S1 alone and first. Every later scout picks sources by region, so
-     dispatching them in parallel with S1 would mean routing on a region we do
-     not have yet. */
+  /* S1 on its own, first. Every later scout picks where to look based on the
+     region, so starting them alongside S1 would mean choosing sources before we
+     know the region. */
   const s1 = await settle('S1', runS1(domain), Math.min(S1_BUDGET_MS, budgetMs))
   await land(s1)
 
@@ -152,27 +156,30 @@ export async function runResearch(
     canonicalDomain?: { value?: string }
   } | null
   const region = s1Facts?.region?.value
-  /* S2's discovery tier shapes its query with the vertical when S1 resolved
-     one — "legal" and "accounting" pull very different results. */
+  /* When S1 worked out the type of business, S2's search uses it. "Legal" and
+     "accounting" bring back very different results. */
   const vertical = s1Facts?.vertical?.value
-  /* The firm's name as it writes it, and any host it declares equivalent to
-     its domain. Both are optional and S2 degrades to its old behaviour without
-     them — but they are the difference between searching for "gowlingwlg" and
-     "Gowling WLG", and between keeping and discarding the real careers page of
-     a firm that redirects to another TLD (LYR-221). */
+  /* The firm's name as the firm writes it, and any other domain it says is
+     the same as its own. Both are optional, and without them S2 falls back to
+     how it used to work. But they are the difference between searching for
+     "gowlingwlg" and "Gowling WLG", and between keeping and throwing away the
+     real careers page of a firm that redirects to a different domain
+     (LYR-221). */
   const companyName = s1Facts?.name?.value
   const canonicalDomain = s1Facts?.canonicalDomain?.value
 
-  /* S2's budget is its own, not the remainder of a shared countdown. Nothing
-     S1 did can shrink it, which is the whole point — a scout that blows its
-     budget now costs its own row and nothing else. It is still scaled down by
-     an unusually small `budgetMs` so a caller asking for a fast run gets one. */
+  /* S2's time limit is its own, not what is left over from a shared countdown.
+     Nothing S1 did can shrink it, which is the whole point: a scout that runs
+     out of time now costs its own row and nothing else. It is still cut down if
+     the caller asked for an unusually short run, so "make it fast" still
+     works. */
   const s2Budget = Math.min(S2_BUDGET_MS, budgetMs)
 
-  /* allSettled, never all. With one scout in the POC the difference is
-     invisible; with S3–S7 it is the difference between one provider outage
-     degrading a row and taking down the run. The shape is here so adding a
-     scout is appending to this array. */
+  /* We wait for every scout to settle, and never abort on the first failure.
+     With one scout in the POC you cannot see the difference. With S3 to S7 it
+     is the difference between one provider being down costing a row, and it
+     killing the whole run. The shape is here so that adding a scout means
+     adding to this list. */
   const rest = await Promise.allSettled([
     settle(
       'S2',
