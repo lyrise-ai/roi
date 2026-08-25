@@ -379,3 +379,91 @@ test('jobLinksFrom dedupes, caps and survives junk', () => {
   assert.deepEqual(s.jobLinksFrom(null, 'https://acmelaw.com/jobs'), [])
   assert.deepEqual(s.jobLinksFrom('<a href="/jobs/x-1">x</a>', 'not a url'), [])
 })
+
+// ── LYR-221: the alias, the subdomain, and the named query ───────────────────
+
+test('a host the company declares canonical is its own, not a stranger', () => {
+  /* Observed: kingsleynapley.com redirects to, and declares rel=canonical on,
+     kingsleynapley.co.uk. Search returned the real careers page and we threw
+     it away as a different company. */
+  assert.equal(
+    s.classifyHost(
+      'https://www.kingsleynapley.co.uk/careers',
+      'kingsleynapley.com',
+    ),
+    'other',
+    'without the alias it is still correctly unattributable',
+  )
+  assert.equal(
+    s.classifyHost(
+      'https://www.kingsleynapley.co.uk/careers',
+      'kingsleynapley.com',
+      ['kingsleynapley.co.uk'],
+    ),
+    'own',
+  )
+})
+
+test('an alias does not open the door to a different member firm', () => {
+  /* bakertilly.com declares no canonical, so no alias is ever produced for it
+     and bakertilly.ca stays rejected. Even handed an unrelated alias, a host
+     that matches neither is still `other`. */
+  assert.equal(
+    s.classifyHost('https://bakertilly.ca/careers', 'bakertilly.com'),
+    'other',
+  )
+  assert.equal(
+    s.classifyHost('https://bakertilly.ca/careers', 'bakertilly.com', [
+      'bakertilly.co.uk',
+    ]),
+    'other',
+  )
+})
+
+test('rankHits keeps a vacancy page on an aliased host', () => {
+  const hits = [
+    { url: 'https://www.kingsleynapley.co.uk/careers', title: 'Careers' },
+  ]
+  assert.equal(rankLen(hits, 'kingsleynapley.com'), 0)
+  assert.equal(rankLen(hits, 'kingsleynapley.com', ['kingsleynapley.co.uk']), 1)
+})
+
+function rankLen(hits, domain, aliases = []) {
+  return s.rankHits(hits, domain, 4, aliases).length
+}
+
+test('a careers SUBDOMAIN is a vacancy URL even with an empty path', () => {
+  /* careers.bdo.co.uk classified `own` and was then dropped because its
+     pathname is bare "/". It was the right page for one of the six zero-yield
+     domains in the measurement. */
+  assert.equal(s.isVacancyUrl('https://careers.bdo.co.uk'), true)
+  assert.equal(s.isVacancyUrl('https://jobs.acmelaw.com/'), true)
+  assert.equal(s.isVacancyUrl('https://www.acmelaw.com/about'), false)
+  assert.equal(s.isVacancyUrl('https://acmelaw.com/'), false)
+})
+
+test('rankHits now keeps the careers subdomain it used to drop', () => {
+  const hits = [{ url: 'https://careers.bdo.co.uk', title: 'Careers at BDO' }]
+  assert.equal(rankLen(hits, 'bdo.co.uk'), 1)
+})
+
+test('discoveryQuery prefers the real company name over the domain token', () => {
+  /* "gowlingwlg" returned a German packaging company four times; "Gowling WLG"
+     returned four usable hits. */
+  const withName = s.discoveryQuery('gowlingwlg.com', 'legal', 'Gowling WLG')
+  assert.match(withName, /"Gowling WLG"/)
+  assert.ok(!withName.includes('"gowlingwlg"'))
+
+  const withoutName = s.discoveryQuery('gowlingwlg.com', 'legal')
+  assert.match(withoutName, /"gowlingwlg"/, 'falls back to the old behaviour')
+})
+
+test('discoveryQuery refuses a name that would break the phrase match', () => {
+  /* A quote in the name would terminate the quoted phrase early. */
+  assert.match(
+    s.discoveryQuery('acmelaw.com', 'legal', 'Acme "The Firm" Law'),
+    /"acmelaw"/,
+  )
+  assert.match(s.discoveryQuery('acmelaw.com', 'legal', '  '), /"acmelaw"/)
+  assert.match(s.discoveryQuery('acmelaw.com', 'legal', 'A'), /"acmelaw"/)
+})

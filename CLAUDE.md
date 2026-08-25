@@ -109,7 +109,15 @@ npm run dev:test       # Dev server on :3777 — the port the Playwright config 
 npm run build          # Lint errors are IGNORED during build; `npm run lint` is the gate
 npm run test:e2e:smoke # @smoke subset (~1 min) vs. the full suite
 npm run eval:roi       # ROI report eval harness
+npm run eval:research  # Research coverage harness — costs real API spend
+npm run deadcode       # knip; clean today, keep it that way
 ```
+
+`knip.json` lists `src/lib/roi/research/**` and `src/lib/roi/v2/*` as **entry
+points**, not because anything imports them but because nothing statically
+does: the research tests and the coverage harness reach them through esbuild at
+runtime. Drop those globs and knip declares the whole research subsystem dead.
+knip rejects unknown keys, so that note cannot live in the config itself.
 
 ## Environment variables
 

@@ -14,9 +14,10 @@
    PDL → site. Adding one later means adding its key here and its adapter in
    scouts/s1.ts; nothing downstream of the scout changes.
 
-   Tavily and Brave are read through the same accessor even though the older ROI
-   pipeline reads them directly, so S2's discovery tier gets the same "blank is
-   a supported state" behaviour as every other provider here. */
+   Tavily and Brave are read through this accessor by `tools/webSearch`, which
+   since LYR-221 is the only place either key is read — the research path and
+   the older ROI agent share one provider cascade rather than carrying a copy
+   each. Everything gets the same "blank is a supported state" behaviour. */
 export type ProviderKey =
   | 'FIRECRAWL_API_KEY'
   | 'PDL_API_KEY'

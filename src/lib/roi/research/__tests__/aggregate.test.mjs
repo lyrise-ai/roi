@@ -6,6 +6,11 @@
 // make "we don't know enough to say something specific" enforceable rather
 // than hoped for: NONE and ERROR score differently, and THIN is reachable.
 //
+// What used to be tested here and no longer is: `manualWorkIndicators`, the
+// verb-set intersection. It was deleted with the set (LYR-216) — judging
+// whether a verb means manual work needs the posting it came from, so it moved
+// to `researchAnalyst.ts` and is covered by that file's tests.
+//
 //   Run:  node --test src/lib/roi/research/__tests__/aggregate.test.mjs
 //
 import assert from 'node:assert/strict'
@@ -129,58 +134,6 @@ test('the three tiers are genuinely reachable', () => {
   assert.deepEqual([...tiers].sort(), ['MODERATE', 'RICH', 'THIN'])
 })
 
-// ── manualWorkIndicators ─────────────────────────────────────────────────────
-
-test('manualWorkIndicators keeps document work and drops professional judgement', () => {
-  /* Calibrated against what 22 real professional-services firms actually
-     advertise. The first version of this set was written a priori around
-     back-office verbs (reconcile, re-key, chase invoices) and matched NOTHING
-     across the whole ICP — these firms advertise document work.
-
-     `draft` and `review` are in: the parent card's own worked example is
-     "people whose first listed duty is document review". `negotiate` and
-     `advise` are out: automating professional judgement is not what this
-     product sells, and claiming it in front of a partner would be
-     embarrassing. */
-  const out = a.manualWorkIndicators([
-    { title: 'Paralegal', taskVerbs: ['chase', 'draft', 'reconcile'] },
-    { title: 'Associate', taskVerbs: ['negotiate', 'advise', 'review'] },
-    { title: 'Bookkeeper', taskVerbs: ['collate', 'mentor'] },
-  ])
-
-  assert.deepEqual(out, ['chase', 'collate', 'draft', 'reconcile', 'review'])
-})
-
-test('irreducibly professional verbs are never counted as manual work', () => {
-  const out = a.manualWorkIndicators([
-    {
-      title: 'Partner',
-      taskVerbs: [
-        'negotiate',
-        'advise',
-        'advocate',
-        'represent',
-        'mentor',
-        'coach',
-      ],
-    },
-  ])
-  assert.deepEqual(out, [])
-})
-
-test('manualWorkIndicators dedupes, sorts, and survives junk', () => {
-  assert.deepEqual(
-    a.manualWorkIndicators([
-      { taskVerbs: ['Chase', ' chase '] },
-      { taskVerbs: ['chase'] },
-    ]),
-    ['chase'],
-  )
-  assert.deepEqual(a.manualWorkIndicators([]), [])
-  assert.deepEqual(a.manualWorkIndicators(null), [])
-  assert.deepEqual(a.manualWorkIndicators([{}, { taskVerbs: null }]), [])
-})
-
 // ── summarize ────────────────────────────────────────────────────────────────
 
 test('summarize reports coverage, tier and the gaps behind them', () => {
@@ -194,7 +147,6 @@ test('summarize reports coverage, tier and the gaps behind them', () => {
   assert.deepEqual(summary.coverage, { S1: 'FULL', S2: 'FULL' })
   assert.equal(summary.confidenceTier, 'RICH')
   assert.equal(summary.coverageScore, 1)
-  assert.deepEqual(summary.manualWorkIndicators, ['chase'])
   assert.deepEqual(summary.gaps, [])
 })
 

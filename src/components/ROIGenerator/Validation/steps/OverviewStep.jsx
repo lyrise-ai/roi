@@ -154,7 +154,7 @@ export default function OverviewStep({
 
   return (
     <div>
-      <div className="mb-[18px] rounded-2xl bg-[#0B1528] px-9 py-8 text-white">
+      <div className="mb-[18px] rounded-2xl bg-[#0B1528] px-9 py-8 text-white [--heading-ink:currentColor]">
         <div className="mb-3 text-[10.5px] font-bold uppercase tracking-[0.14em] text-[#7C8CB0]">
           Confidential · Prepared by LyRise AI
         </div>

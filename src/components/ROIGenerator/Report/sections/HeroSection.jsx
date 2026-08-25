@@ -54,7 +54,7 @@ export default function HeroSection({
   currency,
 }) {
   return (
-    <div className="rounded-2xl bg-[#0B1528] px-[38px] py-[34px] text-white">
+    <div className="rounded-2xl bg-[#0B1528] px-[38px] py-[34px] text-white [--heading-ink:currentColor]">
       <div className="mb-3.5 text-[10.5px] font-bold uppercase tracking-[0.14em] text-[#7C8CB0]">
         Confidential · Prepared by LyRise AI
       </div>
