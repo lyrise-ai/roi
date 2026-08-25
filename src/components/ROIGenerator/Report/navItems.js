@@ -1,9 +1,10 @@
-// The 11 section-nav entries, shared by SectionNav (rendering + scroll-spy)
-// and ReportContent (registering scrollable section refs). `changedKeys` is
-// the reverse of ReportViewer's old hand-maintained CHANGED_TO_NAV_KEYS map —
-// which chat-tool `changedSections` values (agent.ts) light this nav item up
-// — kept here instead so there's one list instead of two independently
-// maintained ones.
+// The 11 entries in the report's side navigation. Two things use this list: the
+// nav itself, for drawing and for tracking which section you are looking at, and
+// the report body, for registering where each section starts.
+//
+// Each entry also lists which section names from the chat tools should light it
+// up. That used to be a separate map, kept by hand in ReportViewer. It lives here
+// now, so there is one list instead of two that drift apart.
 export const NAV_ITEMS = [
   { key: 'overview', label: 'Overview', changedKeys: ['financials', 'thesis'] },
   { key: 'snapshot', label: 'Company Snapshot', changedKeys: [] },
@@ -18,8 +19,8 @@ export const NAV_ITEMS = [
   { key: 'next', label: 'Next Steps', changedKeys: ['cta'] },
 ]
 
-// Inverts NAV_ITEMS' changedKeys into { changedKey: [navKey, ...] } — the
-// shape ReportViewer's chat-update handler actually needs.
+// Flips that list around, into "for this section name, light up these nav
+// entries" — which is the shape the chat-update handler actually needs.
 export function buildChangedToNavKeys() {
   const map = {}
   NAV_ITEMS.forEach(({ key, changedKeys }) => {

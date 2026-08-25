@@ -1,6 +1,7 @@
 /**
- * Auth wall + login page tests — all run anonymously.
- * Tests that ALL protected routes redirect correctly and the login UI is intact.
+ * Tests for the sign-in wall and the login page. All run signed out.
+ * They check that EVERY protected page redirects properly, and that the login
+ * screen itself still works.
  */
 import { test, expect } from '@playwright/test'
 

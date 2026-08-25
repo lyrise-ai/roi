@@ -1,8 +1,9 @@
 import { popoverPositionFor } from '@/src/lib/tourPopover'
 
-// Renders the dim/spotlight/popover chrome for a single active tour step.
-// Step-tracking logic lives in src/hooks/useSpotlightTour.js — this
-// component is purely presentational so it can be reused across tours.
+// Draws one step of a tour: the dimmed background, the highlighted cut-out and
+// the pop-up. Keeping track of which step we are on lives in
+// src/hooks/useSpotlightTour.js. This component only draws, so it can be reused
+// by any tour.
 export default function SpotlightTourOverlay({
   tourRect,
   step,
@@ -30,7 +31,8 @@ export default function SpotlightTourOverlay({
 
   return (
     <>
-      {/* Dim panels that create the spotlight cutout */}
+      {/* The four dark panels that leave a hole around the highlighted
+          element */}
       <div
         style={{
           ...dimStyle,

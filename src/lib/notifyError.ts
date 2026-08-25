@@ -15,8 +15,8 @@ const DEV_TEAM = (process.env.DEV_ALERT_EMAILS ?? DEFAULT_DEV_TEAM.join(','))
   .map((e) => e.trim())
   .filter(Boolean)
 
-// Escape text interpolated into HTML element content. All values below come from
-// the (unauthenticated) /api/notify-error request body, so they are untrusted.
+// Makes text safe to drop into HTML. Everything below arrives in the body of a
+// request that needs no sign-in, so none of it can be trusted.
 function escapeHtml(value: unknown): string {
   return String(value ?? '')
     .replace(/&/g, '&amp;')
@@ -71,7 +71,8 @@ export async function notifyDevTeam(opts: {
   const origin = frames[0]
   const chain = frames.map((f) => f.name).join(' → ')
 
-  // Precomputed to avoid nested template literals in the markup below.
+  // Worked out here so the markup below does not need a template inside a
+  // template.
   const originLineSuffix = origin?.line ? `:${escapeHtml(origin.line)}` : ''
   const originLocationHtml = origin?.file
     ? `<span style="color:#6b7280;font-size:13px;margin-left:10px">${escapeHtml(
@@ -192,9 +193,10 @@ export async function notifyDevTeam(opts: {
     </div>
   `.trim()
 
-  // Fire-and-forget: a failed alert must never throw into the request that
-  // triggered it. But don't fail silently either — log so a broken alert
-  // pipeline (bad key, quota, invalid `from`) is visible in server logs.
+  // Start it and move on: a failed alert must never throw back into the request
+  // that caused it. But it must not fail silently either — we log, so a broken
+  // alert setup (wrong key, no quota, bad sender address) is visible in the
+  // server logs.
   try {
     const res = await fetch('https://api.resend.com/emails', {
       method: 'POST',

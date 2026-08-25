@@ -8,10 +8,10 @@ import {
 import KpiTile from '../KpiTile'
 import NumberScale from '../../NumberScale'
 
-// Uses the same workflow merge/sort and reconciling adoption-ramp-factor as
-// the PDF and web report (reportModel.ts) — the wizard only has `workflows`
-// + `calcOutput` in scope (no company/copy yet), not a full ReportState, so
-// it can't use buildReportModel() directly.
+// Uses the same joining, sorting and reconciling factor as the PDF and the web
+// report (reportModel.ts). The wizard only has the workflows and the calculated
+// figures to hand — no company or written copy yet — so it cannot call
+// buildReportModel() directly.
 function buildOverviewRows(workflowInputs, calcOutput, currency) {
   if (!calcOutput) return []
   return mergeWorkflows(workflowInputs, calcOutput.workflows).map((w) => {
@@ -122,8 +122,9 @@ export default function OverviewStep({
   const s = wizard.liveCalcOutput?.summary
   const [trustBefore, setTrustBefore] = useState(0)
 
-  // Alpha tour tracking — one tap, fire-and-forget. Never blocks starting
-  // the wizard: not awaited, errors only go to console.
+  // Tracking for the alpha tour. One tap, sent and forgotten. It never holds up
+  // starting the wizard: we do not wait for it, and errors only reach the
+  // console.
   const rateTrustBefore = (value) => {
     setTrustBefore(value)
     if (!isAlpha) return

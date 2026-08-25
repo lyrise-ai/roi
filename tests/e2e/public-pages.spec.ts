@@ -1,7 +1,6 @@
 /**
- * Public page tests — pages accessible without authentication.
- * Verifies the feedback flow that customers interact with after receiving
- * a report.
+ * Tests for the pages anyone can reach without signing in.
+ * They check the feedback flow customers use after receiving a report.
  */
 import { test, expect } from '@playwright/test'
 
@@ -28,7 +27,7 @@ test.describe('/roi-feedback', () => {
   })
 
   test('rating buttons are clickable', async ({ page }) => {
-    // Each question has options 1–5; clicking one should not throw
+    // Each question offers 1 to 5. Clicking one should not break anything.
     const ratingButtons = page
       .getByRole('button')
       .filter({ hasText: /^[1-5]$/ })

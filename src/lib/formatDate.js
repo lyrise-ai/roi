@@ -1,16 +1,20 @@
-/* The one place timestamps become strings.
-   Three screens used to each carry their own copy of this; they drifted.
+/* The one place timestamps turn into text.
+   Three screens each used to carry their own copy of this, and they drifted
+   apart.
 
-   Two hazards these helpers exist to absorb:
+   Two traps these helpers exist to absorb:
 
-   1. Postgres hands back timestamps without a zone suffix ("2026-08-10 21:05:33").
-      `new Date()` reads those as *local* time, which silently shifts every
-      rendered date by the viewer's offset. `parseTimestamp` appends the Z.
+   1. Our database returns timestamps with no timezone on the end, like
+      "2026-08-10 21:05:33". JavaScript reads those as LOCAL time, which quietly
+      shifts every date on screen by the viewer's own offset. So we add the
+      timezone marker ourselves.
 
-   2. `toLocaleString()` picks its own date/time joiner ("," vs " at ") from the
-      engine's bundled ICU/CLDR data, which differs between Node (SSR) and the
-      browser — a hydration mismatch even when the instant agrees. So date and
-      time are formatted separately and joined with a literal comma. */
+   2. The built-in formatter chooses its own joining text between the date and
+      the time — a comma, or the word "at" — from data bundled with whatever is
+      running it. That differs between our server and the browser, so the page
+      would render one way on the server and another in the browser, even with
+      the same instant. So we format the date and the time separately and join
+      them with a comma ourselves. */
 
 export function parseTimestamp(iso) {
   if (!iso) return null

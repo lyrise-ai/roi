@@ -1,18 +1,17 @@
 import clsx from 'clsx'
 
-// Shared 1-5 rating control for the alpha tour's inline feedback questions
-// (intake ease, trust before/after, report clarity). One component so all
-// four read as the same product control rather than four one-off pickers.
+// The 1-to-5 rating control used by all four alpha-tour questions: how easy the
+// form was, trust before and after, and how clear the report was. One component,
+// so all four read as the same control rather than four separate pickers.
 //
-// `variant="dark"` is for placement on the navy "starting guess" card.
-// `align` should match the surrounding question's own text alignment so the
-// two read as one unit — 'left' everywhere except the dark card, whose
-// question is centered.
+// The dark version is for the navy "starting guess" card.
+// The alignment should match the question above it, so the two read as one
+// block: left everywhere except on the dark card, whose question is centred.
 //
-// The block is width-locked to its own content (`w-fit`), never the parent's
-// full width, and the label row is a plain 2-item `justify-between` inside
-// that same fit-content box — so the end labels land exactly on the box
-// group's own outer edges, not spread across whatever container it sits in.
+// The whole block is exactly as wide as its own contents, never as wide as
+// whatever it sits inside. The end labels sit at the two edges of that same
+// fit-to-content box, so they line up with the outer boxes rather than
+// spreading across the container.
 export default function NumberScale({
   value = 0,
   onChange,

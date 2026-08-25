@@ -1,13 +1,13 @@
-// The load-bearing property of the server client: with no project token it is
-// completely inert. CI runs the full Playwright suite against a real Supabase
-// project, and if these calls did anything without a token, every CI run would
-// pour synthetic traffic and fake "errors" into the production PostHog project
-// — the one the 2am alerts fire from.
+// The thing that matters most about the server analytics client: with no token
+// set, it does absolutely nothing. CI runs the whole browser suite against a
+// real database, and if these calls did anything without a token, every CI run
+// would pour fake traffic and fake errors into the real PostHog project — the
+// one the 2am alerts come from.
 //
 // The other half is that nothing here throws. These functions sit on the
-// report-generation path, where CLAUDE.md's rule is that a failure degrades to
-// a partial result rather than an exception, and telemetry is the last thing
-// that should ever break a prospect's report.
+// report-generation path, where the rule (see CLAUDE.md) is that a failure gives
+// a partial result rather than an exception. Analytics is the last thing that
+// should ever break a prospect's report.
 import assert from 'node:assert/strict'
 import { test } from 'node:test'
 

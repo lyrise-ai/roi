@@ -1,7 +1,8 @@
 // POST /api/analytics/demo-event
-// Records a demo tour interaction in the shared events table.
-// Auth is optional — the form page is auth-gated so user will usually be
-// logged in, but we accept unauthenticated writes too (share-link visitors).
+// Records one interaction with the demo tour in the shared events table.
+// Being signed in is optional. The form page needs a sign-in, so usually they
+// are — but we accept writes from people who are not, such as share-link
+// visitors.
 
 import {
   createClient,
@@ -47,7 +48,8 @@ export default async function handler(req, res) {
     }
   }
 
-  // Attempt to read the auth user — non-fatal if missing or session expired.
+  // Try to see who is signed in. Fine if nobody is, or the session has
+  // expired.
   let userId = null
   try {
     const supabase = createClient(req, res)
@@ -56,7 +58,7 @@ export default async function handler(req, res) {
     } = await supabase.auth.getUser()
     userId = user?.id ?? null
   } catch {
-    // unauthenticated — fine, we'll write without a user_id
+    // not signed in, which is fine — we write the row with no user on it
   }
 
   const meta = {
@@ -89,9 +91,9 @@ export default async function handler(req, res) {
     return res.status(500).json({ error: 'Failed to record event' })
   }
 
-  // Mirror to PostHog. The Supabase row above stays authoritative — it backs
-  // the alpha dashboard and the usage pages — this is the copy you can slice
-  // into a funnel without writing SQL.
+  // Send the same thing to PostHog. The database row above stays the real
+  // record — it feeds the alpha dashboard and the usage pages. This is the copy
+  // you can build a funnel from without writing SQL.
   captureServer(event_type, meta, userId)
   await flushPostHog()
 

@@ -1,7 +1,7 @@
 import * as React from 'react'
 
-// Plain CSS spinner (Tailwind's animate-spin) — `border-current` inherits the
-// button's text color, matching MUI CircularProgress's `color="inherit"`.
+// A plain CSS spinner. Its border takes the button's own text colour, so it
+// always matches whatever button it sits in.
 function Spinner({ size }) {
   return (
     <span
@@ -12,10 +12,10 @@ function Spinner({ size }) {
   )
 }
 
-// Thin wrapper that gives any button a consistent "in flight" affordance:
-// disables itself and swaps its children for a spinner (or `loadingText`)
-// while `loading` is true. Renders a native <button> by default, or another
-// component via `as`.
+// A thin wrapper that gives any button the same "working on it" behaviour: it
+// disables itself and replaces its contents with a spinner, or with text you
+// pass in, while it is loading. It renders a normal button by default, or a
+// different component if you name one.
 export default function LoadingButton({
   as: Component = 'button',
   loading = false,

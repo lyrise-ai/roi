@@ -1,12 +1,15 @@
 import { createClient, createAdminClient } from '../../src/lib/supabase-server'
 import { ensureUserRecord } from '../../src/lib/authHelpers'
 
-// Landing page for admin-issued alpha invite links (see
-// /api/admin/alpha-invites). The `token` is our own durable, revocable
-// identifier — not a Supabase one-time link — so employees can hand it out
-// once and it keeps working until they revoke it. Each visit mints a fresh
-// Supabase magic-link OTP behind the scenes and verifies it immediately via
-// verifyOtp, server-side, so the visitor never sees an extra sign-in step.
+// The page an alpha invite link lands on (see /api/admin/alpha-invites).
+//
+// The token in the link is our own, long-lived and revocable — not a one-time
+// sign-in link. So staff can hand it out once and it keeps working until they
+// revoke it.
+//
+// Every visit quietly creates a fresh sign-in link behind the scenes and uses it
+// immediately, on the server, so the visitor never sees an extra sign-in
+// step.
 export async function getServerSideProps({ req, res, query }) {
   const { token } = query
   if (typeof token !== 'string' || !token) {

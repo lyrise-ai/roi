@@ -5,11 +5,10 @@ import {
 } from '@/src/lib/roi/pipeline/reportModel'
 import { fmtCurrency, fmtCurrencyShort, fmtNumber } from './format'
 
-// Builds the fully-shaped view model the report sections render from. Pure
-// function of `reportState`. Merging/matching/dedup logic lives once in
-// buildReportModel (shared with the PDF and chat agent) — this file only
-// formats that shared data into the exact prop shapes the section components
-// expect.
+// Builds the object the report's sections draw themselves from. It depends only
+// on the report itself. All the joining, matching and de-duplicating happens once
+// in buildReportModel, which the PDF and the chat agent share. This file only
+// reshapes that shared data into exactly what each section component expects.
 export function buildReportViewModel(reportState) {
   const {
     company,
@@ -343,10 +342,10 @@ function buildOutlook(summary, currency) {
     out[y.key] = {
       year: y.year,
       total: fmtCurrency(y.total, currency),
-      // A pixel height (not a CSS percentage) so the bar renders correctly
-      // regardless of how deeply it's nested inside the clickable trigger —
-      // percentage heights need every ancestor to have a definite height,
-      // which a generic button/popover wrapper doesn't guarantee.
+      // A height in pixels rather than a percentage, so the bar draws correctly
+      // however deeply it is nested inside the button. A percentage height needs
+      // every container above it to have a fixed height, and a general-purpose
+      // button or pop-up wrapper does not guarantee that.
       heightPx: Math.max(6, Math.round((y.total / maxTotal) * 140)),
       odShare: y.od,
       upliftShare: y.pu,

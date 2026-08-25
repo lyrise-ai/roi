@@ -1,13 +1,13 @@
-// The gate in front of every outbound email. This exists because the e2e
-// suite drives the real report-access and share flows against the real
-// Supabase project, and both `npm run dev` and a local `npm start` read
-// .env.local — which has a working RESEND_API_KEY. Alerts about fixture
-// companies reached real inboxes.
+// The check in front of every email this app sends. It exists because the
+// browser test suite drives the real access and sharing flows against the real
+// database, and both `npm run dev` and a local production build read
+// .env.local, which holds a working email key. Alerts about made-up test
+// companies were reaching real inboxes.
 //
-// The property worth locking in is asymmetric: the gate must block every
-// non-production environment, and must NOT block production. Getting the
-// first half wrong spams people; getting the second half wrong silently stops
-// prospects receiving their report.
+// What matters here is lopsided: the check must block every environment that is
+// not production, and must NOT block production. Getting the first half wrong
+// spams people. Getting the second half wrong silently stops prospects
+// receiving their reports.
 import assert from 'node:assert/strict'
 import { test } from 'node:test'
 
@@ -53,8 +53,8 @@ test('a dev server never sends', () => {
   )
 })
 
-// The case that actually leaked: a local production build reading .env.local,
-// which is how Playwright's webServer is configured to run in CI mode locally.
+// The case that actually leaked: a production build running locally and reading
+// .env.local, which is how the test server runs in CI mode on your machine.
 test('a local production build flagged as development never sends', () => {
   withEnv({ NODE_ENV: 'production', NEXT_PUBLIC_ENV: 'development' }, () =>
     assert.equal(outboundEmailBlockedReason(), 'NEXT_PUBLIC_ENV=development'),
@@ -67,10 +67,10 @@ test('ALLOW_OUTBOUND_EMAIL=1 is the deliberate local escape hatch', () => {
   )
 })
 
-// The regression this file's second half exists for: production on Vercel
-// carried NEXT_PUBLIC_ENV from a developer's .env, and every report email was
-// suppressed for five days without an error anywhere. VERCEL_ENV is set by the
-// platform, so it wins over anything we might have misconfigured.
+// The bug the second half of this file exists for: production on Vercel was
+// carrying an environment value from a developer's own settings, and every
+// report email was blocked for five days with no error anywhere. Vercel sets its
+// own value, so that one wins over anything we might have set wrongly.
 test('Vercel production sends even with NEXT_PUBLIC_ENV misconfigured', () => {
   withEnv(
     {
