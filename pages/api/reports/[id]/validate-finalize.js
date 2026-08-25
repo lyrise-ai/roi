@@ -1,9 +1,12 @@
-// POST /api/reports/[id]/validate-finalize — applies the validation wizard's
-// keep/remove + volume/duration decisions onto the report's WorkflowInput[],
-// recomputes the calculator/report HTML (pure — no LLM call), and marks the
-// report validated. "Add a workflow we missed" and freeform "additional
-// context" are applied separately, live, via /api/roi-agent (mode: 'chat') —
-// by the time this runs, state.workflows already reflects those edits.
+// POST /api/reports/[id]/validate-finalize — takes the decisions the user made
+// in the check-it-over wizard (keep or remove each workflow, and any corrected
+// volume or duration), applies them to the report's workflows, redoes the
+// calculations and the HTML — all plain code, no model call — and marks the
+// report as checked.
+//
+// "Add a workflow we missed" and the free-text "anything else" box are handled
+// separately and immediately, through the chat endpoint. By the time this runs,
+// the report already includes those edits.
 
 import { createClient, createAdminClient } from '@/src/lib/supabase-server'
 import {
@@ -30,12 +33,13 @@ function logEvent(admin, row) {
     })
 }
 
-// Diffs the current workflow list against the baseline snapshot: names that
-// weren't in the baseline were added via chat since it was captured; names
-// from the baseline the user chose not to keep were removed. Only meaningful
-// across separate finalize calls — within a single call, chat-added
-// workflows are already part of `workflows` by the time baseline is taken
-// (see the comment on validate-finalize's handler above).
+// Compares the current workflows against the copy taken before the user started.
+// Anything not in that copy was added through chat since. Anything in the copy
+// the user chose not to keep was removed.
+//
+// This only means anything across separate visits: within one visit, workflows
+// added through chat are already part of the list by the time we take the
+// copy (see the note at the top of this file).
 function buildWorkflowChanges(workflows, baseline, workflowDecisions) {
   const baselineNames = new Set(Object.keys(baseline.workflows))
   return {
@@ -87,15 +91,16 @@ export default async function handler(req, res) {
 
   const nowIso = new Date().toISOString()
 
-  // Normally already set at report-generation time (pages/api/roi-agent.js,
-  // before any chat edit can touch the report) — this is a fallback only for
-  // reports generated before that hook existed. Preserve whichever snapshot
-  // exists rather than recapturing on a re-run, where state.workflows would
-  // already reflect a prior adjustment.
+  // This is normally taken when the report is first generated, before any chat
+  // edit can touch it. What follows is a fallback for reports made before that
+  // existed. We keep whichever copy is already there rather than taking a new
+  // one on a second visit, when the workflows would already show earlier
+  // changes.
   const existingBaseline = report.validation_data?.baseline ?? null
 
-  // Skip path (employee/bulk preview only — see pages/report/[id]/validate.jsx's
-  // canSkip) — mark validated without touching the workflow model.
+  // The skip path, which only staff and bulk previews can use (see canSkip in
+  // pages/report/[id]/validate.jsx). It marks the report checked without
+  // touching any of the numbers.
   if (skipped) {
     const baseline =
       existingBaseline ??
@@ -138,9 +143,9 @@ export default async function handler(req, res) {
       .json({ error: 'Report has no workflows to validate' })
   }
 
-  // Fallback snapshot (see existingBaseline above) — taken before anything
-  // below mutates state.workflows, so it still includes workflows the user
-  // is about to remove, not just the ones that survive.
+  // The fallback copy (see above). We take it before anything below changes the
+  // workflows, so it still contains the ones the user is about to remove, not
+  // only the survivors.
   const baseline =
     existingBaseline ??
     buildBaselineSnapshot(state.workflows, nowIso, 'finalize-fallback')
@@ -150,7 +155,7 @@ export default async function handler(req, res) {
     workflowDecisions,
   )
 
-  // Remove first so the volume/duration pass below only ever touches
+  // Remove first, so the volume and duration corrections below only ever touch
   // workflows the user actually kept.
   let workflows = state.workflows
   Object.entries(workflowDecisions).forEach(([name, decision]) => {
@@ -176,9 +181,9 @@ export default async function handler(req, res) {
     })
   })
 
-  // Anything left over that the wizard's decision map didn't mention (e.g. a
-  // workflow added mid-wizard via chat) still made it to finalize without
-  // being removed, so treat it as validated too.
+  // Anything the wizard's decisions did not mention — a workflow added through
+  // chat partway through, for instance — reached the end without being removed,
+  // so we count it as checked too.
   workflows = workflows.map((w) =>
     Object.prototype.hasOwnProperty.call(workflowDecisions, w.name)
       ? w

@@ -5,9 +5,10 @@ import { createRouteClient } from '../../src/lib/supabaseRouteClient'
 import { createAdminClient } from '../../src/lib/supabase-server'
 import { fmtDateTimeUTC } from '../../src/lib/formatDate'
 
-// ── Server-side employee gate ─────────────────────────────────────────────────
-// Non-employees never receive the page (redirected to login). Mirrors the auth
-// pattern in pages/auth/login.js + the employee check in pages/api/reports/[id].
+// -- Staff-only check, done on the server ------------------------------------
+// Anyone who is not staff never receives this page at all; they are sent to the
+// login screen. Same pattern as pages/auth/login.js, with the same staff check
+// as pages/api/reports/[id].
 export async function getServerSideProps({ req, res }) {
   const supabase = createRouteClient(req, res)
   const {
@@ -37,12 +38,13 @@ export async function getServerSideProps({ req, res }) {
 // ── Formatting helpers ────────────────────────────────────────────────────────
 const usd = (n) => `$${Number(n || 0).toFixed(n >= 1 ? 2 : 4)}`
 const secs = (ms) => `${(Number(ms || 0) / 1000).toFixed(1)}s`
-// Comma-separated integer. The locale is pinned: toLocaleString() without one
-// picks up the host's, which differs between Node.js (SSR) and the browser.
+// Whole numbers with thousands separators. We name the language explicitly,
+// because without one the formatter follows the machine's own settings — and
+// those differ between our server and the visitor's browser.
 const INT_FMT = new Intl.NumberFormat('en-US', { maximumFractionDigits: 0 })
 const num = (n) => INT_FMT.format(Math.round(Number(n || 0)))
 
-// Human-friendly duration: "—" / "45s" / "3m 20s".
+// A readable length of time: "—", "45s", or "3m 20s".
 const dur = (ms) => {
   const total = Math.round(Number(ms || 0) / 1000)
   if (!total) return '—'
@@ -200,9 +202,9 @@ export default function UsageDashboard() {
   )
 }
 
-// Blue "View" link that opens the report (and its chat thread) in a new tab.
-// Employees viewing /report/[id] see the full conversation, including chats
-// from prospects who used "Edit with chat" in the email.
+// The blue "View" link, which opens the report and its chat in a new tab. Staff
+// see the whole conversation, including messages from prospects who used "Edit
+// with chat" in the email.
 function ViewReportLink({ reportId, label = 'View' }) {
   if (!reportId) {
     return <span className="text-sm text-[#9CA3AF]">—</span>
@@ -325,7 +327,8 @@ function Dashboard({ data }) {
   )
 }
 
-// Recipient engagement: who opened "Edit with chat", time in panel, downloads.
+// What the recipients did: who opened "Edit with chat", how long they stayed,
+// and what they downloaded.
 function EngagementPanel({ data }) {
   const { totals, perReport } = data
   return (
@@ -402,8 +405,9 @@ function EngagementPanel({ data }) {
   )
 }
 
-// Badges alpha-tour runs so they read as a separate category from real client
-// reports. Purple to stand apart from the blue "View" links and stat accents.
+// Marks alpha-tour runs so they read as their own category, separate from real
+// client reports. Purple, so it stands apart from the blue links and
+// figures.
 function AlphaBadge() {
   return (
     <span className="rounded-full bg-[#f3e8ff] px-[6px] py-px text-[10px] font-bold uppercase tracking-[0.4px] text-[#7c3aed]">

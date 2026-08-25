@@ -310,9 +310,9 @@ function DashboardInner({
     setConfirmingId(null)
     const removedIndex = reports.findIndex((r) => r.id === id)
     const removedReport = reports[removedIndex]
-    // Optimistic: remove the row immediately and roll back if the request
-    // fails, instead of leaving it in a disabled "Deleting…" state for the
-    // full round trip.
+    // Remove the row from the screen straight away, and put it back if the
+    // request fails. Better than leaving it greyed out saying "Deleting..." for
+    // the whole round trip.
     setReports((prev) => prev.filter((r) => r.id !== id))
     try {
       const res = await fetch(`/api/reports/${id}`, { method: 'DELETE' })

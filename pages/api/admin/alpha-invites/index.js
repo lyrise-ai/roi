@@ -3,10 +3,10 @@ import { createRouteClient } from '../../../../src/lib/supabaseRouteClient'
 import { getRoleForUser } from '../../../../src/lib/authHelpers'
 import { getSupabaseAdmin } from '../../../../src/lib/supabaseAdmin'
 
-// Prefer the request's own host over NEXT_PUBLIC_BASE_URL: the header always
-// matches whatever domain actually served this request (production, a Vercel
-// preview deploy, or localhost), whereas the env var is one fixed value per
-// environment and easy to leave stale (e.g. copied from .env.local).
+// Use the domain this request actually came in on, rather than the one in the
+// settings. The request always knows the real domain — production, a preview
+// deploy, or localhost — while the setting is one fixed value per environment
+// and easy to leave out of date, for instance by copying it from .env.local.
 function buildBaseUrl(req) {
   const host = req.headers?.['x-forwarded-host'] || req.headers?.host
   if (host) {
@@ -84,9 +84,9 @@ export default async function handler(req, res) {
       return
     }
 
-    // generateLink creates the auth user if they don't exist yet and returns
-    // their id either way. We don't use the link it returns (it's a
-    // single-use Supabase link) — we only need it to resolve/create the user.
+    // This call creates the account if it does not exist yet, and returns its id
+    // either way. We throw away the link it gives back — it can only be used
+    // once. We are only here to find or create the user.
     const { data: linkData, error: linkError } =
       await supabaseAdmin.auth.admin.generateLink({
         type: 'magiclink',
@@ -120,8 +120,9 @@ export default async function handler(req, res) {
       .single()
 
     if (insertError) {
-      // 23505 = unique_violation — caught by alpha_invites_active_email_key
-      // when two requests for the same email race past the check above.
+      // This error code means "that already exists". It happens when two
+      // requests for the same email slip past the check above at the same
+      // moment.
       if (insertError.code === '23505') {
         res.status(409).json({
           error:
@@ -133,11 +134,13 @@ export default async function handler(req, res) {
       return
     }
 
-    // Set metadata explicitly rather than relying on generateLink's `data`
-    // option alone, since that's only reliably applied at user creation time.
-    // invite_id lets every later alpha_feedback write recover this invite's
-    // row without a privileged lookup (alpha_invites has no client-facing
-    // RLS policies) — see pages/api/alpha/progress.js.
+    // We set this on the account ourselves rather than relying on the option in
+    // the call above, which only reliably applies when the account is first
+    // created.
+    // Storing the invite's id here lets every later feedback write find this
+    // invite without a privileged lookup, which matters because the invites
+    // table cannot be read from the browser at all — see
+    // pages/api/alpha/progress.js.
     const { error: updateError } =
       await supabaseAdmin.auth.admin.updateUserById(userId, {
         user_metadata: {
