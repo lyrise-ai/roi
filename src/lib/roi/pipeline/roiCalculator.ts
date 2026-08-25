@@ -1,6 +1,7 @@
 // ─────────────────────────────────────────────────────────────────────────────
-// roiCalculator — pure TypeScript, no LLM calls
-// Single source: WorkflowInput[] + GlobalInputs + CompanyProfile
+// roiCalculator — plain code, no model calls anywhere.
+// Everything it needs comes from three inputs: the workflows, the money
+// settings, and the company.
 // ─────────────────────────────────────────────────────────────────────────────
 
 import { roiLog } from '@/src/lib/roi/debug'
@@ -16,10 +17,11 @@ import type {
 
 const MAX_MIN = 480
 
-// ── Regional rate floor enforcement (Rule 6A) ────────────────────────────────
-// Bands sourced from `template_instructions.txt:140-148` — fully-loaded billing
-// capacity, not raw wages. Bands are stored in their native currency and
-// converted to the report's output currency at clamp time.
+// -- Minimum hourly rates by region (Rule 6A) --------------------------------
+// The ranges come from `template_instructions.txt:140-148`. They are what an
+// hour of that person's time is worth to the business, including overheads —
+// not their raw salary. Each range is stored in its own local currency and
+// converted to the report's currency at the moment we apply it.
 type SeniorityTier = 'junior' | 'mid' | 'senior'
 type RegionBands = {
   currency: string
@@ -53,8 +55,9 @@ const REGIONAL_BANDS: Record<string, RegionBands> = {
   },
 }
 
-// Approximate FX — 1 USD = X local unit. Used only for rate-band conversion;
-// the report's actual numbers are in whatever currency the modeler chose.
+// Rough exchange rates: 1 US dollar buys this much local currency. Used only to
+// convert these rate ranges. The report's own numbers are in whatever currency
+// the modeller chose.
 const USD_PER_UNIT: Record<string, number> = {
   USD: 1,
   EUR: 0.92,
@@ -88,7 +91,7 @@ function toRegion(country: string | null): keyof typeof REGIONAL_BANDS {
   )
     return 'UAE'
   if (c.includes('saudi') || c.includes('ksa')) return 'SAUDI'
-  // GCC peers tracked under UAE bands
+  // Other Gulf countries use the UAE ranges
   if (
     c.includes('qatar') ||
     c.includes('kuwait') ||
@@ -140,10 +143,11 @@ function getRateBand(
   ]
 }
 
-// Silently clamp each workflow's hourly rate into the regional band for its
-// seniority. Floor is strict (raises wages too low to match team standards);
-// ceiling allows 1.5× headroom for outlier roles before clamping. n8n parity:
-// silent — no warnings surfaced to user.
+// Quietly pulls each workflow's hourly rate into the right range for its region
+// and seniority. The minimum is strict: a rate below it is raised. The maximum
+// allows 1.5 times the usual top before we pull it back, so an unusual role can
+// still be priced higher. Nothing is shown to the user, matching how the old n8n
+// version behaved.
 function enforceRegionalRateFloors(
   workflows: WorkflowInput[],
   globals: GlobalInputs,
@@ -160,14 +164,16 @@ function enforceRegionalRateFloors(
   return workflows.map((wf) => {
     const seniority: SeniorityTier = wf.seniorityLevel ?? 'mid'
     const [floor, baseCeiling] = getRateBand(company.country, seniority, ccy)
-    // The allowed range is [floor, headroomCeiling] — baseCeiling is only the
-    // top of the "typical" band; headroomCeiling is the actual clamp boundary
-    // for outlier roles. A rate that exceeds it must clamp back down TO that
-    // boundary, not down to baseCeiling — clamping to baseCeiling silently
-    // drops the rate below where it started for any edit landing in the
-    // headroom zone (e.g. 50 → scale by 1.25 → 63, clamped to a bare
-    // baseCeiling of 40 instead of the crossed boundary of 60), which made a
-    // requested rate *increase* show up as a decrease in every derived total.
+    // The allowed range runs from the minimum up to the stretched maximum. The
+    // plain maximum is only the top of the "typical" band; the stretched one is
+    // the real limit. A rate above the limit must come back down TO the limit,
+    // not down to the plain maximum.
+    //
+    // Pulling it back to the plain maximum quietly drops a rate below where it
+    // started, for any edit landing in the stretch zone: 50, scaled up by 1.25,
+    // becomes 63, and pulling that back to a plain maximum of 40 instead of the
+    // real limit of 60 turned a requested rate INCREASE into a decrease in
+    // every total on the page.
     const headroomCeiling = baseCeiling * 1.5
     const current = wf.rateOverride ?? globals.laborRate
     let clamped = current
@@ -228,17 +234,18 @@ export function roiCalculator(
   workflows: WorkflowInput[],
   globals: GlobalInputs,
   company: CompanyProfile,
-  // Rule 6B is a generation-time-only sanity check on the modeler's raw
-  // output. It must never re-run on post-generation edits (chat, validation
-  // wizard) — a fixed ceiling/floor target rescales ALL workflows to ~the
-  // same total regardless of the edit, which silently swallows the visible
-  // effect of a user's change (LYR-146). Callers outside the initial
-  // 'generate' run must leave this false.
+  // Rule 6B is a sanity check on the modeller's first output, and only that.
+  // It must never run again on later edits from chat or the wizard. It scales
+  // ALL workflows towards a fixed target total, so whatever the user changed,
+  // the total lands in the same place — which swallows the visible effect of
+  // their edit (LYR-146). Everyone outside the first generation run must leave
+  // this false.
   applyRevenueGuardrail = false,
 ): RoiCalculatorOutput {
-  // Rule 6A: silently clamp per-workflow rates into the regional band for the
-  // workflow's seniority tier. Catches modeler hallucination of cheap-labor
-  // rates (e.g. $12/hr for an Egyptian senior lawyer). n8n-parity: no warnings.
+  // Rule 6A: quietly pull each rate into the right range for its region and
+  // seniority. This catches the modeller inventing bargain rates, like $12 an
+  // hour for a senior lawyer in Egypt. No warnings, matching the old n8n
+  // version.
   // eslint-disable-next-line no-param-reassign
   workflows = enforceRegionalRateFloors(workflows, globals, company)
 
@@ -271,8 +278,9 @@ export function roiCalculator(
     }
   })
 
-  // Revenue guardrail — keep TFG within 5–20% of estimated revenue.
-  // Generation-time only (Rule 6B) — see applyRevenueGuardrail above.
+  // Keep the total gain between 5% and 20% of the company's estimated revenue.
+  // Only while the report is first being built (Rule 6B) — see
+  // applyRevenueGuardrail above.
   const revenueM = company.revenueEstimateM
   if (applyRevenueGuardrail && revenueM != null && revenueM > 0) {
     const rawOD = workflowCalcs.reduce((s, w) => s + w.annualValue, 0)
@@ -333,13 +341,16 @@ export function roiCalculator(
     )
   }
 
-  // Back-derive an "effective monthly volume" that makes the simple formula
-  // (volume × hrsSavedPerItem × rate ≈ monthlyValue) reconcile in the rendered
-  // report. Adoption/realization damping and revenue-band scaling are both
-  // baked in — this is the single number we surface to the reader so the
-  // worked example, master workflow table, and per-lever arithmetic all agree.
-  // Also compute per-workflow profit uplift deterministically so the Profit
-  // Uplift table's per-lever lines don't drift from the totals.
+  // Work a monthly volume backwards so the simple sum on the page adds up:
+  // volume x hours saved per item x rate is roughly the monthly value.
+  //
+  // The take-up and realisation discounts, and any scaling we did to stay
+  // inside the revenue band, are all already inside this number. It is the one
+  // volume we show the reader, so the worked example, the workflow table and
+  // the per-lever sums all agree with each other.
+  //
+  // We also work out each workflow's profit uplift here in code, so the lines
+  // in the Profit Uplift table cannot drift away from the totals.
   const profitUpliftMultiplier = Math.max(0, globals.profitMultiplier - 1)
   workflowCalcs.forEach((w, idx) => {
     const wf = workflows[idx]
@@ -388,7 +399,7 @@ export function roiCalculator(
   const fmtCur = (n: number) => fmtCurrency(n, globals.currency)
   const fmtShort = (n: number) => fmtCurrencyShort(n, globals.currency)
 
-  // Build calculation-friendly figures (sorted desc by value)
+  // Build the figures the report uses, biggest value first
   const sortedCalcs = [...workflowCalcs].sort(
     (a, b) => b.annualValue - a.annualValue,
   )

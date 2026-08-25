@@ -1,8 +1,8 @@
 // ─────────────────────────────────────────────────────────────────────────────
-// Shared TypeScript types for the ROIGEN pipeline
+// The shapes every part of the ROI pipeline passes around.
 // ─────────────────────────────────────────────────────────────────────────────
 
-// ── Questionnaire input ──────────────────────────────────────────────────────
+// -- What the user filled in on the form ------------------------------------
 
 export interface ProcessInput {
   name: string
@@ -31,14 +31,14 @@ export interface QuestionnairePayload {
   Country: string
   'Key Priorities': string[]
   processes: ProcessInput[]
-  // Legacy flat fields (backward compat)
+  // Older, flat field names. Kept so old saved reports still open.
   'Biggest time drain on your team'?: string
   'Monthly volume of this process (approx.)'?: string
   'Primary process time per item'?: string
   'Any other bottlenecks to mention? (optional)'?: string
 }
 
-// ── Normalized input (output of normalize.ts) ───────────────────────────────
+// -- The tidied-up version of that form, produced by normalize.ts ------------
 
 export interface NormalizedInput {
   companyName: string
@@ -69,7 +69,7 @@ export interface Currency {
   name: string
 }
 
-// ── Single source of truth: company profile ──────────────────────────────────
+// -- The company. One of the four fields that hold the truth. ----------------
 
 export interface CompanyProfile {
   company: string
@@ -81,12 +81,12 @@ export interface CompanyProfile {
   revenueEstimateM: number | null // estimated annual revenue in millions
 }
 
-// ── Single source of truth: per-workflow inputs ──────────────────────────────
-// Identity fields come from research; numeric fields are set by the modeler
-// and are directly editable via update_workflow in chat mode.
+// -- One workflow. Another of the four fields that hold the truth. -----------
+// The name and description come from research. The numbers are set by the
+// modeller, and can be edited directly through update_workflow in chat.
 
 export interface WorkflowInput {
-  // Identity (from research phase)
+  // What it is (found during research)
   name: string
   agentName: string
   function: string
@@ -95,7 +95,7 @@ export interface WorkflowInput {
   expectedOutcome: string
   sourceType: 'user_stated' | 'inferred' | 'research_derived'
 
-  // Numeric inputs (set by modeler, editable in chat)
+  // The numbers (set by the modeller, editable in chat)
   monthlyVolume: number
   minutesPerItemBefore: number
   minutesPerItemAfter: number
@@ -103,26 +103,26 @@ export interface WorkflowInput {
   exceptionRate: number // 0–1
   exceptionMinutes: number
   rateOverride: number | null // per-workflow hourly rate; null = use GlobalInputs.laborRate
-  // Seniority tier of the role performing this workflow — drives the regional
-  // rate-floor band enforced by roiCalculator (Rule 6A).
+  // How senior the person doing this work is. It decides the minimum hourly
+  // rate for the region that roiCalculator enforces (Rule 6A).
   seniorityLevel: 'junior' | 'mid' | 'senior' | null
-  // Provenance of the rate (Rule 6A) — surfaced in the report's Data Provenance
-  // table. "benchmark_fallback" means no salary evidence was found and the
-  // regional floor was applied. A real domain like "Glassdoor" / "Bayt.com"
-  // means the rate was derived from a salary_evidence entry.
+  // Where the hourly rate came from (Rule 6A). Shown in the report's sources
+  // table. "benchmark_fallback" means we found no salary evidence and fell back
+  // to the regional minimum. A real name like "Glassdoor" or "Bayt.com" means
+  // the rate came from a salary source we actually found.
   rateSource: string | null
   rateSourceUrl: string | null
   rationale: string
 
-  // Set true for workflows the user explicitly kept during the validation
-  // wizard (src/components/ROIGenerator/Validation) — surfaces as the
-  // 'Validated' status pill instead of 'Provided'/'Scraped'/'Benchmarked'.
+  // True for workflows the user deliberately kept in the check-it-over wizard
+  // (src/components/ROIGenerator/Validation). Shows up as a 'Validated' label
+  // instead of 'Provided', 'Scraped' or 'Benchmarked'.
   userValidated?: boolean
 }
 
-// ── Salary evidence collected during research (per workflow) ─────────────────
-// One entry per workflow. Modeler reads this to set fullyLoadedHourlyCostOverride
-// from a real source instead of hallucinating from training data.
+// -- Pay figures found during research, one per workflow ---------------------
+// The modeller reads these to set the hourly cost from a real source, instead
+// of making one up from memory.
 export interface SalaryEvidence {
   workflowName: string // join key — must match a WorkflowInput.name
   roleQueried: string // e.g. "Senior sales executive in UAE"
@@ -133,7 +133,7 @@ export interface SalaryEvidence {
   evidenceCurrency?: string | null // ISO code of the parsed numbers (e.g. "USD", "AED")
 }
 
-// ── Single source of truth: global financial inputs ──────────────────────────
+// -- The money settings that apply to the whole report. Truth field three. ---
 
 export interface GlobalInputs {
   laborRate: number // fully-loaded hourly cost (global fallback)
@@ -145,7 +145,7 @@ export interface GlobalInputs {
   currency: Currency
 }
 
-// ── ROI Calculator output — derived values only ──────────────────────────────
+// -- What the calculator works out. Nothing here is typed in by anyone. ------
 
 export interface WorkflowCalc {
   name: string // mirrors WorkflowInput.name for lookup
@@ -158,14 +158,15 @@ export interface WorkflowCalc {
   monthlyValue: number
   annualHours: number
   annualValue: number
-  // Back-derived volume that makes the simple formula reconcile:
-  //   effectiveMonthlyVolume × hrsSavedPerItem × effectiveRate ≈ monthlyValue
-  // Reflects adoption/realization damping AND any revenue-band scaling — so the
-  // renderer can show one self-consistent number on the page.
+  // A volume worked backwards so that the simple sum on the page adds up:
+  //   volume x hours saved per item x rate is roughly the monthly value.
+  // It already has the take-up and realisation discounts in it, and any scaling
+  // we did to stay inside the revenue band. That way the page can show one set
+  // of numbers that agree with each other.
   effectiveMonthlyVolume: number
-  // Per-workflow profit uplift = monthlyValue × (profitMultiplier - 1).
-  // Used to render deterministic per-lever arithmetic in the Profit Uplift table
-  // instead of trusting the modeler's authored rationale strings.
+  // Profit uplift for this workflow = monthly value x (profit multiplier - 1).
+  // The Profit Uplift table shows this sum, worked out here in code, instead of
+  // trusting the sentence the modeller wrote.
   monthlyProfitUplift: number
 }
 
@@ -206,7 +207,7 @@ export interface RoiCalculatorOutput {
   figures: Figures
 }
 
-// ── Report copy (formerly ReportWriterOutput) ─────────────────────────────────
+// -- The written words of the report. Truth field four. ----------------------
 
 export interface CompanySnapshotItem {
   text: string
@@ -274,9 +275,9 @@ export interface ProfitLever {
   baseline_data: string
   ai_agent_action: string
   rationale: string
-  // Authored by the LLM but overwritten in assembleReport with arithmetic
-  // derived from WorkflowCalc — so it always reconciles with the calculator
-  // PU total even when the writer model used stale rates.
+  // The model writes this, but assembleReport overwrites it with the sum worked
+  // out from the calculator's own figures. That way it always agrees with the
+  // profit uplift total, even if the writing model used old rates.
   rationale_with_arithmetic?: string
   derived_from: string
 }
@@ -292,7 +293,7 @@ export interface ReportCopy {
   risks: RiskRow[]
 }
 
-// ── Assemble Report output (display object) ──────────────────────────────────
+// -- The finished object the page and the PDF are drawn from -----------------
 
 export interface DisplayObject {
   currencyCode: string
@@ -340,7 +341,7 @@ export interface DisplayObject {
   profitUpliftLogicBody: string
 }
 
-// roi_data is a thin display-info object for template placeholders
+// roi_data is a small bag of display values that fill the gaps in the template
 export interface RoiDisplayData {
   company: string
   industry: string | null
@@ -361,24 +362,24 @@ export interface AssembleReportOutput {
   recipient_email: string
 }
 
-// ── Unified Agent state ───────────────────────────────────────────────────────
+// -- Everything the agent holds while it works -------------------------------
 
 export interface ReportState {
   normInput: NormalizedInput | null
 
-  // Single sources of truth — everything editable by tools
+  // The four truth fields. These are what the tools edit.
   company: CompanyProfile | null
   globals: GlobalInputs | null
   workflows: WorkflowInput[] | null
   copy: ReportCopy | null
 
-  // Derived — recomputed by reAssemble() on every mutation
+  // Worked out from the four above. reAssemble() redoes these on every change.
   calcOutput: RoiCalculatorOutput | null
   assembled: AssembleReportOutput | null
   renderedHtml: string | null
   renderedFullHtml: string | null
 
-  // Metadata
+  // Bookkeeping
   confidenceLevel: 'high' | 'low' | null
   coreThesis: string | null
   painPoints?: PainPoint[]
@@ -392,14 +393,15 @@ export interface AgentCallbacks {
   onTextDelta(delta: string): void
   onToolStart(toolName: string, args?: Record<string, unknown>): void
   onPipelineLog?(message: string): void
-  // Fired when a tool call finishes (success or a returned/thrown error) —
-  // lets the caller know a tool's actual outcome instead of only inferring
-  // it from whether onReportUpdate happened to fire.
+  // Called when a tool finishes, whether it worked or failed. It tells the
+  // caller what actually happened, instead of leaving them to guess from
+  // whether onReportUpdate happened to fire.
   onToolResult?(toolName: string, output: unknown): void
   onReportUpdate(state: ReportState, changedSections?: string[]): void
   onDone(newMessages: import('ai').ModelMessage[]): void
   onError(err: Error): void
-  // Fired once with the per-run LLM usage summary. The caller persists it to
-  // roi_usage once a report_id is available (see usageStore.persistUsage).
+  // Called once with a summary of what this run cost. The caller saves it to
+  // the roi_usage table once the report has an id (see
+  // usageStore.persistUsage).
   onUsage?(summary: import('./services/usageTracker').UsageSummary): void
 }
