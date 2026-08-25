@@ -79,7 +79,6 @@ function isRedundantSnapshotText(
       // A list of fixed words with no nesting. The `.*` has nothing to fall
       // back into, so this runs in a straight line rather than blowing up on
       // certain input.
-      // eslint-disable-next-line security/detect-unsafe-regex
       /\b(annual\s+)?revenue\b|\bgenerates?\b.*\$|\bannually\b/.test(t)),
   )
 }

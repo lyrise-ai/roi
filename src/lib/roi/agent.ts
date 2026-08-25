@@ -465,13 +465,11 @@ function buildTools(
           maxResults: maxResults ?? 3,
         })
         if (SALARY_SEARCH_RE.test(query)) {
-          // eslint-disable-next-line security/detect-object-injection
           callbacks.onPipelineLog?.(
             SALARY_SEARCH_POOL[salarySearchCount % SALARY_SEARCH_POOL.length],
           )
           salarySearchCount++
         } else {
-          // eslint-disable-next-line security/detect-object-injection
           callbacks.onPipelineLog?.(
             COMPANY_SEARCH_POOL[
               companySearchCount % COMPANY_SEARCH_POOL.length

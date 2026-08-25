@@ -1,4 +1,4 @@
-/* eslint-disable no-console, security/detect-object-injection, security/detect-non-literal-fs-filename, security/detect-non-literal-regexp */
+/* eslint-disable no-console */
 // ─────────────────────────────────────────────────────────────────────────────
 // usageTracker — adds up the tokens and cost of one request's model calls
 //

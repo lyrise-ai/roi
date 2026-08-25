@@ -30,7 +30,6 @@ const TEMPLATES = new Set(['roi-template.html', 'roi-exec-template.html'])
 
 export function loadTemplate(filename = 'roi-template.html'): string {
   if (!TEMPLATES.has(filename)) throw new Error(`Unknown template: ${filename}`)
-  // eslint-disable-next-line security/detect-non-literal-fs-filename -- whitelisted above
   return fs.readFileSync(path.join(process.cwd(), 'public', filename), 'utf-8')
 }
 
@@ -42,7 +41,6 @@ export function renderTemplate(
   // Fill in every {{$json.display.<key>}} gap
   Object.entries(assembled.display).forEach(([key, value]) => {
     // The key is one of our own field names, never anything a caller passed in.
-    // eslint-disable-next-line security/detect-non-literal-regexp
     const placeholder = new RegExp(
       `\\{\\{\\s*\\$json\\.display\\.${key}\\s*\\}\\}`,
       'g',
