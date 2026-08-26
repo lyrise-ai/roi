@@ -1,6 +1,7 @@
 import * as React from 'react'
 import Head from 'next/head'
 import { useRouter } from 'next/router'
+import { Analytics } from '@vercel/analytics/next'
 import '../styles/global.css'
 import { AuthSessionContext } from '../src/context/AuthSessionContext'
 
@@ -169,6 +170,7 @@ export default function MyApp(props) {
       <AuthSessionContext.Provider value={authSessionValue}>
         <Component {...pageProps} />
       </AuthSessionContext.Provider>
+      <Analytics />
     </>
   )
 }
