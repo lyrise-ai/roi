@@ -3,9 +3,9 @@
   "version": "0.1.0",
   "private": true,
   "scripts": {
-    "dev": "next dev --turbo",
-    "build": "next build",
-    "start": "next start",
+    "dev": "dotenvx run -- next dev --turbo",
+    "build": "dotenvx run -- next build",
+    "start": "dotenvx run -- next start",
     "lint": "ESLINT_USE_FLAT_CONFIG=false eslint . --ext .js,.jsx,.ts,.tsx --ignore-pattern .next --ignore-pattern node_modules",
     "lint:fix": "ESLINT_USE_FLAT_CONFIG=false eslint . --ext .js,.jsx,.ts,.tsx --ignore-pattern .next --ignore-pattern node_modules --fix",
     "deadcode": "knip",
@@ -53,6 +53,7 @@
     "*.{json,css,md}": "prettier --write"
   },
   "devDependencies": {
+    "@dotenvx/dotenvx": "^2.21.0",
     "@next/env": "^16.2.10",
     "@playwright/test": "^1.61.0",
     "@types/react": "^18.3.12",
