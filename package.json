@@ -17,7 +17,7 @@
     "test:e2e:smoke": "playwright test --grep @smoke",
     "dev:test": "next dev --turbo -p 3777",
     "prepare": "husky install",
-    "research": "node --env-file-if-exists=.env.local evals/research/look.mjs"
+    "research": "dotenvx run -- node evals/research/look.mjs"
   },
   "dependencies": {
     "@ai-sdk/openai": "^3.0.48",
