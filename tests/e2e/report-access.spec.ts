@@ -1,18 +1,19 @@
 /**
- * Report access-control tests — runs in the `authenticated` project.
+ * Tests for who is allowed to see a report. Runs signed in.
  *
- * Covers the highest-risk code on the report-viewing path:
- * resolveReportViewerAccess / reportGrants (src/lib/roi/reportViewerAccess.js,
- * src/lib/roi/reportGrants.js). A bug here doesn't 500 — it shows one
- * person's report, and their chat history, to somebody else. That includes
- * the colleague-invite flow, which silently signs a browser out and back in
- * as a different identity server-side based on a query param — exactly the
- * kind of access-control code that deserves a real browser test, not just a
- * status-code check.
+ * This covers the riskiest code on the report path
+ * (src/lib/roi/reportViewerAccess.js and src/lib/roi/reportGrants.js). A bug
+ * here does not throw an error — it shows one person's report, and their chat
+ * history, to somebody else.
  *
- * Fixtures are seeded directly via the Supabase service role
- * (tests/e2e/utils/reportFixtures.ts) so none of this depends on real AI
- * generation, real email delivery, or a second pre-existing account.
+ * That includes the colleague-invite flow, which quietly signs a browser out and
+ * back in as a different person, on the server, based on a value in the URL.
+ * Exactly the kind of code that deserves a real browser test rather than a
+ * check on a status code.
+ *
+ * The test data is written straight into the database with the admin key, so
+ * none of this depends on real generation, real email, or a second account
+ * existing beforehand.
  */
 import { test, expect } from '@playwright/test'
 import {
@@ -79,8 +80,8 @@ test.describe('colleague invite claim + revoke', () => {
       invitedEmail,
     })
 
-    // Fresh, unauthenticated context — the invite must work cold, with no
-    // prior sign-in, exactly like a colleague clicking the link from email.
+    // A brand new browser with nobody signed in. The invite has to work from
+    // cold, exactly like a colleague clicking the link in an email.
     const colleagueContext = await browser.newContext({
       storageState: { cookies: [], origins: [] },
     })
@@ -93,8 +94,8 @@ test.describe('colleague invite claim + revoke', () => {
       colleaguePage.getByText(/E2E Fixture Co/).first(),
     ).toBeVisible()
 
-    // Revoke as the owner, through the real endpoint (`request` here runs
-    // with the authenticated project's saved owner session).
+    // Revoke it as the owner, through the real endpoint. This request carries
+    // the owner's saved session.
     const revokeRes = await request.delete('/api/roi-report-shares', {
       data: { reportId, grantId },
     })

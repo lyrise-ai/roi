@@ -1,11 +1,11 @@
-/* eslint-disable no-console, security/detect-object-injection, security/detect-non-literal-fs-filename, security/detect-non-literal-regexp */
+/* eslint-disable no-console */
 // ─────────────────────────────────────────────────────────────────────────────
-// usageTracker — per-request LLM token & cost accumulator
+// usageTracker — adds up the tokens and cost of one request's model calls
 //
-// Usage:
+// How to use it:
 //   const tracker = new UsageTracker({ company: 'Acme', mode: 'generate' })
-//   tracker.record({ call: 'modeler', model: 'gpt-4o-mini', ...result.usage })
-//   tracker.record({ call: 'main_agent', model: 'gpt-4o', ...await result.usage })
+//   tracker.record({ call: 'modeler', model: m.modelId, ...result.usage })
+//   tracker.record({ call: 'main_agent', model: m.modelId, ...await result.usage })
 //   tracker.flush()   // logs to console + appends to logs/roi-usage.ndjson
 // ─────────────────────────────────────────────────────────────────────────────
 
@@ -15,34 +15,50 @@ import path from 'path'
 import { EVENTS } from '@/src/lib/analytics'
 import { captureServer } from '@/src/lib/posthog-server'
 
-// ── Pricing (per 1M tokens, USD) ────────────────────────────────────────────
-const MODEL_PRICING: Record<string, { input: number; output: number }> = {
-  'gpt-4o': { input: 2.5, output: 10.0 },
-  'gpt-4o-mini': { input: 0.15, output: 0.6 },
-  'gpt-4o-2024-11-20': { input: 2.5, output: 10.0 },
-  'gpt-4o-mini-2024-07-18': { input: 0.15, output: 0.6 },
-  // Claude models (if switched)
-  'claude-sonnet-4-6': { input: 3.0, output: 15.0 },
-  'claude-haiku-4-5-20251001': { input: 0.8, output: 4.0 },
+// -- Prices, in US dollars per million tokens --------------------------------
+// Text the model has seen before is about 10 times cheaper than new text on the
+// 5.6 family. A tracker that ignores that overstates the cost of every repeated
+// prompt tenfold. Checked against OpenAI's pricing page on 2026-08-20.
+const MODEL_PRICING: Record<
+  string,
+  { input: number; cachedInput: number; output: number }
+> = {
+  'gpt-5.6-sol': { input: 5.0, cachedInput: 0.5, output: 30.0 },
+  'gpt-5.6-terra': { input: 2.0, cachedInput: 0.2, output: 12.0 },
+  'gpt-5.6-luna': { input: 0.2, cachedInput: 0.02, output: 1.2 },
+  // Kept so old runs, and any call pinned to this model, still price correctly.
+  'gpt-4o': { input: 2.5, cachedInput: 1.25, output: 10.0 },
+  'gpt-4o-mini': { input: 0.15, cachedInput: 0.075, output: 0.6 },
+  'gpt-4o-2024-11-20': { input: 2.5, cachedInput: 1.25, output: 10.0 },
+  'gpt-4o-mini-2024-07-18': { input: 0.15, cachedInput: 0.075, output: 0.6 },
+  // Claude models, if we ever switch
+  'claude-sonnet-4-6': { input: 3.0, cachedInput: 0.3, output: 15.0 },
+  'claude-haiku-4-5-20251001': { input: 0.8, cachedInput: 0.08, output: 4.0 },
 }
 
 function pricingFor(model: string) {
-  // Try exact match first, then prefix match
+  // Look for the exact model name first, then for one that starts the same
   if (MODEL_PRICING[model]) return MODEL_PRICING[model]
   const key = Object.keys(MODEL_PRICING).find(
     (k) => model.startsWith(k) || k.startsWith(model),
   )
-  return key ? MODEL_PRICING[key] : { input: 0, output: 0 }
+  return key ? MODEL_PRICING[key] : { input: 0, cachedInput: 0, output: 0 }
 }
 
 function costUsd(
   model: string,
   inputTokens: number,
   outputTokens: number,
+  cachedInputTokens = 0,
 ): number {
   const p = pricingFor(model)
+  // OpenAI counts the cheaper repeated tokens inside the input total, so the
+  // full-price part is whatever is left after taking them out.
+  const cached = Math.min(Math.max(cachedInputTokens, 0), inputTokens)
   return (
-    (inputTokens / 1_000_000) * p.input + (outputTokens / 1_000_000) * p.output
+    ((inputTokens - cached) / 1_000_000) * p.input +
+    (cached / 1_000_000) * p.cachedInput +
+    (outputTokens / 1_000_000) * p.output
   )
 }
 
@@ -52,6 +68,7 @@ export interface UsageEntry {
   call: string
   model: string
   inputTokens: number
+  cachedInputTokens: number
   outputTokens: number
   totalTokens: number
   costUsd: number
@@ -65,6 +82,7 @@ export interface UsageSummary {
   calls: UsageEntry[]
   totals: {
     inputTokens: number
+    cachedInputTokens: number
     outputTokens: number
     totalTokens: number
     costUsd: number
@@ -94,15 +112,18 @@ export class UsageTracker {
     inputTokens: number
     outputTokens: number
     totalTokens?: number
+    cachedInputTokens?: number
   }) {
     const total = opts.totalTokens ?? opts.inputTokens + opts.outputTokens
+    const cached = opts.cachedInputTokens ?? 0
     this.entries.push({
       call: opts.call,
       model: opts.model,
       inputTokens: opts.inputTokens,
+      cachedInputTokens: cached,
       outputTokens: opts.outputTokens,
       totalTokens: total,
-      costUsd: costUsd(opts.model, opts.inputTokens, opts.outputTokens),
+      costUsd: costUsd(opts.model, opts.inputTokens, opts.outputTokens, cached),
     })
   }
 
@@ -112,11 +133,18 @@ export class UsageTracker {
     const totals = this.entries.reduce(
       (acc, e) => ({
         inputTokens: acc.inputTokens + e.inputTokens,
+        cachedInputTokens: acc.cachedInputTokens + e.cachedInputTokens,
         outputTokens: acc.outputTokens + e.outputTokens,
         totalTokens: acc.totalTokens + e.totalTokens,
         costUsd: acc.costUsd + e.costUsd,
       }),
-      { inputTokens: 0, outputTokens: 0, totalTokens: 0, costUsd: 0 },
+      {
+        inputTokens: 0,
+        cachedInputTokens: 0,
+        outputTokens: 0,
+        totalTokens: 0,
+        costUsd: 0,
+      },
     )
 
     const summary: UsageSummary = {
@@ -128,7 +156,7 @@ export class UsageTracker {
       totals,
     }
 
-    // Console log
+    // Print it to the console
     console.log(
       `[roi-usage] ${this.mode} | ${this.company} | ` +
         `${totals.totalTokens.toLocaleString()} tokens | ` +
@@ -144,7 +172,7 @@ export class UsageTracker {
         .join(' | '),
     )
 
-    // Append to NDJSON log file
+    // Add a line to the log file
     try {
       const logsDir = path.join(process.cwd(), 'logs')
       if (!fs.existsSync(logsDir)) fs.mkdirSync(logsDir, { recursive: true })
@@ -157,9 +185,10 @@ export class UsageTracker {
       console.warn('[roi-usage] Could not write log file:', err)
     }
 
-    // Same summary to PostHog. The NDJSON file above is per-lambda and dies
-    // with it; this is the copy you can actually query ("what did last week's
-    // reports cost", "which model is burning the budget").
+    // The same summary goes to PostHog. The log file above lives and dies with
+    // one server run; this is the copy you can actually ask questions of, like
+    // "what did last week's reports cost" or "which model is eating the
+    // budget".
     captureServer(EVENTS.LLM_USAGE, {
       company: summary.company,
       mode: summary.mode,
@@ -170,8 +199,8 @@ export class UsageTracker {
       output_tokens: totals.outputTokens,
       call_count: this.entries.length,
       models: [...new Set(this.entries.map((e) => e.model))],
-      // Per-call breakdown, so a run that went wrong shows *where* the tokens
-      // went rather than just a total.
+      // A line per call, so a run that went wrong shows WHERE the tokens went
+      // instead of only a total.
       calls: this.entries.map((e) => ({
         call: e.call,
         model: e.model,

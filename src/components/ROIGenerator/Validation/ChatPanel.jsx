@@ -2,12 +2,13 @@ import { forwardRef, useCallback, useImperativeHandle, useState } from 'react'
 import { drainSSE } from '@/src/lib/drainSSE'
 import { REPORT_CHAT_MESSAGE_LIMIT } from '@/src/lib/roi/constants'
 
-// Right-rail AI advisor for validation wizard steps 1-4. Wired identically to
-// ReportViewer.jsx's chat panel (same /api/roi-agent SSE contract, same
-// REPORT_CHAT_MESSAGE_LIMIT budget shared with the post-validation report's
-// chat panel — no separate allowance for the wizard). Exposes `send()` via
-// ref so ConfirmWorkflowsStep/ContextStep can push a synthesized message
-// (e.g. "add a workflow we missed") through the same pipeline as a typed one.
+// The AI adviser in the right-hand column, on wizard steps 1 to 4. It is wired
+// up exactly like the chat panel on the report itself: same endpoint, and the
+// same shared message allowance — the wizard gets no separate quota of its own.
+//
+// It exposes its send function, so two of the steps can push a message they
+// composed themselves — "add a workflow we missed", for instance — through the
+// same path as one the user typed.
 function ChatPanel(
   { reportId, quickReplies = [], onWorkflowsChanged, initialMessagesUsed = 0 },
   ref,
@@ -21,7 +22,8 @@ function ChatPanel(
   ])
   const [draft, setDraft] = useState('')
   const [isSending, setIsSending] = useState(false)
-  // Counter is only ever read inside its own updater, to flip limitReached.
+  // This counter is only ever read inside its own update function, to decide
+  // when the limit has been reached.
   const [, setMessagesUsed] = useState(initialMessagesUsed)
   const [limitReached, setLimitReached] = useState(
     initialMessagesUsed >= REPORT_CHAT_MESSAGE_LIMIT,

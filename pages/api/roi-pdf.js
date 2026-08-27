@@ -1,13 +1,14 @@
 /* eslint-disable no-console */
 // ─────────────────────────────────────────────────────────────────────────────
-// POST /api/roi-pdf — Generate and stream a PDF for direct download
+// POST /api/roi-pdf — builds a PDF and sends it straight back as a download.
 //
-// Body: { state: ReportState, reportType: 'exec' | 'full' }
-// Response: application/pdf binary with Content-Disposition: attachment
+// Body: the report, and which template to use — the short executive one or the
+// full one.
+// Response: the PDF itself, marked as a file to save.
 //
-// Used by the "Download PDF" button so the user gets the real Puppeteer-
-// rendered PDF (with the correct CSS-driven margins, no browser print
-// header, and a proper filename) instead of the browser's print dialog.
+// The "Download PDF" button uses this, so the user gets our real rendered PDF —
+// with the right margins, no browser-added header, and a sensible filename —
+// instead of the browser's own print dialog.
 // ─────────────────────────────────────────────────────────────────────────────
 
 import {

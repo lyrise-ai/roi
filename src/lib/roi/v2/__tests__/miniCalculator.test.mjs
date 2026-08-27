@@ -1,11 +1,12 @@
-// Worked-example regression test for the Profit Map POC mini calculator
-// (LYR-186 / POC 8). Locks in the six output figures and their formula
-// strings for one hand-checked input so a constant tweak doesn't silently
-// drift the numbers shown to a prospect.
+// One worked example, checked by hand, for the POC calculator (LYR-186 /
+// POC 8). It pins down all six output figures and the formula lines that go
+// with them, so that changing a constant cannot quietly move the numbers a
+// prospect sees.
 //
-// No test-runner dependency: uses Node's built-in `node:test` + `node:assert`.
-// miniCalculator.ts has no path aliases, so it's bundled with esbuild the
-// same way src/lib/roi/pipeline/__tests__/roiCalculator.test.mjs does.
+// No test framework needed: this uses Node's own `node:test` and
+// `node:assert`. miniCalculator.ts uses no path shortcuts, so esbuild bundles
+// it here the same way src/lib/roi/pipeline/__tests__/roiCalculator.test.mjs
+// does.
 //
 //   Run:  node --test src/lib/roi/v2/__tests__/miniCalculator.test.mjs
 //
@@ -82,11 +83,11 @@ test('worked example: 12 people, 10 hrs/wk, $60k/yr, 40% automatable', () => {
   assert.match(out.formulas.totalFinancialGain, /^\$52,416 \+ \$68,141 = /)
 })
 
-// The formula strings are what a prospect checks on their phone. Every one of
-// them has to add up on its own terms, for any input — not just the worked
-// example above. Parse the arithmetic back out and re-do it.
-// First number in the fragment — the right-hand side carries a unit suffix
-// ("6,000 hours/year spent today for Finance").
+// The formula lines are what a prospect checks on their phone. Each one has to
+// add up on its own, for any input, not only for the worked example above. So
+// we read the numbers back out of the string and redo the sum.
+// We take the first number in each part, because the right-hand side also
+// carries words ("6,000 hours/year spent today for Finance").
 const value = (s) => Number(s.replace(/[$,%]/g, '').match(/-?\d+(\.\d+)?/)[0])
 
 const selfAdds = (formula) => {
@@ -100,8 +101,8 @@ const selfAdds = (formula) => {
     sep === ' + '
       ? operands.reduce((a, b) => a + b, 0)
       : operands.reduce((a, b) => a * b, 1)
-  // Half-unit tolerance: operands are shown rounded, so the printed result is
-  // the rounded product/sum of exactly those rounded operands.
+  // We allow half a unit of slack. The numbers shown are already rounded, so
+  // the printed answer is the rounded result of those rounded numbers.
   return Math.abs(expected - value(right)) <= 0.5
 }
 

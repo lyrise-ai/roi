@@ -1,10 +1,10 @@
-// Tests for assembleReport — focused on how the report flags annual revenue
-// across the three places it surfaces (company snapshot, data provenance, and
-// the revenue context statement).
+// Tests for assembleReport, focused on how the report labels annual revenue in
+// the three places it appears: the company summary, the sources table, and the
+// sentence that puts the total in context.
 //
-// No test-runner dependency: uses Node's built-in `node:test` + `node:assert`.
-// The TypeScript source (with `@/` path aliases) is bundled on the fly by
-// esbuild into a temp ESM module, which we then import.
+// No test framework needed: this uses Node's own `node:test` and `node:assert`.
+// The TypeScript source uses `@/` path shortcuts, so esbuild bundles it into a
+// temporary module first, and we import that.
 //
 //   Run:  node --test src/lib/roi/pipeline/__tests__/assembleReport.test.mjs
 //
@@ -32,7 +32,8 @@ before(async () => {
     platform: 'node',
     format: 'esm',
     outfile,
-    // Mirror tsconfig.json's `"@/*": ["./*"]` alias so source imports resolve.
+    // Match the `@/` shortcut from tsconfig.json so the source's imports
+    // resolve.
     alias: { '@': repoRoot },
     logLevel: 'silent',
   })

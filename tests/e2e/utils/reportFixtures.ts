@@ -1,10 +1,10 @@
-// Fixture helpers for seeding real report rows directly via the Supabase
-// service role, bypassing the network layer entirely. This lets
-// access-control tests (report-access.spec.ts) exercise realistic
-// state_data/rendered_html without depending on the dev-mock generation
-// endpoint, which is gated behind NODE_ENV==='development' and therefore
-// unreachable against the production build Playwright runs in CI (see
-// golden-path.spec.ts, which documents and works around that gate instead).
+// Helpers that write real report rows straight into the database with the admin
+// key, skipping the app entirely.
+//
+// That lets the access-control tests work with realistic report data without
+// depending on the fake-data generation endpoint, which only works in
+// development mode and so cannot be reached against the production build CI
+// runs. golden-path.spec.ts explains and works around that limit instead.
 import { createClient, type SupabaseClient } from '@supabase/supabase-js'
 import crypto from 'node:crypto'
 import { buildDevMockReportState } from '@/src/lib/roi/devMockReport'
@@ -44,10 +44,10 @@ const BASE_NORM_INPUT: NormalizedInput = {
   workContext: '',
 }
 
-// Builds a real report state using the same dev-mock builder production
-// uses for the "Fast mock preview" button — realistic calculator output and
-// rendered HTML instead of a hand-rolled stand-in that could mask a
-// rendering bug the real report viewer would otherwise hit.
+// Builds a real report using the same fake-data builder the "Fast mock preview"
+// button uses. That gives realistic calculated figures and real HTML, rather
+// than a hand-made stand-in that could hide a rendering bug the real viewer
+// would hit.
 function buildFixtureState(overrides: Partial<NormalizedInput> = {}) {
   const normInput = { ...BASE_NORM_INPUT, ...overrides }
   const execTemplateHtml = loadTemplate('roi-exec-template.html')
@@ -76,7 +76,7 @@ export async function getUserIdByEmail(
   return data.id as string
 }
 
-// Seeds a real, validated (post-wizard) report row owned by userId.
+// Writes a real, already-checked report owned by the given user.
 export async function seedReport(
   admin: SupabaseClient,
   {
@@ -111,9 +111,9 @@ export async function seedReport(
   return data.id as string
 }
 
-// Mirrors reportGrants.js's createColleagueInvite, minus the email send —
-// inserts the chat_usage grant row directly so tests can claim/revoke it
-// without a real Resend call.
+// Does the same as createColleagueInvite in reportGrants.js, without sending the
+// email. It writes the invite row directly, so tests can accept and revoke it
+// without a real email being sent.
 export async function seedColleagueInvite(
   admin: SupabaseClient,
   { reportId, invitedEmail }: { reportId: string; invitedEmail: string },
@@ -146,9 +146,9 @@ export async function deleteReport(
   await admin.from('reports').delete().eq('id', reportId)
 }
 
-// Creates a throwaway auth user + matching public.users row, so tests that
-// need "somebody else's report" don't depend on a second real account
-// existing in whatever Supabase project the suite runs against.
+// Creates a throwaway account and its matching row, so tests that need
+// "somebody else's report" do not depend on a second real account already
+// existing in whichever database the suite runs against.
 export async function createFixtureUser(
   admin: SupabaseClient,
   email: string,
@@ -175,9 +175,9 @@ export async function createFixtureUser(
   return data.user.id
 }
 
-// Cascades (auth.users → public.users, public.reports, public.chat_usage
-// all have on-delete-cascade FKs) so this alone cleans up everything the
-// fixture user owns.
+// Deleting the account deletes everything attached to it — its row, its reports
+// and its chat allowances all follow automatically — so this one call cleans up
+// everything the test user owned.
 export async function deleteFixtureUser(
   admin: SupabaseClient,
   userId: string,

@@ -37,13 +37,16 @@ export async function getServerSideProps({
     token,
   } = access
 
-  // Self-serve prospects confirm the AI's assumptions in the validation
-  // wizard before seeing the polished report. Share-link recipients (already
-  // finished, reviewing by email) and bulk-outbound reports (an employee's
-  // own internal review flow) bypass this redirect. Employees still get
-  // redirected to the wizard for their own reports — they just get the
-  // `canSkip` button there (see pages/report/[id]/validate.jsx) instead of
-  // bypassing it outright.
+  // A prospect who came on their own has to check the AI's assumptions in the
+  // wizard before seeing the finished report.
+  //
+  // Two groups skip this. Someone on a share link is reviewing a report that is
+  // already done. A bulk outbound report is a member of staff's own internal
+  // review.
+  //
+  // Staff are still sent to the wizard for their own reports. They simply get a
+  // skip button there (see pages/report/[id]/validate.jsx) rather than
+  // bypassing it entirely.
   if (!isShareLink && !isBulk && !report.validated_at) {
     return {
       redirect: {
@@ -56,10 +59,10 @@ export async function getServerSideProps({
   const admin = createAdminClient()
   const initialState = buildStateFromReportRow(report)
 
-  // Chat history belongs to the report, not the viewer — anyone who reached
-  // this point already passed hasReportAccess (owner, employee, or an
-  // invited colleague), so everyone sees the same full thread. Usage is the
-  // one thing that's per-user (chat_usage, queried below).
+  // The chat history belongs to the report, not to whoever is looking at it.
+  // Anyone who got this far has already passed the access check — owner, staff,
+  // or invited colleague — so they all see the same full conversation. The one
+  // thing counted per person is their message allowance, queried below.
   const msgQuery = admin
     .from('chat_messages')
     .select('role, content')
@@ -137,7 +140,7 @@ export default function ReportPage({
   shareToken,
   validatedAt,
 }) {
-  // Track that the tester reached and loaded the report page
+  // Record that the tester reached the report page and it loaded
   useEffect(() => {
     if (!isAlpha) return
     try {
@@ -168,8 +171,9 @@ export default function ReportPage({
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [isAlpha])
 
-  // Inject a short usage hint just above the chat textarea when alpha is active.
-  // Uses DOM injection because the textarea lives inside ReportViewerWithBatch.
+  // For alpha testers, put a short hint just above the chat box. We insert it
+  // into the page directly, because the chat box itself lives inside another
+  // component we do not control from here.
   useEffect(() => {
     if (!isAlpha) return undefined
 

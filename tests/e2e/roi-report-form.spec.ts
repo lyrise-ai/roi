@@ -1,10 +1,11 @@
 /**
- * ROI report generator form tests — runs in the `authenticated` project.
- * Verifies step-1 intake behavior (input state, validation, industry
- * selection) without triggering actual AI generation or API costs. The full
- * generate → validate → view chain is covered separately by
- * golden-path.spec.ts (local-only, since it needs the dev-mock generation
- * path).
+ * Tests for the report form itself. Runs signed in.
+ *
+ * It checks how the first step behaves — what you can type, what it refuses,
+ * picking an industry — without ever starting a real generation or costing
+ * anything. The full generate, check, view chain is covered separately by
+ * golden-path.spec.ts, which only runs locally because it needs the fake-data
+ * path.
  */
 import { test, expect } from '@playwright/test'
 
@@ -13,12 +14,11 @@ test.describe('ROI report form (authenticated)', () => {
     await page.goto('/roi-report')
     await expect(page).toHaveURL('/roi-report', { timeout: 15_000 })
 
-    // Alpha accounts see an intro splash first (auto-dismisses after 8s —
-    // see SplashScreen's setTimeout in pages/roi-report.jsx). Dismiss it
-    // immediately so assertions with the default 5s expect-timeout don't
-    // race it; tests using .fill()/.click() alone happened to outlast it
-    // since action waits are bounded by the much longer test timeout, which
-    // is what made this intermittent rather than a hard failure everywhere.
+    // Alpha accounts get an opening screen first, which clears itself after 8
+    // seconds. We dismiss it straight away, so checks with a 5-second timeout
+    // are not racing it. Tests that only type or click happened to outlast it,
+    // because those wait much longer — which is why this failed intermittently
+    // rather than everywhere.
     const skipSplash = page.getByRole('button', { name: 'Skip →' })
     if (await skipSplash.isVisible().catch(() => false)) {
       await skipSplash.click()
@@ -34,11 +34,10 @@ test.describe('ROI report form (authenticated)', () => {
   })
 
   test('company name starts blank in production', async ({ page }) => {
-    // The IS_DEV preset (companyName: 'LyRise', etc.) only applies when
-    // NODE_ENV==='development'. CI always runs against the production
-    // build (npm start), so this is the one place we can assert the real,
-    // deployed behavior — a self-serve visitor must not see LyRise's own
-    // preset data pre-filled in their intake form.
+    // The pre-filled test data only appears in development mode. CI always runs
+    // the production build, so this is the one place we can check the real,
+    // deployed behaviour: a visitor must never see our own test data already
+    // filled into their form.
     test.skip(!process.env.CI, 'preset only reliably absent in a prod build')
     await expect(page.getByPlaceholder('e.g. Acme Corp')).toHaveValue('')
   })
@@ -65,7 +64,8 @@ test.describe('ROI report form (authenticated)', () => {
     const input = page.getByPlaceholder('e.g. Acme Corp')
     await input.fill('')
     await page.getByRole('button', { name: /continue/i }).click()
-    // Still on step 1 — Continue was blocked, not just "input still visible"
+    // Still on step 1 — Continue was actually blocked, not just "the input is
+    // still on screen"
     // (visible would be true on step 2 as well if a different field reused
     // the same placeholder, so assert the step indicator directly).
     await expect(page.getByText('Step 1 of 2')).toBeVisible()

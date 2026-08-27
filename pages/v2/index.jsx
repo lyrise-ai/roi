@@ -1,36 +1,48 @@
 /* POC of the redesigned Profit Map (LYR-178, scaffold: LYR-182).
 
-   Parallel route, deliberately. Everything under /v2 is isolated from the live
-   alpha: no auth, no alpha cap, no `reports`/`state_data`, no SSE, and nothing
-   imported from `src/lib/roi/`. The live app must behave identically with this
-   directory deleted — which is also how it gets thrown away later.
+   This is a separate page on purpose. Nothing under /v2 touches the live app:
+   no login, no alpha limit, no `reports`/`state_data` tables, and no imports
+   from the production ROI code (`src/lib/roi/pipeline`, `src/lib/roi/agent.ts`
+   and friends). `src/lib/roi/v2/` is this POC's own corner of that folder —
+   its own calculator (LYR-186) and its own answer reader (LYR-188), sharing no
+   code with the pipeline — so that folder is fine to use. Delete this whole
+   directory and the live app must behave exactly the same. That is also how we
+   throw it away later.
 
-   The token layer needs no import here: `styles/global.css` is loaded once in
-   `pages/_app.js`, so every CSS custom property the primitives read is already
-   on the document. `Shell` below is this route's own layout — the alpha's
-   chrome is not reused.
+   It calls the server once: `/api/v2/research` (LYR-199), which fills the scan
+   panel. The call starts when the company form is submitted and we never wait
+   for it — research takes 5 to 20 seconds, and the questions have to stay
+   usable the whole time.
 
-   Flow state is a single object in this component and lives in memory only.
-   A refresh starts over; that's the accepted trade for a supervised demo
-   (LYR-182: "state can live in memory"). Landing and company are built
-   (LYR-183), the interview is built (LYR-184), the company scan panel is
-   built (LYR-185); the reveal is still a stub.
+   No need to import the design tokens here. `styles/global.css` is loaded once
+   in `pages/_app.js`, so every CSS variable the shared components read is
+   already on the page. `Shell` below is this route's own layout; we do not
+   reuse the live app's chrome.
 
-   The interview does not add a step: `flow.turn` walks the pain points inside
-   the `interview` step, and every answer for every pain point stays in
-   `flow.pains` for the whole session. That is what makes going back cheap and
-   what hands the calculator the full set at the end.
+   Every answer lives in one object in this component, in memory only. A
+   refresh loses it. That is the accepted trade for a demo someone runs in
+   front of a prospect (LYR-182: "state can live in memory"). Landing and
+   company are built (LYR-183), the questions are built (LYR-184), the scan
+   panel is built (LYR-185) and now reads real research (LYR-199), and the
+   reveal screen is built (LYR-188).
 
-   Sizes here are tokens or relative units — no raw px (P10). Inline styles
-   can't carry media queries, so everything responsive comes from `clamp()`,
-   `ch` max-widths and wrapping flex rows instead. */
+   The questions are not a separate step. `flow.turn` counts which pain point
+   we are on inside the `interview` step, and every answer for every pain point
+   stays in `flow.pains` for the whole session. That is what makes going back
+   cheap, and what hands the calculator the full set at the end.
+
+   Sizes here are design tokens or relative units — never raw pixels (P10).
+   Inline styles cannot hold media queries, so anything responsive is done with
+   `clamp()`, `ch` widths, and flex rows that wrap. */
 import * as React from 'react'
 import Head from 'next/head'
 import { useRouter } from 'next/router'
 import Image from 'next/image'
 import Logo from '@/src/assets/logo.svg'
+import { fmtDate } from '@/src/lib/formatDate'
 import {
   Button,
+  Dialog,
   Icon,
   Input,
   ProvenanceMark,
@@ -38,12 +50,19 @@ import {
   SegmentedInput,
   SuggestionBlock,
 } from '@components/ui'
+import {
+  assembleCalculatorInput,
+  bridgePainQuant,
+} from '@/src/lib/roi/v2/answerBridge'
+import { calculateMiniProfitMap } from '@/src/lib/roi/v2/miniCalculator'
+import { buildObservationSentence } from '@/src/lib/roi/v2/observation'
 
 const STEPS = ['landing', 'company', 'interview', 'reveal']
 
-/* The two headline sizes the design uses sit between the type-scale roles:
-   --type-h1 (48px) is too big on a phone and --type-h2 too big for a question.
-   Both interpolate between existing size tokens rather than naming new ones. */
+/* The two heading sizes this design needs fall between the sizes the design
+   system names: --type-h1 (48px) is too big on a phone, --type-h2 too big for
+   a question. So both slide between two existing size tokens instead of adding
+   new ones. */
 const HEADLINE = {
   font: 'var(--weight-extrabold) clamp(var(--text-2xl), 6vw, var(--text-4xl))/var(--leading-snug) var(--font-display)',
   letterSpacing: 'var(--tracking-tight)',
@@ -60,10 +79,45 @@ const LEAD = {
   textWrap: 'pretty',
 }
 
-/* The design's entrance: each screen rises 8px as it mounts. It lives here
-   rather than in styles/global.css so /v2 stays deletable as one directory,
-   and in a class rather than an inline style so the reduced-motion query can
-   actually override it. */
+/* The two big numbers on the reveal screen (LYR-188 / POC 10, piece 2). Same
+   size for both. What makes one of them impressive is the number itself, not a
+   larger font. */
+const FIGURE_LABEL = {
+  font: 'var(--weight-semibold) var(--text-sm)/var(--leading-normal) var(--font-body)',
+  color: 'var(--text-muted)',
+  margin: '0 0 var(--space-1)',
+}
+const FIGURE_VALUE = {
+  display: 'flex',
+  alignItems: 'baseline',
+  gap: 'var(--space-2)',
+  margin: 0,
+  font: 'var(--weight-extrabold) clamp(var(--text-3xl), 7vw, var(--text-5xl))/var(--leading-tight) var(--font-display)',
+  letterSpacing: 'var(--tracking-tight)',
+  color: 'var(--text-heading)',
+}
+const FIGURE_UNIT = {
+  font: 'var(--weight-regular) var(--text-lg)/1 var(--font-body)',
+  color: 'var(--text-muted)',
+}
+
+/* Piece 4 (LYR-188 / POC 10): the pop-up that shows how the money figure was
+   worked out. Each line is copied straight from calc.formulas — we never redo
+   the maths here — in the order the figure is actually built up. `annualHours`
+   is left out on purpose: it belongs to the OTHER figure (hours spent), which
+   carries no guesses, so it is not one of the assumptions behind this one. */
+const FORMULA_ROWS = [
+  { key: 'hoursReturned', label: 'Hours returned' },
+  { key: 'ratePerHour', label: 'Rate per hour' },
+  { key: 'operationalDividend', label: 'Operational dividend' },
+  { key: 'profitUplift', label: 'Profit uplift' },
+  { key: 'totalFinancialGain', label: 'Total financial gain' },
+]
+
+/* Each screen slides up 8px when it appears. It lives in this file, not in
+   styles/global.css, so /v2 stays one folder you can delete. And it is a CSS
+   class, not an inline style, because only a class can be overridden by the
+   "user asked for less motion" media query below. */
 const RISE_CSS = `
   .v2-rise { animation: v2-rise var(--duration-slow) var(--ease-out); }
   @keyframes v2-rise {
@@ -102,11 +156,12 @@ function Shell({ step, children }) {
           padding: 'var(--space-5) var(--space-6)',
         }}
       >
-        {/* 70x24 is the asset's own 138:47 ratio at --space-6 tall. Sized by
-            attribute rather than CSS: next/image warns when a rendered
-            dimension disagrees with the one it was given. */}
+        {/* 70x24 keeps the logo file's own 138:47 shape at --space-6 tall. The
+            size is set with width/height attributes, not CSS, because
+            next/image warns when the size on screen does not match the size it
+            was told. */}
         <Image src={Logo} alt="LyRise" width={70} height={24} priority />
-        {/* No progress on the landing screen — there is no flow to be in yet. */}
+        {/* No progress bar on the first screen — nothing has started yet. */}
         {index > 0 && (
           <div
             style={{
@@ -150,7 +205,7 @@ function Shell({ step, children }) {
   )
 }
 
-/* The analyst is a presence, not a mascot: a dot, a name, nothing animated. */
+/* The analyst should feel present, not cute: a dot and a name, no animation. */
 function AnalystMark() {
   return (
     <div
@@ -193,8 +248,8 @@ function AnalystMark() {
   )
 }
 
-/* One line, one CTA, three chips. No splash, no typewriter, no auto-advance —
-   the restraint is the design (LYR-183). */
+/* One line of text, one button, three small labels. No splash screen, no
+   typewriter effect, no auto-advance. Holding back is the design (LYR-183). */
 function Landing({ onStart }) {
   const chips = ['~3 minutes', 'Free, no sales call', 'Your numbers stay yours']
   return (
@@ -246,8 +301,8 @@ function Landing({ onStart }) {
           color: 'var(--text-muted)',
         }}
       >
-        {/* The separator travels with the chip that follows it, so a wrap on a
-            narrow screen never strands a dot at the end of a line. */}
+        {/* Each dot is grouped with the label after it, so on a narrow screen a
+            line never ends with a lonely dot. */}
         {chips.map((chip, i) => (
           <span
             key={chip}
@@ -276,8 +331,8 @@ function Landing({ onStart }) {
   )
 }
 
-/* Two fields, then straight into the interview. Submitting starts the scan but
-   never waits for it — see `startScan`. */
+/* Two fields, then straight into the questions. Submitting starts the research
+   call but never waits for it — see `useScan`. */
 function Company({ value, onChange, onBack, onSubmit }) {
   const submit = (e) => {
     e.preventDefault()
@@ -303,6 +358,12 @@ function Company({ value, onChange, onBack, onSubmit }) {
         nothing I ask is something I could have looked up myself.
       </p>
 
+      {/* TODO(agent) — both fields are free text and are read by regex today
+          (demoFor() normalises the domain, the name is used verbatim). An
+          agent should read them instead: "Dr Job Pro, Cairo" carries the
+          country and therefore the report's currency and working-weeks
+          constant, which we currently assume are US dollars and 50. See the
+          TODO(agent) block in src/lib/roi/v2/answerBridge.ts for the rule. */}
       <form onSubmit={submit}>
         <div
           style={{
@@ -352,8 +413,9 @@ function Company({ value, onChange, onBack, onSubmit }) {
           <Button variant="ghost" size="sm" onClick={onBack}>
             Back
           </Button>
-          {/* Not gated on a name: an unnamed company falls back to the demo
-              one, and a demo you can't walk without typing isn't a demo. */}
+          {/* The button works even with the fields empty. An empty company
+              falls back to the demo company, and a demo you cannot click
+              through without typing is not a demo. */}
           <Button
             type="submit"
             iconRight={<Icon name="arrow-right" size={18} />}
@@ -366,17 +428,18 @@ function Company({ value, onChange, onBack, onSubmit }) {
   )
 }
 
-/* The interview's own wording, which is the same for every prospect: the
-   questions, what they're for, and a placeholder generic enough to stand when
-   we know nothing about the company. Everything that cites a specific business
-   — the placeholder's example, the researched guess, the number estimates —
-   lives per company in `DEMOS` and is merged over the top by `painFor` and
-   `quantFor`. Nothing company-specific may be hardcoded here: it would follow
-   the wrong prospect into the demo.
+/* The wording every prospect sees, no matter who they are: the questions, why
+   we ask them, and a grey example text that still makes sense when we know
+   nothing about the company.
 
-   Read the question strings aloud before editing one. The rule the whole
-   screen is built on is that none of them may contain "percent",
-   "automatable", "headcount", "volume", "FTE" or "blended rate" (LYR-184). */
+   Anything that names a specific business — the example text, the guess we
+   offer, the number estimates — lives per company in `DEMOS` further down, and
+   `painFor` and `quantFor` lay it over the top of this. Never hardcode
+   anything company-specific here: it would show up for the wrong prospect.
+
+   Read a question out loud before you change it. The rule this whole screen is
+   built on: no question may contain "percent", "automatable", "headcount",
+   "volume", "FTE" or "blended rate" (LYR-184). */
 const PAINS = [
   {
     question:
@@ -400,7 +463,7 @@ const PAINS = [
   },
 ]
 
-/* The pushback the card asks for at four and beyond. It is copy, not a block:
+/* What we say from the fourth pain point on. It is only wording, not a limit —
    the button still works, the analyst just says what it thinks. */
 const EXTRA_PAIN = {
   question: 'Another one, then.',
@@ -411,14 +474,24 @@ const EXTRA_PAIN = {
 }
 
 /* The five number questions, asked the same way for every pain point.
-   The last one becomes `automatable%` downstream — it is the single largest
-   guess in the whole model, which is why it is asked rather than assumed.
 
-   The estimate here is the one we give when we know nothing about the company,
-   and it is deliberately not a number. An estimate with no evidence under it is
-   the fabrication this whole POC exists to stop; saying so is more useful than
-   inventing a plausible figure the prospect then has to argue with. A company
-   we did scan overrides all four fields from `DEMOS`. */
+   TODO(agent) — all five are answered by typing into a box, and the grey
+   example text here ("$70k a year", "about a third") teaches a style that the
+   plain text-matching code in answerBridge.ts cannot read back. These answers
+   should be read by an agent instead. The full rule is in that file, under
+   TODO(agent).
+
+   The last question asks what is LEFT OVER — how much still needs a person. It
+   gets flipped later into "how much can be automated" by bridgeAutomatable()
+   in answerBridge.ts (confirmed, PR #56). It is the biggest single guess in
+   the whole model, which is why we ask it instead of assuming it.
+
+   The `estimate` text here is what we say when we know nothing about the
+   company, and it is deliberately not a number. A guess with no evidence under
+   it is exactly the thing this POC exists to stop. Saying "we have nothing to
+   base this on" is more useful than making up a believable number the prospect
+   then has to argue with. For a company we did research, `DEMOS` below
+   replaces these four estimates. */
 const QUANT = [
   {
     label: 'How many times does this happen, start to finish, in a month?',
@@ -458,96 +531,38 @@ const QUANT = [
   },
 ]
 
-/* One record per demo company (LYR-185): what the scan found, the guess the
-   analyst offers against each pain point, and the number estimates behind
-   "Let AI estimate". All three come from the same place on purpose — a guess
-   that cites a fact the panel never showed is the fabrication this POC exists
-   to stop, so every `guessWhy` and every estimate `why` points at something in
-   that company's own `scan`.
+/* One entry per demo company (LYR-185): the guess the analyst offers for each
+   pain point, and the number estimates behind the "Let AI estimate" button.
 
-   Live enrichment is a production concern; what needs testing here is the
-   behaviour. The demo domains are `drjobpro.com`, `harbourfield.com`,
-   `northaxle.com` and `verdantdental.com` — anything else gets no panel, no
-   guesses, and estimates that say they have nothing to stand on.
+   These entries used to also hold canned facts for the scan panel. Those are
+   gone (LYR-199) — the panel reads the real research system now, and keeping
+   canned facts too would mean two sources for the same panel, disagreeing with
+   each other.
 
-   Every scan entry is something a person could go and check: a headcount, a
-   service line, a location, what the site is built on, what the careers page is
-   advertising. Nothing in `scan` is a workflow, a department or an "operating
-   model". That inference is what made the old research agent untrustworthy — it
-   was required to invent four workflows whether or not the evidence existed.
-   The scan shows what we can point at; the interview gets everything else. The
-   guesses are allowed to infer, which is exactly why they sit in a dashed box
-   marked `estimated`, in the interview, next to a field the user can overrule.
+   The guesses and number estimates are still canned. Replacing them with real
+   findings is LYR-186's job, not this one. Until then the demo domains are
+   `drjobpro.com`, `harbourfield.com`, `northaxle.com` and
+   `verdantdental.com`; any other company gets no guesses, and estimates that
+   say they have nothing to stand on.
 
-   `looking` is what the panel says while that fact is still pending, so the
-   status line always names the page being read rather than counting down.
+   Be aware of what that mix means: the panel is live but these guesses are
+   not, so a guess may mention something the panel never showed. We get away
+   with it only because a guess is clearly marked as junior work — a dashed box
+   labelled `estimated`, sitting next to a field the user can overrule — and
+   only for the length of one card.
 
-   `sourceUrl` is set wherever the page really exists — Dr. Job Pro is a real
-   company and every one of its links was checked. The other three are invented
-   demo fixtures: their sources stay as text, because a source that 404s in
-   front of a prospect is worse than one that is merely quoted. That is also
-   what the live product does when enrichment has a citation but no URL. */
+   Nothing here may put a guessed workflow, department or "operating model"
+   into the PANEL. That kind of guessing is what made the old research agent
+   untrustworthy. The panel shows only what we can point at; everything else
+   comes from the questions. */
 const DEMOS = {
-  /* Dr. Job Pro (drjobpro.com) is the demo we actually show, so none of this is
-     invented: every line was read off the live site, and the two lines the v17
-     prototype had that reached past the evidence — "60–80 staff across sales,
-     support and operations" and "support arrives on all three" — are gone.
-     They named departments and workflows their own sources don't show. */
+  /* Dr. Job Pro (drjobpro.com) is the demo we actually give, so nothing here is
+     invented: every line was read off their live site. The v17 prototype had
+     two lines that went past the evidence — "60–80 staff across sales, support
+     and operations" and "support arrives on all three" — and they are gone.
+     They named departments and workflows their own sources never showed. */
   'drjobpro.com': {
     name: 'Dr. Job Pro',
-    scan: [
-      {
-        fact: 'What you do',
-        value:
-          'An AI-first recruitment platform — a job portal since 2015, now the whole hiring lifecycle',
-        source: 'drjobpro.com/about-us',
-        sourceUrl: 'https://www.drjobpro.com/about-us',
-        looking: 'Reading your site…',
-      },
-      {
-        fact: 'Scale you claim',
-        value: '10M+ users since 2015',
-        source: 'drjobpro.com/about-us',
-        sourceUrl: 'https://www.drjobpro.com/about-us',
-        looking: 'Reading your about page…',
-      },
-      {
-        fact: 'Live vacancies',
-        value: 'Thousands — Cairo alone lists about 8,000',
-        source: 'drjobpro.com/egypt',
-        sourceUrl: 'https://www.drjobpro.com/egypt',
-        looking: 'Counting what’s live on your jobs pages…',
-      },
-      {
-        fact: 'Reach',
-        value:
-          'Saudi Arabia, Kuwait, Qatar, Bahrain, Egypt, Jordan, the UK, the USA and India',
-        source: 'drjobpro.com',
-        sourceUrl: 'https://www.drjobpro.com/',
-        looking: 'Checking which markets you cover…',
-      },
-      {
-        fact: 'Offices',
-        value: 'Abu Dhabi, Giza, and Vellore in Tamil Nadu',
-        source: 'drjobpro.com/contact-us',
-        sourceUrl: 'https://www.drjobpro.com/contact-us',
-        looking: 'Looking for where you’re based…',
-      },
-      {
-        fact: 'Contact channels',
-        value: 'WhatsApp, email and a help centre',
-        source: 'drjobpro.com/contact-us',
-        sourceUrl: 'https://www.drjobpro.com/contact-us',
-        looking: 'Reading your contact page…',
-      },
-      {
-        fact: 'Who buys',
-        value: 'Employers, through a separate portal with published packages',
-        source: 'employer.drjobpro.com/pricing',
-        sourceUrl: 'https://employer.drjobpro.com/pricing',
-        looking: 'Reading your employer pages…',
-      },
-    ],
     pains: [
       {
         placeholder:
@@ -610,44 +625,6 @@ const DEMOS = {
 
   'harbourfield.com': {
     name: 'Harbourfield Legal',
-    scan: [
-      {
-        fact: 'Team size',
-        value: '42 people',
-        source: 'harbourfield.com/team',
-        looking: 'Reading your site…',
-      },
-      {
-        fact: 'Service lines',
-        value: 'Commercial, property, employment',
-        source: 'harbourfield.com',
-        looking: 'Checking your team page…',
-      },
-      {
-        fact: 'Pricing model',
-        value: 'Fixed fee, published openly',
-        source: 'harbourfield.com/pricing',
-        looking: 'Reading your pricing page…',
-      },
-      {
-        fact: 'Locations',
-        value: 'Two offices — Leeds and Manchester',
-        source: 'harbourfield.com/contact',
-        looking: 'Looking for other offices…',
-      },
-      {
-        fact: 'Site is built on',
-        value: 'WordPress, Calendly, Mailchimp',
-        source: 'builtwith.com',
-        looking: 'Checking what your site runs on…',
-      },
-      {
-        fact: 'Hiring now',
-        value: 'Two roles, both mention document review',
-        source: 'harbourfield.com/careers',
-        looking: 'Checking recent job postings…',
-      },
-    ],
     pains: [
       {
         placeholder:
@@ -712,44 +689,6 @@ const DEMOS = {
 
   'northaxle.com': {
     name: 'Northaxle Freight',
-    scan: [
-      {
-        fact: 'Team size',
-        value: 'About 55 people',
-        source: 'linkedin.com/company/northaxle',
-        looking: 'Reading your site…',
-      },
-      {
-        fact: 'Industry',
-        value: 'Freight brokerage and 3PL',
-        source: 'northaxle.com',
-        looking: 'Checking who you are…',
-      },
-      {
-        fact: 'Service lines',
-        value: 'LTL, full truckload, drayage',
-        source: 'northaxle.com/services',
-        looking: 'Reading your services page…',
-      },
-      {
-        fact: 'Locations',
-        value: 'Three terminals — Memphis, Dallas, Reno',
-        source: 'northaxle.com/network',
-        looking: 'Looking for your terminals…',
-      },
-      {
-        fact: 'Site is built on',
-        value: 'HubSpot forms, a McLeod portal login',
-        source: 'builtwith.com',
-        looking: 'Checking what your site runs on…',
-      },
-      {
-        fact: 'Hiring now',
-        value: 'Four roles, three of them in dispatch',
-        source: 'northaxle.com/careers',
-        looking: 'Checking recent job postings…',
-      },
-    ],
     pains: [
       {
         placeholder:
@@ -811,44 +750,6 @@ const DEMOS = {
 
   'verdantdental.com': {
     name: 'Verdant Dental',
-    scan: [
-      {
-        fact: 'Team size',
-        value: '31 people across the practices',
-        source: 'verdantdental.com/about',
-        looking: 'Reading your site…',
-      },
-      {
-        fact: 'Industry',
-        value: 'Multi-site dental group',
-        source: 'verdantdental.com',
-        looking: 'Checking who you are…',
-      },
-      {
-        fact: 'Service lines',
-        value: 'General, orthodontics, implants',
-        source: 'verdantdental.com/services',
-        looking: 'Reading your services page…',
-      },
-      {
-        fact: 'Locations',
-        value: 'Five practices in greater Phoenix',
-        source: 'verdantdental.com/locations',
-        looking: 'Looking for your other practices…',
-      },
-      {
-        fact: 'Site is built on',
-        value: 'A Dentrix patient portal, a Podium widget',
-        source: 'builtwith.com',
-        looking: 'Checking what your site runs on…',
-      },
-      {
-        fact: 'Hiring now',
-        value: 'Two front-desk roles, both mention insurance claims',
-        source: 'verdantdental.com/careers',
-        looking: 'Checking recent job postings…',
-      },
-    ],
     pains: [
       {
         placeholder:
@@ -910,14 +811,18 @@ const DEMOS = {
   },
 }
 
-/* Whatever the user typed in the Website field, down to the key `DEMOS` uses:
-   `https://www.DrJobPro.com/about` and `drjobpro.com` are one company.
+/* Cuts whatever the user typed in the Website field down to the key `DEMOS`
+   uses: `https://www.DrJobPro.com/about` and `drjobpro.com` are the same
+   company.
 
-   An empty field or an unrecognised domain falls back to the demo company, so
-   the whole flow is walkable on Next, Next, Next without typing anything —
-   which is how it gets shown. The no-scan state is still real and still has to
-   work (a live prospect we find nothing on gets no panel), so it lives behind
-   `/v2?scan=none` rather than behind an unlucky typo. */
+   An empty field, or a domain we have no entry for, falls back to the demo
+   company. That is what lets you click Next, Next, Next through the whole flow
+   without typing — which is how the demo is actually given.
+
+   `/v2?scan=none` is the way into the "we know nothing about this company"
+   state. Since LYR-199 it no longer hides the panel — the panel is live now
+   and there are no canned facts left to hide — but it still switches off the
+   canned guesses and estimates, which is what it was really for. */
 const DEFAULT_DEMO = 'drjobpro.com'
 const demoFor = (website = '') =>
   DEMOS[
@@ -929,10 +834,10 @@ const demoFor = (website = '') =>
       .split('/')[0]
   ] || DEMOS[DEFAULT_DEMO]
 
-/* The shared question, with whatever we know about this company merged over it.
-   A company we didn't scan keeps the generic placeholder and gets no `guess` at
-   all — the block only renders when there is one. Pain points past the third
-   never get a guess, whoever the company is. */
+/* Takes the shared question and lays anything we know about this company over
+   the top of it. A company with no entry in `DEMOS` keeps the generic example
+   text and gets no `guess` at all — the guess box only appears when there is
+   one. Pain points four and beyond never get a guess, for any company. */
 const painFor = (demo, i) => ({
   ...(PAINS[i] || EXTRA_PAIN),
   ...((PAINS[i] && demo && demo.pains[i]) || {}),
@@ -942,13 +847,14 @@ const quantFor = (demo, i) => ({
   ...((demo && demo.quant[i]) || {}),
 })
 
-/* Two is the floor for a report that holds up; the copy says why rather than
-   disabling anything. */
+/* A report needs at least two pain points to hold up. We say so in the
+   wording; we never disable the button. */
 const MIN_PAINS = 2
 
-/* The question column, and the interview's width with the scan panel beside it.
-   Without a panel the column is the whole screen and centres, rather than
-   sitting against a gutter of nothing. */
+/* How wide the questions are on their own, and how wide the page gets when the
+   scan panel sits beside them. With no panel, the questions take the whole
+   width and centre, instead of hugging one side with empty space next to
+   them. */
 const COLUMN = '41rem'
 const COLUMN_PLUS_PANEL = '66rem'
 
@@ -960,8 +866,9 @@ const emptyPain = () => ({
   guessOpen: true,
 })
 
-/* A pain point only counts once it has been named. Turns the user opened and
-   left blank are neither counted towards the floor nor handed to the reveal. */
+/* A pain point only counts once it has a name. A card the user opened and left
+   blank is not counted towards the minimum, and is not sent to the reveal
+   screen. */
 const isNamed = (pain) => pain.text.trim() !== ''
 
 function Divider({ children }) {
@@ -977,21 +884,53 @@ function Divider({ children }) {
   )
 }
 
-/* What the scan found, beside the questions rather than in front of them: it
-   only ever shows what it can point to, and it never fills in an answer.
+/* Turns a source URL into something a person can read: the domain, plus enough
+   of the path to tell an about page from a careers page. Very long job-board
+   URLs get cut short rather than wrapping and breaking the panel's shape. The
+   link still opens the full URL — that is the part that has to be true. */
+const SOURCE_MAX = 34
+function sourceLabel(url) {
+  let parsed
+  try {
+    parsed = new URL(url)
+  } catch {
+    return url
+  }
+  const label = (parsed.host.replace(/^www\./, '') + parsed.pathname).replace(
+    /\/$/,
+    '',
+  )
+  return label.length > SOURCE_MAX
+    ? `${label.slice(0, SOURCE_MAX - 1)}…`
+    : label
+}
 
-   Three states, and the third one is the point: with facts it resolves them a
-   row at a time; while it still has some to find it says so quietly; with no
-   fact set at all it renders nothing. An empty panel reads as broken, and a
-   panel promising a scan it can't deliver is worse than no panel (LYR-185). */
-function ScanPanel({ company, all, step }) {
-  if (!all) return null
-  const facts = all.slice(0, step)
-  const looking = step < all.length
+/* What the research found, shown beside the questions rather than in front of
+   them. It only ever shows things it can point at, and it never fills in an
+   answer for the user.
+
+   Three cases, and the third is the important one: findings appear one by one
+   as they arrive; while the search is still running it says so quietly; and if
+   nothing at all was found, the panel does not appear. An empty panel looks
+   broken, and a panel that promises a scan it cannot deliver is worse than no
+   panel (LYR-185).
+
+   No sorting, no limit, no "show a mix of types" rule. The agent already decided
+   what is worth saying and wrote each line. A second round of picking here would
+   quietly throw away that thinking, and cutting the list short would drop
+   findings for no reason the prospect can see. We print `says` exactly as
+   written and use `link` as the link. This component calls no model and makes no
+   decisions of its own (LYR-199). */
+function ScanPanel({ company, findings, looking }) {
+  /* Nothing found means nothing on screen, not an empty box. Once the search
+     is finished and found nothing, the panel disappears — the questions are
+     the whole product without it. */
+  if (findings.length === 0 && !looking) return null
   return (
     <aside
-      /* Named so it stays a landmark: an unnamed <aside> inside <section> maps
-         to `generic`, not `complementary`. */
+      /* The label is what keeps this a landmark for screen readers. An <aside>
+         with no label inside a <section> is announced as a plain box, not as a
+         side panel. */
       aria-label="Company scan"
       style={{
         flex: '1 1 17rem',
@@ -1023,15 +962,17 @@ function ScanPanel({ company, all, step }) {
       >
         {`What we could verify about ${company || 'you'} — each with a source.`}
       </p>
-      {facts.map((f, i) => (
+      {findings.map((f, i) => (
         <ScanFactRow
-          key={f.fact}
+          /* The agent may say more than one thing about one page, so the link
+             alone is not a key. */
+          key={`${f.link}\n${f.says}`}
           stacked
-          fact={f.fact}
-          value={f.value}
-          source={f.source}
-          sourceUrl={f.sourceUrl}
-          last={!looking && i === facts.length - 1}
+          fact={f.about}
+          value={f.says}
+          source={sourceLabel(f.link)}
+          sourceUrl={f.link}
+          last={!looking && i === findings.length - 1}
         />
       ))}
       {looking && (
@@ -1059,7 +1000,7 @@ function ScanPanel({ company, all, step }) {
               color: 'var(--text-muted)',
             }}
           >
-            {all[step].looking}
+            Reading what&rsquo;s public about you&hellip;
           </span>
         </div>
       )}
@@ -1078,19 +1019,19 @@ function ScanPanel({ company, all, step }) {
   )
 }
 
-/* One pain point per screenful, in the order that makes the answers honest:
-   the open question is the hero and is answered first, the researched guess
-   sits under it in a dashed box that is visibly junior, and only then do the
-   numbers get asked. Nothing here pre-fills the big box — a suggestion the
-   user has to accept is data; a suggestion already in the field is a leading
-   question. */
+/* One pain point per screen, in the order that keeps the answers honest: the
+   open question comes first and is answered first, our guess sits under it in
+   a dashed box that clearly looks like junior work, and only then do we ask
+   for numbers. Nothing here pre-fills the big text box. A suggestion the user
+   has to accept is data; a suggestion already sitting in the field is us
+   putting words in their mouth. */
 function Interview({
   turn,
   pain,
   namedCount,
   company,
   demo,
-  scanStep,
+  scan,
   onChange,
   onBack,
   onAdd,
@@ -1099,6 +1040,14 @@ function Interview({
   const t = painFor(demo, turn)
   const quant = QUANT.map((_, i) => quantFor(demo, i))
   const sharper = namedCount >= MIN_PAINS
+  /* Is the panel on screen? The page width depends on this. We used to check
+     `demo` instead, which worked while the panel was canned, but not now that
+     it is live research. So a search that ends up finding nothing will
+     re-centre the questions once, the moment we learn there is nothing. The
+     alternative is an empty gap beside the questions for the rest of the
+     session. */
+  const hasPanel = scan.findings.length > 0 || scan.looking
+
   const set = (fields) => onChange(fields)
   const setQuant = (i, value) =>
     onChange({ quant: pain.quant.map((q, j) => (j === i ? value : q)) })
@@ -1109,7 +1058,7 @@ function Interview({
       style={{
         flex: 1,
         width: '100%',
-        maxWidth: demo ? COLUMN_PLUS_PANEL : COLUMN,
+        maxWidth: hasPanel ? COLUMN_PLUS_PANEL : COLUMN,
         margin: '0 auto',
         padding: 'var(--space-8) var(--space-6) var(--space-20)',
         display: 'flex',
@@ -1125,7 +1074,7 @@ function Interview({
           {t.sub}
         </p>
 
-        {/* The hero. No label above it — the question is the label. */}
+        {/* The main box. No label above it — the question is the label. */}
         <Input
           multiline
           rows={4}
@@ -1181,6 +1130,11 @@ function Interview({
           </Divider>
         ))}
 
+        {/* TODO(agent) — the pain point text above, plus these two, are free
+            writing, and nothing reads them today beyond showing them back.
+            They are where the shape of the work, the size of the team and the
+            tone of the final report should come from. Same rule as the
+            numbers: an agent has to read them, not us. */}
         <Divider>
           <Input
             label="Which team or department handles this?"
@@ -1254,28 +1208,138 @@ function Interview({
         </div>
       </div>
 
-      <ScanPanel company={company} all={demo && demo.scan} step={scanStep} />
+      <ScanPanel
+        company={company}
+        findings={scan.findings}
+        looking={scan.looking}
+      />
     </section>
   )
 }
 
-/* What the calculator will read: the number the user gave, the range they gave,
-   or — for anything they left blank — the estimate, carrying the tag that says
-   whose number it is. A blank must never become a dash: the demo is walkable
-   without typing, so most answers in a demo run are blank, and a report full of
-   dashes is no report. The tag is what keeps that honest, so it is never
-   flattened away. */
-function quantAnswer(answer = {}, q) {
-  if (answer.mode === 'exact' && answer.exact) return answer.exact
-  if (answer.mode === 'range' && (answer.low || answer.high))
-    return `${answer.low || '—'} to ${answer.high || '—'}`
-  return `${q.estimate} (${q.kind})`
+/* Said once, above the figures, whenever a blank answer was filled in with the
+   estimate we showed during the questions. The purple dots next to the numbers
+   let you trace them; this sentence is the plain admission. It deliberately
+   does not promise an edit button, because this screen does not have one
+   yet. */
+const OURS_NOT_YOURS =
+  'You left the numbers to me, so these are my guesses standing in — marked as mine, and worth replacing with your own before this goes in front of anyone.'
+
+const comma = (n) => Math.round(n).toLocaleString('en-US')
+const money = (n) => `$${comma(n)}`
+
+/* Takes one pain point's five number answers, reads them with answerBridge,
+   and runs the calculator on them.
+
+   `estimates` is the five estimate strings we showed this company during the
+   questions (quantFor(demo, i).estimate). answerBridge uses one of them
+   whenever the matching question was left blank. That is what makes the
+   click-through demo show real figures instead of "not enough here yet".
+   Anything filled in that way is flagged as an estimate and marked on screen
+   as ours — never passed off as the user's own number.
+
+   annualHours (hours spent per year) never looks at pay or at how much can be
+   automated. It is only people × hours a week × the calculator's own 50
+   working weeks. So a pain point missing only pay can still show hours spent.
+   The money side is what we hold back — we never make a number up. A pain
+   point missing people or hours a week has nothing to show at all. */
+function figuresFor(pain, estimates) {
+  const fields = bridgePainQuant(pain.quant, estimates)
+  const assembled = assembleCalculatorInput(fields, pain.team || undefined)
+
+  if (!assembled.incomplete) {
+    return { complete: true, calc: calculateMiniProfitMap(assembled) }
+  }
+  if (fields.people.value === null || fields.hoursPerWeek.value === null) {
+    return { complete: false, calc: null }
+  }
+  const calc = calculateMiniProfitMap({
+    people: fields.people.value,
+    hoursPerWeek: fields.hoursPerWeek.value,
+    annualPay: 0,
+    automatablePct: 0,
+  })
+  return { complete: false, calc: { annualHours: calc.annualHours } }
 }
 
-/* `demo` is passed in rather than resolved here: an estimate the user left
-   standing is only traceable against the record the interview actually showed
-   them. */
+/* Picks which pain point to show on the reveal screen (LYR-188). The rules run
+   in order: biggest money figure wins; if two tie, more hours returned wins;
+   if they still tie, whichever the user entered first wins. Nothing random and
+   no model call, so the same answers always pick the same pain point, and we
+   can unit-test the choice.
+
+   A pain point with missing numbers always loses to one with complete numbers,
+   even if its partial hours figure happens to be bigger. A number with less
+   behind it should never beat a number with more behind it just because it
+   looks larger. */
+function selectFeatured(pains, estimates) {
+  return pains
+    .map((pain, index) => ({
+      pain,
+      index,
+      figures: figuresFor(pain, estimates),
+    }))
+    .sort((a, b) => {
+      if (a.figures.complete !== b.figures.complete)
+        return a.figures.complete ? -1 : 1
+      if (a.figures.complete && b.figures.complete) {
+        const gain =
+          b.figures.calc.totalFinancialGain - a.figures.calc.totalFinancialGain
+        if (gain !== 0) return gain
+        const hours =
+          b.figures.calc.hoursReturned - a.figures.calc.hoursReturned
+        if (hours !== 0) return hours
+      }
+      return a.index - b.index
+    })[0]
+}
+
+/* `demo` is handed in from above rather than looked up here. If the user left
+   one of our estimates standing, the only honest thing to check it against is
+   the exact entry the questions actually showed them.
+
+   Piece 2 (LYR-188 / POC 10): the real figures for the chosen pain point.
+   Piece 3: the sentence above them — the "I heard you" moment — built by
+   buildObservationSentence() from the same numbers the figures came from,
+   never by a model. The final pitch styling is a later piece. */
 function Reveal({ flow, demo, onRestart }) {
+  // Every pain point can still be thrown away on the way in: blank, with no
+  // guess to fall back on (open /v2?scan=none, name nothing, click finish). So
+  // there may be nothing to show. In that case we fall into the same
+  // empty-handed screen a pain point with no numbers reaches, instead of
+  // reading fields off a value that isn't there and crashing.
+  const estimates = QUANT.map((_, i) => quantFor(demo, i).estimate)
+  const featured = selectFeatured(flow.pains, estimates)
+  const pain = featured ? featured.pain : null
+  const figures = featured ? featured.figures : { complete: false, calc: null }
+  const fields = bridgePainQuant(pain?.quant, estimates)
+  const observation = buildObservationSentence(
+    fields.people,
+    fields.hoursPerWeek,
+    figures.calc ? figures.calc.annualHours : null,
+  )
+  // Hours spent goes unmarked only while it is built from the user's own
+  // answers. If either number behind it came from one of our estimates, it
+  // carries a guess and has to say so. That mark is what keeps "we never
+  // invent a number" true once our estimates are doing the talking.
+  const hoursAreOurs =
+    fields.people.source === 'estimate' ||
+    fields.hoursPerWeek.source === 'estimate'
+
+  // Piece 4: the pop-up that shows how the money figure was worked out. The
+  // Escape-to-close code lives here, not in the shared Dialog component,
+  // because Dialog has no Escape handling of its own (and neither does its
+  // only other user, pages/ui-kit.jsx).
+  const [formulaOpen, setFormulaOpen] = React.useState(false)
+  React.useEffect(() => {
+    if (!formulaOpen) return undefined
+    const onKeyDown = (e) => {
+      if (e.key === 'Escape') setFormulaOpen(false)
+    }
+    window.addEventListener('keydown', onKeyDown)
+    return () => window.removeEventListener('keydown', onKeyDown)
+  }, [formulaOpen])
+
   return (
     <section
       className="v2-rise"
@@ -1290,33 +1354,117 @@ function Reveal({ flow, demo, onRestart }) {
       <h2 style={QUESTION}>
         {flow.company.name || (demo && demo.name) || 'Your company'}
       </h2>
-      {/* A stub until the reveal is built (LYR-186). It reads the interview's
-          real answers rather than a summary of them, which is the only thing
-          this screen has to prove today: everything the calculator needs is
-          in `flow.pains`. */}
-      <ol
-        style={{
-          ...LEAD,
-          margin: 'var(--space-4) 0 var(--space-6)',
-          paddingLeft: 'var(--space-5)',
-        }}
-      >
-        {flow.pains.map((pain, i) => (
-          <li key={i} style={{ marginBottom: 'var(--space-3)' }}>
-            {[
-              pain.fromGuess
-                ? `${pain.text} (our guess, not yours)`
-                : pain.text,
-              pain.team || 'team not named',
-              ...pain.quant.map((a, j) => {
-                const q = quantFor(demo, j)
-                return `${q.label} ${quantAnswer(a, q)}`
-              }),
-              `worst part: ${pain.worst || '—'}`,
-            ].join(' · ')}
-          </li>
-        ))}
-      </ol>
+
+      <p style={{ ...LEAD, margin: 'var(--space-3) 0 var(--space-8)' }}>
+        {observation}
+      </p>
+
+      {hoursAreOurs && <p style={LEAD}>{OURS_NOT_YOURS}</p>}
+
+      {!figures.calc && (
+        <p style={LEAD}>
+          Not enough here yet to put a number on it — go back and answer at
+          least how many people do this and how many hours a week.
+        </p>
+      )}
+
+      {figures.calc && (
+        <div
+          style={{
+            display: 'flex',
+            flexDirection: 'column',
+            gap: 'var(--space-8)',
+            margin: '0 0 var(--space-8)',
+          }}
+        >
+          {/* The first figure: hours currently SPENT. It comes straight from
+              the user's own answers. Never call it "hours back", "hours
+              returned" or "hours saved", and never mark it, because it holds
+              no guess beyond what was typed. */}
+          <div>
+            <p style={FIGURE_LABEL}>Hours currently spent</p>
+            <p style={FIGURE_VALUE}>
+              {comma(figures.calc.annualHours)}
+              <span style={FIGURE_UNIT}>hrs / year</span>
+              {/* Only shown when there is a pop-up to open. The dot exists so
+                  you can trace the number; a dot that opens nothing is just
+                  decoration. In practice every run built on our estimates has
+                  complete figures, so this changes nothing in the demo. */}
+              {hoursAreOurs && figures.complete && (
+                <ProvenanceMark
+                  kind="estimated"
+                  onClick={() => setFormulaOpen(true)}
+                />
+              )}
+            </p>
+          </div>
+
+          {figures.complete ? (
+            <div>
+              <p style={FIGURE_LABEL}>Hours returned, and what that’s worth</p>
+              <p style={FIGURE_VALUE}>
+                {comma(figures.calc.hoursReturned)}
+                <span style={FIGURE_UNIT}>hrs / year</span>
+              </p>
+              <p style={{ ...FIGURE_VALUE, marginTop: 'var(--space-2)' }}>
+                {money(figures.calc.totalFinancialGain)}
+                {/* This one holds our guesses about how much can be
+                    automated, how many people will use it, and how much of the
+                    saving really lands. Clicking it opens the pop-up below. */}
+                <ProvenanceMark
+                  kind="estimated"
+                  onClick={() => setFormulaOpen(true)}
+                />
+              </p>
+            </div>
+          ) : (
+            <p style={LEAD}>
+              We don’t have enough here yet to put a return number on this one —
+              pay and how much still needs a person are missing.
+            </p>
+          )}
+        </div>
+      )}
+
+      {/* The formula pop-up (LYR-188 / POC 10, piece 4). You can only reach it
+          when the figures are complete — that is the only case where the
+          formulas exist and the dot that opens it is drawn. We check again
+          here so that a pop-up left open from before can never try to read
+          formulas that are not there. */}
+      {figures.complete && (
+        <Dialog
+          open={formulaOpen}
+          onClose={() => setFormulaOpen(false)}
+          title="How this number was calculated"
+          description="Straight from the calculator — nothing rounded differently here than what's shown above."
+        >
+          <div
+            style={{
+              display: 'flex',
+              flexDirection: 'column',
+              gap: 'var(--space-4)',
+            }}
+          >
+            {FORMULA_ROWS.map((row) => (
+              <div key={row.key}>
+                <p style={{ ...FIGURE_LABEL, margin: '0 0 var(--space-1)' }}>
+                  {row.label}
+                </p>
+                <p
+                  style={{
+                    font: 'var(--type-body)',
+                    color: 'var(--text-heading)',
+                    margin: 0,
+                  }}
+                >
+                  {figures.calc.formulas[row.key]}
+                </p>
+              </div>
+            ))}
+          </div>
+        </Dialog>
+      )}
+
       <Button variant="secondary" onClick={onRestart}>
         Start over
       </Button>
@@ -1327,41 +1475,97 @@ function Reveal({ flow, demo, onRestart }) {
 const emptyFlow = () => ({
   step: 'landing',
   company: { name: '', website: '' },
-  scan: { step: 0 },
+  /* The website as it was when the form was submitted. The research call is
+     tied to this, not to `company.website`, so that typing in the field does
+     not start a new research run on every keystroke. */
+  scanFor: '',
   turn: 0,
   pains: [emptyPain()],
 })
 
-/* The scan is canned in the POC (LYR-178) and is fired, never awaited: the
-   company form advances on the same tick and the facts land one at a time
-   while the first questions are being answered. Resolving them instantly would
-   be both unconvincing and untested — the in-flight state would never render.
-   The timer is module-level so restarting the flow cannot leave two of them
-   racing to fill the panel. */
-let scanTimer
-function startScan(setFlow, count) {
-  clearInterval(scanTimer)
-  if (!count) return // unknown company: nothing to resolve, and no panel to fill
-  let step = 0
-  scanTimer = setInterval(() => {
-    step += 1
-    setFlow((f) => ({ ...f, scan: { step } }))
-    if (step >= count) clearInterval(scanTimer)
-  }, 1500) // stands in for a research call; nothing downstream blocks on it
+/* Where the scan panel's data comes from (LYR-199).
+
+   We open one long-lived connection to the server when the company form is
+   submitted, and we never wait for it. The server keeps it open and pushes
+   findings down it one at a time as it finds them. The questions appear
+   immediately, and each finding is added when it arrives — so one slow search
+   costs us one row, not the whole panel.
+
+   We use the browser's built-in `EventSource` rather than reading the response
+   ourselves, because this request has one parameter and writing our own reader
+   would be more code for the same result. The one thing `EventSource` does
+   that we do not want is reconnect automatically when the server hangs up.
+   A reconnect here means a second research run — the same crawling and the
+   same model calls, paid for twice. So we close the connection ourselves, both
+   when the server says it is done and when it errors.
+
+   A website we cannot turn into a domain is rejected by the server, which the
+   browser reports as an error. The panel then stops looking and, having found
+   nothing, draws nothing. That is the right outcome for a company we know
+   nothing about. */
+function useScan(website) {
+  const [scan, setScan] = React.useState({ findings: [], looking: false })
+
+  React.useEffect(() => {
+    if (!website) {
+      setScan({ findings: [], looking: false })
+      return undefined
+    }
+    setScan({ findings: [], looking: true })
+
+    const stream = new EventSource(
+      `/api/v2/research?domain=${encodeURIComponent(website)}`,
+    )
+    const stop = () => {
+      stream.close()
+      setScan((current) => ({ ...current, looking: false }))
+    }
+    stream.onmessage = (message) => {
+      let event
+      try {
+        event = JSON.parse(message.data)
+      } catch {
+        return /* a broken message costs its own row, never the whole panel */
+      }
+      if (event.type === 'done') {
+        stop()
+        return
+      }
+      /* The server already throws away any finding pointing at a page it did
+         not open, so a missing link should be impossible. We check again
+         anyway: if it ever did happen we would print a line with no source
+         under it, which is the exact thing this panel promises never to do.
+         No link, no row.
+         Other event types — `step` and `gaps` — are ignored here for now. */
+      if (event.type !== 'finding' || !event.finding?.link) return
+      setScan((current) => ({
+        ...current,
+        findings: [...current.findings, event.finding],
+      }))
+    }
+    stream.onerror = stop
+
+    /* If the user leaves /v2 while a search is running, we must close the
+       connection. Otherwise it keeps trying to update a page that is gone.
+       Closing is also how the server knows to stop working: the client
+       hanging up is its stop signal. */
+    return () => stream.close()
+  }, [website])
+
+  return scan
 }
 
 export default function V2() {
   const [flow, setFlow] = React.useState(emptyFlow)
-  /* `/v2?scan=none` is the no-scan state: no facts, so no panel and no guesses.
-     It needs a door of its own now that an unrecognised domain falls back to
-     the demo company. */
+  /* `/v2?scan=none` switches off the canned guesses and estimates. It needs its
+     own way in, because a domain we do not recognise now falls back to the
+     demo company instead. */
   const demo =
     useRouter().query.scan === 'none'
       ? undefined
       : demoFor(flow.company.website)
 
-  // Leaving /v2 mid-scan must not leave the interval setting state on nothing.
-  React.useEffect(() => () => clearInterval(scanTimer), [])
+  const scan = useScan(flow.scanFor)
 
   const go = (delta) =>
     setFlow((f) => ({
@@ -1370,9 +1574,10 @@ export default function V2() {
     }))
   const patch = (fields) => setFlow((f) => ({ ...f, ...fields }))
 
-  /* Moving between pain points is not a step — the flow is still on
-     `interview`. A turn the user has not reached yet gets a blank answer set
-     appended; one they have is left exactly as they left it. */
+  /* Moving between pain points is not a new step — we are still on
+     `interview`. A pain point the user has not reached yet gets a fresh blank
+     set of answers added. One they have already visited is left exactly as
+     they left it. */
   const goTurn = (turn) => {
     setFlow((f) => ({
       ...f,
@@ -1399,8 +1604,10 @@ export default function V2() {
             }
             onBack={() => go(-1)}
             onSubmit={() => {
-              patch({ step: 'interview', scan: { step: 0 } })
-              startScan(setFlow, demo?.scan.length)
+              /* We start the research call and move on immediately. The
+                 questions appear at once and the panel fills in behind
+                 them. */
+              patch({ step: 'interview', scanFor: flow.company.website })
             }}
           />
         )}
@@ -1410,11 +1617,12 @@ export default function V2() {
             pain={flow.pains[flow.turn]}
             namedCount={flow.pains.filter(isNamed).length}
             company={flow.company.name || (demo && demo.name)}
-            /* Resolved from the website field at render rather than copied into
-               `flow` — one source of truth, and editing the website on the way
-               back through the company screen re-scans by definition. */
+            /* Worked out from the website field every time we draw, rather
+               than copied into `flow`. One source of truth — and it means
+               going back and editing the website automatically picks a
+               different company. */
             demo={demo}
-            scanStep={flow.scan.step}
+            scan={scan}
             onChange={(fields) =>
               setFlow((f) => ({
                 ...f,
@@ -1423,15 +1631,16 @@ export default function V2() {
                 ),
               }))
             }
-            /* Going back is cheap and lossless: earlier pain points are kept
-               in `pains`, so returning to one shows what was typed. */
+            /* Going back costs nothing and loses nothing: earlier pain points
+               stay in `pains`, so returning to one shows what was typed. */
             onBack={() => (flow.turn > 0 ? goTurn(flow.turn - 1) : go(-1))}
             onAdd={() => goTurn(flow.turn + 1)}
-            /* Blank turns fall back to the guess we showed for them, flagged
-               so the reveal can say whose words they are. A turn with no guess
-               to fall back on is dropped — that, not the finish button, is
-               where an empty pain point stops. Done here rather than on the way
-               in so backing up to a blank turn still shows it blank. */
+            /* A pain point left blank falls back to the guess we showed for
+               it, flagged so the reveal screen can say whose words they are. A
+               blank one with no guess to fall back on is thrown away. That is
+               where an empty pain point stops — not at the finish button,
+               which never blocks. We do this here, on the way out, so that
+               going back to a blank card still shows it blank. */
             onFinish={() => {
               setFlow((f) => ({
                 ...f,

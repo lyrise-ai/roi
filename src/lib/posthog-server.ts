@@ -1,21 +1,21 @@
 // ─────────────────────────────────────────────────────────────────────────────
-// posthog-server — the server-side PostHog client.
+// posthog-server — the analytics client that runs on the server.
 //
-// Named to match supabase-server.js: `-server` means "runs in the API route /
-// instrumentation, never shipped to the browser". The browser gets posthog-js,
-// initialised in instrumentation-client.ts.
+// Named to match supabase-server.js: "-server" means it runs in API routes and
+// never goes to the browser. The browser has its own, set up in
+// instrumentation-client.ts.
 //
-// Two things make this different from the browser client:
+// Two things make it different from the browser one:
 //
-// 1. It must be a singleton. Vercel reuses a warm lambda across requests, and a
-//    new PostHog() per request would leak a flush timer each time.
-// 2. Nothing here may throw. This module sits on the report-generation path
-//    (see CLAUDE.md) and telemetry failing is never a reason for a prospect's
-//    report to fail. Every export swallows.
+// 1. There must only ever be one. Vercel reuses a warm server across requests,
+//    and creating a new client per request would leave a timer behind every
+//    time.
+// 2. Nothing here may throw. This sits on the report-generation path (see
+//    CLAUDE.md), and analytics failing is never a reason for a prospect's
+//    report to fail. Every function here swallows its own errors.
 //
-// Returns null when NEXT_PUBLIC_POSTHOG_PROJECT_TOKEN is unset — which is the
-// case in CI and in any dev environment that hasn't opted in — so callers can
-// stay unconditional.
+// It returns nothing when the PostHog token is unset — the case in CI and on any
+// dev machine that has not opted in — so callers never have to check first.
 // ─────────────────────────────────────────────────────────────────────────────
 
 import { PostHog } from 'posthog-node'
@@ -33,8 +33,8 @@ export function getPostHogServer(): PostHog | null {
   try {
     client = new PostHog(key, {
       host: process.env.NEXT_PUBLIC_POSTHOG_HOST,
-      // Serverless: a request can end before a batch timer would fire, so keep
-      // batches small and let flushIfServerless() below force the send.
+      // On Vercel a request can finish before a batching timer would fire, so we
+      // keep batches at one event and let the helper below force the send.
       flushAt: 1,
       flushInterval: 0,
     })
@@ -46,8 +46,8 @@ export function getPostHogServer(): PostHog | null {
 }
 
 /**
- * Capture a server-side event. Fire-and-forget — never awaited by callers on
- * the request path, never throws.
+ * Records one event from the server. Callers start it and move on; nothing on
+ * the request path waits for it, and it never throws.
  */
 export function captureServer(
   event: string,
@@ -58,8 +58,8 @@ export function captureServer(
   if (!ph) return
   try {
     ph.capture({
-      // Server events without a signed-in user still need an id. A stable
-      // literal keeps them grouped rather than inventing a person per request.
+      // An event with no signed-in user still needs some id. One fixed value
+      // keeps them together, rather than inventing a new person per request.
       distinctId: distinctId || 'server',
       event,
       properties,
@@ -70,7 +70,7 @@ export function captureServer(
 }
 
 /**
- * Capture an exception for PostHog error tracking.
+ * Records an error so it shows up in PostHog's error list.
  */
 export function captureServerException(
   error: unknown,

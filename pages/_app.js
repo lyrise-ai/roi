@@ -79,17 +79,19 @@ export default function MyApp(props) {
       Sentry.setUser(user ? { id: user.id, email: user.email } : null)
     }
 
-    // Tie the PostHog person to the Supabase user id — not the email, which
-    // changes and isn't a stable key. Without this, every session is a fresh
+    // Tie the person in PostHog to their user id, not their email. Emails
+    // change; the id does not. Without this, every session is a brand new
     // anonymous person and "show me everything this user did" is impossible.
     //
-    // reset() is gated on the SIGNED_OUT event specifically, NOT on "no user".
-    // onAuthStateChange fires INITIAL_SESSION with a null session on every
-    // anonymous page load, and resetting there would mint a new anonymous id
-    // and cut the session recording in two on each navigation — while also
-    // breaking the anonymous→signed-up funnel, which is the one thing
-    // identify() exists to preserve. Only an actual sign-out should clear the
-    // identity, so the next person on a shared machine doesn't inherit it.
+    // We only clear the identity on an actual SIGN-OUT, never on "there is no
+    // user right now". Supabase reports "no session" on every anonymous page
+    // load, and clearing there would create a new anonymous id and cut the
+    // session recording in half on every navigation. It would also break the
+    // anonymous-to-signed-up funnel, which is the one thing identifying a person
+    // exists to protect.
+    //
+    // Only a real sign-out clears it, so the next person on a shared machine
+    // does not inherit the previous one's identity.
     const setPostHogUser = async (event, user) => {
       const { getPostHog } = await import('../src/lib/posthog-browser')
       const posthog = await getPostHog()
@@ -101,10 +103,11 @@ export default function MyApp(props) {
         return
       }
 
-      // Supabase emits INITIAL_SESSION after a reload and SIGNED_IN when auth
-      // completes. Both are the identity boundary; token refreshes are not.
-      // If a second account signs in without a preceding sign-out, start a
-      // fresh PostHog identity rather than joining the two accounts.
+      // Supabase reports one event after a page reload and another when signing
+      // in finishes. Both are moments where we learn who someone is. A token
+      // being refreshed is not.
+      // If a second account signs in without the first signing out, start a
+      // fresh identity rather than merging the two accounts together.
       if (user && (event === 'INITIAL_SESSION' || event === 'SIGNED_IN')) {
         if (posthogUserId.current && posthogUserId.current !== user.id) {
           posthog.reset()

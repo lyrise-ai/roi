@@ -1,10 +1,10 @@
-// Currency/number formatting shared by the calculator, PDF assembler, and
-// live report view — single copy (was independently duplicated 3x).
+// How money and numbers are written out. The calculator, the PDF builder and
+// the live report all use this. There used to be three separate copies.
 
 import type { Currency } from '@/src/lib/roi/types'
 
-// Currencies whose official symbols are non-Latin script — always use the ISO
-// code instead.
+// Currencies whose symbols are not in the Latin alphabet. For these we always
+// write the three-letter code instead.
 export const SCRIPT_SYMBOL_CODES = new Set([
   'SAR',
   'AED',
@@ -50,7 +50,7 @@ export function fmtCurrency(
   return currencySymbolFor(currency) + fmtNumber(n)
 }
 
-// Abbreviated form used for large headline figures, e.g. "$125K" / "$1.2M".
+// The short form used for big headline numbers, like "$125K" or "$1.2M".
 export function fmtCurrencyShort(
   n: number | null | undefined,
   currency?: Partial<Currency> | null,

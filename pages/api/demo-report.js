@@ -1,10 +1,11 @@
 // GET /api/demo-report?variant=base|alt
-// Returns pre-rendered HTML for the Meridian Consulting Group demo report.
-// The real pipeline (roiCalculator → assembleReport → renderTemplate) runs once
-// per variant and results are cached in module scope — subsequent requests are
-// a cache hit with no computation.
+// Returns the finished HTML for the Meridian Consulting Group demo report.
 //
-// No auth required — this is a marketing demo visible before sign-up.
+// The real pipeline — calculate, assemble, render — runs once per version, and
+// we keep the result in memory. Every request after the first gets the saved
+// copy with no work done.
+//
+// No sign-in needed: this is a marketing demo people see before signing up.
 
 import { roiCalculator } from '@/src/lib/roi/pipeline/roiCalculator'
 import { assembleReport } from '@/src/lib/roi/pipeline/assembleReport'
@@ -17,7 +18,8 @@ import {
   MERIDIAN_ALT_STATE,
 } from '@/src/lib/roi/demoReportData'
 
-// Module-level cache — templates are deterministic; compute once per cold start.
+// Kept in memory. The templates always produce the same output, so we build
+// them once per server start.
 let cache = null
 
 function renderVariant(state) {
@@ -54,8 +56,9 @@ export default function handler(req, res) {
 
   try {
     const html = getCache()[variant]
-    // Cache-Control: private so CDN doesn't cache (HTML contains company data);
-    // max-age=3600 lets the browser reuse within a session.
+    // "private" so the CDN never stores it — the HTML contains company data.
+    // The hour-long limit lets one visitor's browser reuse it during a
+    // session.
     res.setHeader('Cache-Control', 'private, max-age=3600')
     return res.status(200).json(html)
   } catch (err) {

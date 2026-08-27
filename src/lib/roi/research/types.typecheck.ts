@@ -1,99 +1,61 @@
 // ─────────────────────────────────────────────────────────────────────────────
-// research/types.typecheck — a test that runs in the compiler, not the runner.
+// types.typecheck — a test that runs in the type checker, not the test runner.
 //
-// R1's headline acceptance criterion is "a Fact cannot be constructed without a
-// sourceUrl — verify by trying, it should be a type error". That guarantee
-// can't be asserted from `node --test`, because the code under test is the type
-// system. So it's asserted here instead.
+// The rule is "a finding cannot be built without a link we really opened —
+// check by trying, it should be a type error". You cannot check that from
+// `node --test`, because the thing being tested IS the type system. So it is
+// checked here.
 //
-// Every `@ts-expect-error` below is an assertion: if the line it precedes ever
-// STOPS being an error, tsc fails with "unused '@ts-expect-error' directive".
-// That is what makes this a regression guard rather than a comment — weaken the
-// `SourceUrl` brand or make `sourceUrl` optional and `next build` breaks.
+// Every `@ts-expect-error` below claims the next line is an error. If that line
+// ever stops being an error, the compiler fails with "unused '@ts-expect-error'
+// directive". That is what makes this a real guard and not a comment: weaken the
+// `Link` type, or make the field optional, and `next build` breaks.
 //
-// Nothing here is imported at runtime; the file exists to be compiled.
-// Everything is exported only so no-unused-vars stays quiet.
+// Nothing here runs. It exists only to be compiled. Everything is exported to
+// keep the unused-variable rule quiet.
 // ─────────────────────────────────────────────────────────────────────────────
 
-import {
-  fact,
-  sourceUrl,
-  type Fact,
-  type Provenance,
-  type ScoutResult,
-} from './types'
+import { type Finding, type Link, link } from './types'
 
-const NOW = '2026-03-03T00:00:00.000Z'
-
-/* 1. A source cannot be omitted. This is the "everything else is inferred"
-      shape the old research agent produced. */
-/* The directive sits above the declaration rather than inside the literal: a
-   missing required property is reported against the object as a whole, not
-   against any one line within it. */
-// @ts-expect-error — sourceUrl is required
-export const missingSource: Provenance = {
-  sourceType: 'site',
-  retrievedAt: NOW,
-  confidence: 'high',
+/* 1. You cannot leave the link out. This is the shape the old research agent
+      produced: everything worked out, nothing pointed at. */
+/* The marker sits above the whole declaration, not inside the object. A missing
+   required field is reported against the object as a whole. */
+// @ts-expect-error — link is required
+export const noLink: Finding = {
+  says: 'They are hiring a paralegal',
+  about: 'hiring',
 }
 
-/* 2. A source cannot be hand-written. A raw string is not a SourceUrl, so a
-      model-supplied or invented URL cannot be dropped straight into a fact —
-      it has to go through `sourceUrl()`, which validates. */
-export const handWrittenSource: Provenance = {
-  // @ts-expect-error — string is not assignable to SourceUrl
-  sourceUrl: 'https://acmelaw.com/careers',
-  sourceType: 'site',
-  retrievedAt: NOW,
-  confidence: 'high',
+/* 2. You cannot write a URL in by hand. This is the one that matters: it is how
+      a model's made-up citation would get in, if it could. */
+export const madeUp: Finding = {
+  says: 'They are hiring a paralegal',
+  about: 'hiring',
+  // @ts-expect-error — a plain string is not a Link
+  link: 'https://acmelaw.com/careers',
 }
 
-/* 3. An empty string is not a loophole around rule 2. */
-export const emptySource: Provenance = {
-  // @ts-expect-error — string is not assignable to SourceUrl
-  sourceUrl: '',
-  sourceType: 'site',
-  retrievedAt: NOW,
-  confidence: 'high',
-}
+/* 3. Nor can you cast your way past it with something that is not a URL at
+      all. */
+// @ts-expect-error — 'not a url' is not a Link
+export const notEvenAUrl: Link = 'not a url'
 
-/* 4. A fact cannot carry no provenance at all. */
-// @ts-expect-error — provenance is required
-export const noProvenance: Fact<string> = { value: 'four paralegals' }
+/* 4. The only way through is `link()`, which checks. It gives back null for
+      anything that is not a real http address, so the caller has to deal with
+      the null — which is the point. Dropping the finding is the right answer:
+      something we cannot point at is something we should not say. */
+export const checked: Link | null = link('https://acmelaw.com/careers')
 
-/* 5. `fact()` refuses a raw string just as the type does. */
-export const factWithRawString = fact(1, {
-  // @ts-expect-error — string is not assignable to SourceUrl
-  sourceUrl: 'https://acmelaw.com/careers',
-  sourceType: 'ats',
-  retrievedAt: NOW,
-  confidence: 'high',
-})
+/* 5. What this does NOT catch, stated plainly so nobody assumes otherwise.
+      This repo compiles with strict checks off, so `null` is assignable to
+      anything and the compiler will not make you handle the null `link()` can
+      return:
 
-/* 6. A scout cannot invent a status outside the four. In particular there is no
-      way to spell a single value meaning "nothing here" that blurs NONE
-      (we looked, there's nothing) into ERROR (we couldn't look). */
-export const badStatus: ScoutResult<null> = {
-  scout: 'S2',
-  // @ts-expect-error — 'EMPTY' is not a ScoutStatus
-  status: 'EMPTY',
-  facts: null,
-  sourcesAttempted: [],
-  durationMs: 0,
-  costUsd: 0,
-}
+        const skipped: Link = link(whatever)   // compiles. It should not.
 
-/* 7. The sanctioned path. This one must COMPILE — if it ever fails, the
-      contract has been tightened into something no scout can satisfy, which is
-      its own kind of breakage. */
-export function sanctioned(): Fact<number> | null {
-  const url = sourceUrl('https://acmelaw.com/careers')
-  if (!url) return null
-  return fact(3, {
-    sourceUrl: url,
-    sourceType: 'ats',
-    retrievedAt: NOW,
-    confidence: 'high',
-    excerpt: 'chasing outstanding client documents',
-  })
-}
+      So the type stops a made-up URL, which is the failure that matters. It
+      does not stop a forgotten null check. That is why the run-time check —
+      throwing away any finding whose link is not in the set of pages we really
+      opened — has to exist as well, and cannot be argued away as belt and
+      braces. */

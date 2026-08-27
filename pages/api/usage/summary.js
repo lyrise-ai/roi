@@ -6,16 +6,17 @@ import {
 // ─────────────────────────────────────────────────────────────────────────────
 // GET /api/usage/summary?days=30
 //
-// Employee-gated. Returns aggregates for the monitoring dashboard:
-//   - totals (cost, reports, tokens, avg duration) over the window
-//   - perDay   : [{ day, costUsd, count }]            (cost & volume over time)
-//   - perModel : [{ model, costUsd, totalTokens, calls }]
-//   - perMode  : [{ mode, costUsd, count }]
-//   - recent   : last 50 rows (with per-call breakdown for the expandable table)
+// Staff only. Returns the totals the monitoring dashboard draws:
+//   - overall cost, report count, tokens and average run time for the period
+//   - per day: cost and how many reports
+//   - per model: cost, tokens and number of calls
+//   - per mode: generating versus chatting
+//   - the last 50 runs, each with its own per-call breakdown
 //
-// All aggregation is done here (small data volumes) so the page stays a thin
-// renderer. Reads use the admin client; access is still gated by the employee
-// check below, mirroring pages/api/reports/[id].js.
+// All the adding up happens here — the amounts of data are small — so the page
+// itself just draws what it is given. Reading uses the admin key; access is
+// still controlled by the staff check below, the same way
+// pages/api/reports/[id].js does it.
 // ─────────────────────────────────────────────────────────────────────────────
 
 export default async function handler(req, res) {
@@ -42,7 +43,8 @@ export default async function handler(req, res) {
     userData?.role === 'EMPLOYEE' || user.email?.endsWith('@lyrise.ai')
   if (!isEmployee) return res.status(403).json({ error: 'Forbidden' })
 
-  // Window: default last 30 days, clamped to [1, 365].
+  // How far back to look. 30 days by default, and never less than 1 or more
+  // than 365.
   const days = Math.min(Math.max(parseInt(req.query.days, 10) || 30, 1), 365)
   const since = new Date(Date.now() - days * 24 * 60 * 60 * 1000).toISOString()
 
@@ -55,8 +57,9 @@ export default async function handler(req, res) {
     .order('created_at', { ascending: false })
 
   if (error) {
-    // Most likely the migration hasn't been applied yet — surface a clear,
-    // non-fatal signal the page can render as an empty/onboarding state.
+    // Most likely the database table has not been created yet. Return a clear
+    // but harmless signal, so the page can show an empty "nothing here yet"
+    // state instead of an error.
     return res.status(200).json({
       ready: false,
       error: error.message,
@@ -134,12 +137,14 @@ export default async function handler(req, res) {
   })
 }
 
-// Tags each row with the email of the user who requested the report — the
-// authenticated account that submitted the request, NOT the company contact
-// the report is addressed to (mirrors withRequester in pages/dashboard.jsx) —
-// and with is_alpha so the dashboard can badge alpha-tour runs separately.
-// Both come from the parent report: roi_usage has no alpha flag, and older
-// rows may have a null user_id, so we resolve via reports.report_id.
+// Adds two things to each row: the email of the person who asked for the report
+// — the signed-in account that submitted it, NOT the company contact the report
+// is addressed to — and whether they were an alpha tester, so the dashboard can
+// mark those runs separately.
+//
+// Both come from the report itself. The usage table has no alpha field, and
+// older rows may have no user attached, so we look them up through the
+// report.
 async function withRequesterEmail(admin, rows) {
   if (!rows.length) return rows
 

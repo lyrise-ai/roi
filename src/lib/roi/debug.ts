@@ -1,8 +1,9 @@
 // ─────────────────────────────────────────────────────────────────────────────
-// debug — terminal logging for the ROI pipeline.
-// All logs are gated by ROI_DEBUG (default ON in dev, OFF in prod) so we never
-// leak verbose internals to production logs. Each tag (`[ROI:research]`,
-// `[ROI:modeler]`, etc.) is grep-able.
+// debug — logging for the ROI pipeline.
+// Everything here is switched off unless ROI_DEBUG is set. It defaults to on
+// while developing and off in production, so we never fill production logs with
+// internal detail. Each tag, like `[ROI:research]` or `[ROI:modeler]`, is easy
+// to search for.
 // ─────────────────────────────────────────────────────────────────────────────
 
 const ENABLED =

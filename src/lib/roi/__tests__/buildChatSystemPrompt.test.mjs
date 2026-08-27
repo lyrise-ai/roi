@@ -1,8 +1,8 @@
-// Regression check for the "chat's workflow list wasn't sorted" bug: the
-// system prompt used to build its own unsorted merge, so the workflow it
-// implicitly treated as "the top one" (first in the WORKFLOWS section, used
-// for lever positional fallback) could differ from the sorted order the PDF
-// and web report use. Now both go through the same mergeWorkflows().
+// Guards against the "chat's workflow list wasn't sorted" bug. The chat prompt
+// used to build its own unsorted list, so the workflow it treated as "the top
+// one" — the first in its list — could be a different workflow from the one the
+// PDF and the web report call the top one. Both now go through the same
+// mergeWorkflows().
 //
 //   Run:  node --test src/lib/roi/__tests__/buildChatSystemPrompt.test.mjs
 //
@@ -96,9 +96,9 @@ test('WORKFLOWS section lists the highest-value workflow first, matching PDF/web
     employees: 20,
     revenueEstimateM: null,
   }
-  // "Small Workflow" is listed FIRST in the input array but has a much lower
-  // annual value than "Big Workflow" — a naive unsorted merge would put it
-  // first in the prompt too.
+  // "Small Workflow" comes FIRST in the input list but is worth far less per
+  // year than "Big Workflow". Without sorting, it would come first in the
+  // prompt too.
   const workflows = [wf('Small Workflow', 10, 50), wf('Big Workflow', 500, 50)]
   const calcOutput = roiCalculator(workflows, globals, company, false)
 

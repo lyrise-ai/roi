@@ -9,8 +9,9 @@ import { drainSSE } from '../src/lib/drainSSE'
 import { PIPELINE_LOG_TOOL_NAMES } from '../src/lib/roi/constants'
 import { useRouter } from 'next/router'
 
-// Only one of these views is ever mounted at a time (see viewState below) —
-// dynamic-import them so a visitor only downloads the one they land on.
+// Only one of these screens is ever on show at a time (see viewState below), so
+// we load them on demand. A visitor only downloads the one they actually
+// reach.
 const ReportLoadingScreen = dynamic(
   () => import('../src/components/ROIGenerator/ReportLoadingScreen'),
   { ssr: false },
@@ -945,9 +946,10 @@ export async function getServerSideProps({ req, res }) {
     return { redirect: { destination: '/auth/login', permanent: false } }
   }
 
-  // Alpha status lives on the Supabase user (set at magic-link generation
-  // time, see /api/admin/generate-alpha-link) rather than a URL param, so it
-  // survives sign-in redirects and the whole form -> generate -> report flow.
+  // Whether someone is an alpha tester is stored on their user account, set when
+  // their sign-in link is created (see /api/admin/generate-alpha-link), not
+  // passed in the URL. So it survives sign-in redirects and the whole form,
+  // generate, report journey.
   const isAlpha = user.user_metadata?.alpha === true
   if (isAlpha) {
     return { props: { isEmployee: false, isAlpha: true } }
@@ -973,7 +975,7 @@ export default function ROIReport({ isEmployee, isAlpha }) {
   const [step, setStep] = useState(1)
   const [viewState, setViewState] = useState(VIEW_STATES.FORM)
 
-  // Alpha-specific UI state
+  // Screen state that only alpha testers use
   const [showSplash, setShowSplash] = useState(isAlpha)
 
   const generationStartedAt = useRef(Date.now())
@@ -1003,9 +1005,9 @@ export default function ROIReport({ isEmployee, isAlpha }) {
   )
   const [errors, setErrors] = useState({})
 
-  // Generate a unique per-session alpha token (sent to /api/alpha/progress
-  // as session_token, alpha_feedback's conflict key) and fire a one-time
-  // notification email to the internal team.
+  // Make a unique id for this alpha session. We send it with every progress
+  // update, and it is what ties all of one tester's rows together. Also sends
+  // one notification email to the team.
   useEffect(() => {
     if (!isAlpha) return
 
@@ -1016,7 +1018,7 @@ export default function ROIReport({ isEmployee, isAlpha }) {
       )
     }
 
-    // One notification per browser session -- skip if already sent
+    // One notification per browser session — skip if we already sent it
     if (!localStorage.getItem('alpha_notified')) {
       const token = localStorage.getItem('alpha_token')
       fetch('/api/alpha-notify', {
@@ -1050,7 +1052,7 @@ export default function ROIReport({ isEmployee, isAlpha }) {
       setReportState(null)
       setErrorMessage('')
 
-      // Alpha: mark intake step as complete
+      // For alpha testers: record that they finished the first step
       if (isAlpha) {
         try {
           const token = localStorage.getItem('alpha_token')
@@ -1105,9 +1107,9 @@ export default function ROIReport({ isEmployee, isAlpha }) {
         })
 
         if (response.status === 401) {
-          // Alpha status lives on the user record, so re-authenticating and
-          // landing back on this page (via `next`) is enough to resume —
-          // no need to round-trip anything through the URL or localStorage.
+          // Alpha status lives on the user account, so signing in again and
+          // coming back to this page is enough to carry on. Nothing needs to be
+          // passed through the URL or saved in the browser.
           const next = encodeURIComponent(
             window.location.pathname + window.location.search,
           )
@@ -1202,7 +1204,7 @@ export default function ROIReport({ isEmployee, isAlpha }) {
     [s1, s2, isAlpha, router],
   )
 
-  // Enforce minimum loader visibility before transitioning to COMPLETE
+  // Keep the loading screen up for a minimum time before moving on
   useEffect(() => {
     if (viewState !== VIEW_STATES.FINALISING) return () => {}
     if (!reportState?.renderedHtml) return () => {}
@@ -1223,7 +1225,7 @@ export default function ROIReport({ isEmployee, isAlpha }) {
     }
   }, [viewState, reportState])
 
-  // COMPLETE: track generation (alpha), then navigate to report
+  // Once finished: record it for alpha testers, then go to the report
   useEffect(() => {
     if (viewState !== VIEW_STATES.COMPLETE) return () => {}
 
@@ -1253,7 +1255,7 @@ export default function ROIReport({ isEmployee, isAlpha }) {
       }
     }
 
-    // Alpha users navigate manually via the "Open my Profit Map" button
+    // Alpha testers move on themselves, using the "Open my Profit Map" button
     if (isAlpha) return () => {}
 
     if (reportId) {
@@ -1308,7 +1310,7 @@ export default function ROIReport({ isEmployee, isAlpha }) {
 
   // ── Renders ───────────────────────────────────────────────────────────────
 
-  // Alpha splash -- shown until animation completes
+  // The alpha opening screen — shown until its animation finishes
   if (isAlpha && showSplash) {
     return <SplashScreen onExitComplete={() => setShowSplash(false)} />
   }
@@ -1383,7 +1385,7 @@ export default function ROIReport({ isEmployee, isAlpha }) {
     )
   }
 
-  // retiring the demo as it was designed around the old UI.
+  // The demo is switched off: it was built around the old interface.
   /* if (viewState === VIEW_STATES.CHOICE) {
     return (
       <div className="-mt-[12px]">

@@ -1,4 +1,5 @@
-// Dedup Apollo rows down to one per company, picking the most senior contact.
+// Cuts an Apollo export down to one row per company, keeping the most senior
+// contact.
 
 import type { BulkRow } from './parseBulkCsv'
 import { seniorityRank } from './seniorityRank'

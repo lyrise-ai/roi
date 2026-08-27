@@ -1,7 +1,8 @@
 // ─────────────────────────────────────────────────────────────────────────────
-// resolveReportViewerAccess — shared SSR auth/access resolution for a single
-// report, used by both pages/report/[id].jsx and pages/report/[id]/validate.jsx
-// so the share-link / employee / owner / bulk gating logic lives in one place.
+// resolveReportViewerAccess — works out, on the server, whether the person
+// asking is allowed to see one report. Both pages/report/[id].jsx and
+// pages/report/[id]/validate.jsx call it, so the rules about share links,
+// employees, owners and bulk reports live in one place instead of two.
 // ─────────────────────────────────────────────────────────────────────────────
 
 import { createClient, createAdminClient } from '@/src/lib/supabase-server'
@@ -17,18 +18,21 @@ import {
 const REPORT_SELECT =
   'id, company_name, email, status, state_data, user_id, share_token, share_revoked_at, share_message_count, validated_at'
 
-// Silently claim a colleague invite: mint + verify a fresh magic-link OTP
-// for the invited email server-side, in this same request, exactly like
-// pages/auth/alpha.js does for alpha invites — the visitor never sees a
-// separate sign-in step. An invite link names a specific person, so if a
-// *different* identity happens to already be active in this browser (some
-// unrelated stale session), we switch to the invited one rather than
-// silently ignoring the invite — that silent-ignore is what previously left
-// grants stuck "pending" forever and let whoever was already logged in
-// (often the report owner, mid-testing) see themselves as if they were the
-// invited colleague. We only skip the swap if the existing session is
-// already the right person, or is the report owner opening their own
-// invite link (nothing to switch to).
+// Accepts a colleague invite without the visitor noticing. We create and use a
+// one-time sign-in link for the invited email here on the server, during this
+// same request, exactly as pages/auth/alpha.js does for alpha invites. The
+// visitor never sees a separate sign-in step.
+//
+// An invite link names one specific person. So if a DIFFERENT person happens to
+// be signed in already in this browser — some leftover session — we switch to
+// the invited person rather than quietly ignoring the invite. Quietly ignoring
+// it is what used to leave invites stuck as "pending" forever, and let whoever
+// was already signed in (often the report owner, testing) look like the invited
+// colleague to themselves.
+//
+// We only skip the switch when the person already signed in IS the invited one,
+// or is the report owner opening their own invite link — in which case there is
+// nothing to switch to.
 async function claimInviteIfPresent({ admin, supabase, report, inviteToken }) {
   if (!inviteToken) return
 
@@ -50,13 +54,13 @@ async function claimInviteIfPresent({ admin, supabase, report, inviteToken }) {
     await supabase.auth.signOut()
   }
 
-  // generateLink({ type: 'magiclink' }) only verifies cleanly for an email
-  // that already has an auth user — for a genuinely new colleague (the
-  // common case) verifyOtp fails with otp_expired even immediately after
-  // generation. Create the auth user first so the same magic-link
-  // generate+verify pairing used by pages/auth/alpha.js actually succeeds.
-  // Ignore "already registered" — the invited email may already have an
-  // account from a previous invite, an unrelated signup, etc.
+  // Supabase's magic-link generator only works cleanly for an email that
+  // already has an account. For a genuinely new colleague — the common case —
+  // checking the link fails with "expired" even a second after we made it. So
+  // we create the account first, and then the same generate-and-check pair that
+  // pages/auth/alpha.js uses actually works.
+  // We ignore "already registered": the invited email may already have an
+  // account from an earlier invite or an unrelated signup.
   const { error: createError } = await admin.auth.admin.createUser({
     email: grant.invited_email,
     email_confirm: true,
@@ -122,8 +126,9 @@ export async function resolveReportViewerAccess({
   const isBulk = typeof query?.batch === 'string'
   let isAlpha = false
 
-  // Always fetch the report once with its share fields so we can decide
-  // whether to grant share-link access before requiring a Supabase session.
+  // Always load the report once, including its sharing fields, so we can decide
+  // whether a share link is enough before we insist on someone being signed
+  // in.
   const { data: report } = await admin
     .from('reports')
     .select(REPORT_SELECT)
@@ -199,9 +204,9 @@ export async function resolveReportViewerAccess({
     viewerEmail,
     isAlpha,
     isOwner,
-    // Passed hasReportAccess without being the owner, an employee, or a
-    // share-link visitor — the only way that's possible is a claimed
-    // colleague grant.
+    // They got through the access check without being the owner, an employee or
+    // a share-link visitor. The only way that can happen is an accepted
+    // colleague invite.
     isColleague: !isShareLink && !isEmployee && !isOwner,
     token: isShareLink ? token : null,
   }

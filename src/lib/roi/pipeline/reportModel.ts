@@ -1,9 +1,11 @@
 // ─────────────────────────────────────────────────────────────────────────────
-// reportModel — the single source of truth for report content shared by the
-// PDF (assembleReport.ts), the live web report (reportViewModel.js), the
-// chat agent (agent.ts), and the validation wizard (OverviewStep.jsx).
-// Pure, no HTML, no formatting — raw numbers/strings only. Each consumer
-// formats/renders this however it needs; the numbers themselves never diverge.
+// reportModel — the one definition of what the report says. Four things read
+// it: the PDF (assembleReport.ts), the web report (reportViewModel.js), the
+// chat agent (agent.ts) and the check-it-over wizard (OverviewStep.jsx).
+//
+// Plain data only. No HTML, no formatting, just raw numbers and strings. Each
+// of the four displays it however it needs to. The numbers themselves can never
+// disagree, because there is only one copy of them.
 // ─────────────────────────────────────────────────────────────────────────────
 
 import { currencySymbolFor } from '@/src/lib/roi/format'
@@ -61,9 +63,9 @@ export interface ReportModel {
   sources: SourceRow[]
 }
 
-// Suppresses LLM-authored snapshot bullets that just restate a form-provided
-// fact (the writer prompt asks it to skip these, but it doesn't always
-// comply) — was independently duplicated byte-for-byte in assembleReport.ts
+// Drops model-written bullet points that just repeat something the user already
+// typed on the form. The prompt asks the model not to write those, but it does
+// it anyway. This used to exist as two identical copies, in assembleReport.ts
 // and reportViewModel.js.
 function isRedundantSnapshotText(
   text: string,
@@ -74,18 +76,19 @@ function isRedundantSnapshotText(
   return Boolean(
     (teamSizeFromForm && /\b\d[\d,]*\s*(employees?|people|staff)\b/.test(t)) ||
     (revenueRangeFromForm &&
-      // Alternation of literals with no nested quantifier — the `.*` has
-      // nothing to backtrack into, so this is linear, not exponential.
-      // eslint-disable-next-line security/detect-unsafe-regex
+      // A list of fixed words with no nesting. The `.*` has nothing to fall
+      // back into, so this runs in a straight line rather than blowing up on
+      // certain input.
       /\b(annual\s+)?revenue\b|\bgenerates?\b.*\$|\bannually\b/.test(t)),
   )
 }
 
-// Joins calcOutput.workflows with their WorkflowInput by name, sorted desc by
-// annualValue — the ONE definition of "the top/pilot workflow" used
-// everywhere (PDF, web, chat, validation wizard). Exported standalone (not
-// just via buildReportModel) because the validation wizard only has
-// `workflows` + `calcOutput` in scope, not the full ReportState.
+// Matches each calculated workflow back to the workflow it came from, by name,
+// and sorts them by yearly value, biggest first. This is the ONE definition of
+// "the top workflow" used by the PDF, the web report, the chat agent and the
+// wizard. It is exported on its own, not only through buildReportModel, because
+// the wizard only has the workflows and the calculated figures to hand, not the
+// whole report object.
 export function mergeWorkflows(
   workflowInputs: WorkflowInput[],
   calcWorkflows: WorkflowCalc[],
@@ -99,11 +102,11 @@ export function mergeWorkflows(
     })
 }
 
-// The reconciling ramp factor (bundles adoption + realization + revenue-band
-// scaling into one multiplier) so worked-example arithmetic always ties out
-// to the displayed value — the one canonical formula instead of 3 diverging
-// ones (PDF's calculation panel, web's non-reconciling adoption%, and the
-// validation wizard's formula which omitted it entirely).
+// Rolls take-up, realisation and any revenue-band scaling into a single
+// multiplier, so the worked example on the page always adds up to the value
+// shown beside it. There is one formula here now. There used to be three that
+// disagreed: the PDF's panel, the web report's take-up percentage that did not
+// add up, and the wizard's version, which left this out completely.
 export function reconcilingAdoptionFactor(w: MergedWorkflow): number {
   const baseline = w.monthlyVolume * (w.timeSaved / 60) * w.effectiveRate
   const value = Math.round(w.monthlyHours * w.effectiveRate)
@@ -136,12 +139,16 @@ export function buildReportModel(state: ReportState): ReportModel {
     ),
   }
 
-  // Per-lever match (derived_from -> workflow name, case-insensitive, then
-  // positional fallback) + deterministic arithmetic inputs. This intentionally
-  // overrides whatever the LLM wrote so every lever always reconciles with
-  // the calculator's PU total (see ProfitLever.rationale_with_arithmetic).
-  // Redirection % itself is just `globals.profitMultiplier - 1`, cheap enough
-  // for adapters to compute inline rather than carry in the model.
+  // Match each profit lever to its workflow: by name, ignoring capitalisation,
+  // and falling back to position if the name does not match. Then attach the
+  // numbers for its sum, worked out here in code.
+  //
+  // This deliberately overwrites whatever the model wrote, so every lever adds
+  // up to the calculator's own profit uplift total (see
+  // ProfitLever.rationale_with_arithmetic).
+  //
+  // The redirection percentage is just the profit multiplier minus one — cheap
+  // enough for each display to work out itself rather than carry here.
   const levers: LeverModel[] = (copy.profit_levers ?? []).map((l, i) => {
     const wf =
       merged.find(
@@ -156,7 +163,8 @@ export function buildReportModel(state: ReportState): ReportModel {
     }
   })
 
-  // Worked example / "how this is calculated" for the top workflow.
+  // The worked example — "here is how we got this number" — for the top
+  // workflow.
   const baselineMonthly = topWorkflow
     ? topWorkflow.monthlyVolume *
       (topWorkflow.timeSaved / 60) *
@@ -185,14 +193,14 @@ export function buildReportModel(state: ReportState): ReportModel {
   }
 
   const costOfDelayMonthly = Math.round(tf12 / 12)
-  // Only used for the handful of prose strings below that embed a currency
-  // amount mid-sentence — currency symbol selection is itself already the
-  // one shared implementation (format.ts), so reusing it here doesn't
-  // reintroduce duplication; it's not general number/short-form formatting.
+  // Only used for the few sentences below that have a money amount inside
+  // them. Choosing the currency symbol is already a single shared function
+  // (format.ts), so calling it here does not create a second copy of anything.
+  // This is not general number formatting.
   const sym = currencySymbolFor(globals.currency)
 
-  // Company snapshot — form-provided facts (highest confidence) first, then
-  // LLM-authored bullets with redundant ones suppressed.
+  // The company summary. Facts the user typed come first, because we trust
+  // those most, then the model's bullets with the repetitive ones removed.
   const teamSizeFromForm = (normInput?.teamSize ?? '').trim()
   const revenueRangeFromForm = (normInput?.revenueRange ?? '').trim()
   const countryFromForm = (normInput?.country ?? '').trim()
@@ -257,10 +265,9 @@ export function buildReportModel(state: ReportState): ReportModel {
     })
   })
 
-  // Sources / provenance rows — shared by PDF's Data Provenance table and
-  // (as of this change) the web report's Sources section, so both surfaces
-  // show the same evidence links/labels instead of web being a stripped-down
-  // copy.
+  // The source rows. The PDF's sources table and the web report's sources
+  // section both read these, so the two show the same links and labels. The web
+  // version used to be a cut-down copy.
   const sources: SourceRow[] = []
   if (revenueRangeFromForm) {
     sources.push({

@@ -6,6 +6,12 @@ import React from 'react'
    the AI path is never the shortest label. If "Let AI estimate" ever looks
    easier than "Exact", the estimates stop being challenged. */
 
+/* TODO(agent) — 'exact' and 'range' are free-text boxes: whatever the user
+   types lands as a string and is read by a regex in
+   src/lib/roi/v2/answerBridge.ts, which rejects most of the ways people write
+   a number ("70k a year", "about a third", "1.5 days"). That parse belongs to
+   an agent; see the TODO(agent) block in answerBridge.ts. */
+
 const MODES = [
   { value: 'exact', label: 'Exact' },
   { value: 'range', label: 'A range' },

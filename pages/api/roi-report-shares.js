@@ -1,9 +1,11 @@
 /* eslint-disable no-console */
 // ─────────────────────────────────────────────────────────────────────────────
-// GET/DELETE /api/roi-report-shares — manage colleague invites on a report.
-// Owner + employees only: any accessor can create an invite (via
-// /api/roi-share-email), but only the owner/employee can see the full list
-// or revoke someone else's access.
+// GET and DELETE /api/roi-report-shares — manage the colleague invites on a
+// report.
+//
+// Owner and staff only. Anyone with access can create an invite, through
+// /api/roi-share-email, but only the owner or a member of staff can see the
+// full list or take someone else's access away.
 //
 // GET  ?reportId=…              -> { shares: [{ id, invitedEmail, claimed, messageCount }] }
 // DELETE { reportId, grantId }  -> { ok: true }

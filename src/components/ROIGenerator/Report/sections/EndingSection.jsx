@@ -26,8 +26,8 @@ export default function EndingSection({
   onAward,
   onCredibilityAnswer,
 }) {
-  // Keep a copy — mirrors the toolbar's Download PDF button/status so both
-  // entry points never disagree (see ReportViewer's handleDownload).
+  // Mirrors the toolbar's Download PDF button and its status, so the two places
+  // you can start a download never disagree with each other.
   const [downloadTriggered, setDownloadTriggered] = useState(false)
   const prevDownloadStatusRef = useRef(downloadStatus)
   useEffect(() => {
@@ -55,9 +55,9 @@ export default function EndingSection({
           ? 'Downloaded ✓'
           : 'Download PDF'
 
-  // Loop in a colleague — shares the same "send via email" mechanism as the
-  // toolbar's resend-to-self button (see useEmailSendControl), starting
-  // blank here rather than prefilled since this card is for a colleague.
+  // "Loop in a colleague" uses the same send-by-email machinery as the toolbar's
+  // resend-to-myself button. The only difference is that this field starts
+  // empty, because it is for someone else.
   const emailControl = useEmailSendControl({
     reportId,
     defaultEmail: '',
@@ -67,9 +67,9 @@ export default function EndingSection({
     },
   })
 
-  // Shared-with list — owner/employee only. Anyone with access can send a
-  // new invite above; only the owner/employee sees who currently has access
-  // or can revoke it.
+  // The "shared with" list. Owner and staff only. Anyone with access can send a
+  // new invite above, but only the owner or staff can see who currently has
+  // access, or take it away.
   const [shares, setShares] = useState([])
   const [sharesLoaded, setSharesLoaded] = useState(false)
   const [revokingId, setRevokingId] = useState(null)
@@ -84,7 +84,8 @@ export default function EndingSection({
       const data = await res.json()
       setShares(data.shares ?? [])
     } catch {
-      // best-effort — the list is a convenience, not core functionality
+      // If this fails, never mind. The list is a convenience, not the point of
+      // the page.
     } finally {
       setSharesLoaded(true)
     }
@@ -105,7 +106,7 @@ export default function EndingSection({
       })
       if (res.ok) setShares((prev) => prev.filter((s) => s.id !== grantId))
     } catch {
-      // best-effort
+      // if this fails, never mind
     } finally {
       setRevokingId(null)
     }

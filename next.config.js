@@ -2,11 +2,12 @@ const path = require('path')
 const { withSentryConfig } = require('@sentry/nextjs')
 const { withPostHogConfig } = require('@posthog/nextjs-config')
 
-// Source maps only get built when something is going to upload them. Next
-// doesn't emit browser source maps in a production build by default, so
-// without this the PostHog plugin finds nothing and fails the build step; and
-// generating them unconditionally would both slow every build and serve this
-// app's source publicly on any build that doesn't upload-and-delete them.
+// We only build source maps — the files that turn minified code back into
+// readable code — when something is going to upload them. Next.js does not make
+// them for a production build by default, so without this the PostHog plugin
+// finds nothing and fails the build. But making them every time would slow every
+// build AND publish this app's source code on any build that does not upload
+// and then delete them.
 const uploadSourcemaps = Boolean(process.env.POSTHOG_API_KEY)
 
 const nextConfig = {
@@ -47,11 +48,11 @@ const nextConfig = {
       '@components': path.resolve(__dirname, 'src/components'),
       '@hooks': path.resolve(__dirname, 'src/hooks'),
       '@': path.resolve(__dirname),
-      // framer-motion probes for this at import time purely for
-      // styled-components interop, which this app doesn't use. Telling webpack
-      // it resolves to nothing is the whole fix — installing @emotion to
-      // silence a warning would ship a package we never call.
-      // Webpack only; turbopack (npm run dev) doesn't emit the warning.
+      // The animation library looks for this package when it loads, purely to
+      // work with a styling library we do not use. Telling the bundler it
+      // resolves to nothing is the whole fix. Installing that package just to
+      // silence a warning would ship code we never call.
+      // Only needed for the production bundler; the dev one does not warn.
       '@emotion/is-prop-valid': false,
     }
     return config
@@ -60,10 +61,10 @@ const nextConfig = {
 
 const sentryWrapped = withSentryConfig(nextConfig, {
   silent: true,
-  // Sentry's plugin runs first and, by default, deletes the client source maps
-  // as soon as it has uploaded them — which left PostHog's plugin with nothing
-  // to upload and failed the build. Both tools need the same maps, so Sentry
-  // hands them on and PostHog (running second) does the deleting.
+  // Sentry's plugin runs first and normally deletes the source maps as soon as
+  // it has uploaded them — which left PostHog's plugin with nothing and failed
+  // the build. Both tools need the same files, so Sentry now passes them on and
+  // PostHog, running second, does the deleting.
   sourcemaps: { deleteSourcemapsAfterUpload: !uploadSourcemaps },
 })
 
@@ -81,11 +82,11 @@ module.exports = uploadSourcemaps
       sourcemaps: {
         enabled: true,
         releaseName: 'lyrise-roi',
-        // Vercel sets this on every deploy; it's what ties a stack trace back
+        // Vercel sets this on every deploy. It is what ties a stack trace back
         // to the exact commit that produced it.
         releaseVersion: process.env.VERCEL_GIT_COMMIT_SHA,
-        // Uploaded maps must not also ship in the bundle — that would publish
-        // this app's source to anyone who opens devtools.
+        // Once uploaded, these files must not also ship to the browser — that
+        // would publish this app's source to anyone who opens devtools.
         deleteAfterUpload: true,
       },
     })

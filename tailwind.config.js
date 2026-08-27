@@ -1,15 +1,16 @@
 /** @type {import('tailwindcss').Config} */
 
-/* Design system tokens live in styles/tokens/*.css as CSS custom properties.
-   This file only maps them to Tailwind utility names — it never restates a
-   value. Change a token in CSS, every utility follows.
+/* The design system's values live in styles/tokens/*.css as CSS variables. This
+   file only gives them Tailwind names — it never repeats a value. Change one in
+   the CSS and every utility follows.
 
-   Deliberately NOT mapped: the numeric radius/shadow/font-size ramps. The
-   token scales are one step off Tailwind's defaults (--radius-sm is 8px vs
-   rounded-sm's 2px; --text-xl is 24px vs text-xl's 20px), so overriding them
-   would silently resize ~280 existing `rounded-*` and ~280 `text-*` usages.
-   Semantic names (rounded-card, shadow-glass) are exposed instead; reach for
-   text-[length:var(--text-xl)] on the rare occasion you need the raw step. */
+   What is deliberately NOT mapped: the numbered scales for corner radius,
+   shadow and font size. Our scale is one step off Tailwind's own (our small
+   radius is 8px where Tailwind's is 2px; our extra-large text is 24px where
+   Tailwind's is 20px), so overriding them would quietly resize about 280
+   existing rounded-* and 280 text-* usages across the app.
+   Named ones like rounded-card and shadow-glass are exposed instead. On the
+   rare occasion you need a raw step, write it out longhand. */
 
 module.exports = {
   content: [
@@ -21,7 +22,7 @@ module.exports = {
   theme: {
     extend: {
       colors: {
-        // --- Pre-design-system colors, still referenced in the app ---
+        // --- Colours from before the design system, still used in places ---
         primary: 'rgba(41, 87, 255, 1)',
         navy: '#1a2742',
         'new-black': '#2C2C2C',
@@ -46,8 +47,9 @@ module.exports = {
           grow: 'var(--grow)',
         },
 
-        // Ramps. Both names were unused by Tailwind's defaults in this repo,
-        // so they shadow the stock palettes without touching existing markup.
+        // Colour scales. Neither name was in use from Tailwind's own palette in
+        // this repo, so these replace the stock ones without changing any
+        // existing markup.
         purple: {
           50: 'var(--purple-50)',
           100: 'var(--purple-100)',
@@ -74,7 +76,7 @@ module.exports = {
           900: 'var(--neutral-900)',
         },
 
-        // --- Semantic aliases. Prefer these in new work. ---
+        // --- Names that say what they are for. Use these in new work. ---
         ink: {
           DEFAULT: 'var(--text-body)',
           heading: 'var(--text-heading)',

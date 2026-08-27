@@ -1,11 +1,13 @@
 // ─────────────────────────────────────────────────────────────────────────────
-// Static demo report data for Meridian Consulting Group
-// Used by /api/demo-report to render a realistic example report via the real
-// ROI pipeline — same assembleReport + renderTemplate path as live reports.
+// Fixed demo data for a made-up company, Meridian Consulting Group.
+// /api/demo-report uses it to render a realistic example report through the
+// real pipeline — the same building and rendering steps a live report goes
+// through.
 //
-// Two exports:
-//   MERIDIAN_BASE_STATE  — all 6 workflows (shown on initial demo load)
-//   MERIDIAN_ALT_STATE   — proposal writing workflow only (shown after chip click)
+// Two versions:
+//   MERIDIAN_BASE_STATE  — all six workflows, shown when the demo first loads
+//   MERIDIAN_ALT_STATE   — the proposal-writing workflow only, shown after the
+//                          visitor clicks a chip
 // ─────────────────────────────────────────────────────────────────────────────
 
 const USD = { code: 'USD', symbol: '$', name: 'US Dollar' }
@@ -56,7 +58,7 @@ const NORM_INPUT = {
   workContext: '',
 }
 
-// ── 6 workflows (base state) ──────────────────────────────────────────────────
+// -- The six workflows shown at first ----------------------------------------
 
 export const BASE_WORKFLOWS = [
   {
@@ -208,11 +210,12 @@ export const BASE_WORKFLOWS = [
   },
 ]
 
-// Alt: proposal writing only — used after the demo chip interaction
+// The other version: proposal writing only, shown after the chip is clicked
 export const ALT_WORKFLOWS = [BASE_WORKFLOWS[0]]
 
-// ── Report copy (shared between base and alt) ─────────────────────────────────
-// The alt state uses the same copy; assembleReport recomputes all financials.
+// -- The written words, shared by both versions ------------------------------
+// The second version reuses the same words; the money figures are recalculated
+// for it automatically.
 
 export const BASE_COPY = {
   cta_paragraph:
@@ -370,8 +373,9 @@ export const BASE_COPY = {
   ],
 }
 
-// The alt copy differs only in pilot recommendation and CTA — the financial
-// recalculation handles everything else automatically.
+// The second version's words differ only in which pilot we recommend and the
+// closing call to action. Everything else follows from the recalculated
+// figures.
 export const ALT_COPY = {
   ...BASE_COPY,
   cta_paragraph:
@@ -380,7 +384,7 @@ export const ALT_COPY = {
     "With a Year 1 scope limited to Proposal Writing Automation, the implementation is straightforward: one workflow, one team (senior consultants), one quality gate (partner review). The pilot should target 20 proposals over 6 weeks, with a quality comparison against the firm's baseline win rate. Success metric: proposal turnaround time reduced by 70% and win rate maintained or improved. This creates the internal business case for expanding to Client Reporting and Research Synthesis in Year 2.",
 }
 
-// ── Assembled state objects ───────────────────────────────────────────────────
+// -- The two finished report objects -----------------------------------------
 
 export const MERIDIAN_BASE_STATE = {
   normInput: NORM_INPUT,

@@ -1,14 +1,16 @@
-// Snapshot of the AI's pre-validation modeled values, keyed by workflow
-// name. Captured at report generation (source: 'generation' —
-// pages/api/roi-agent.js, before any chat edit or validation wizard
-// interaction can touch the report) so that later diffs against it can tell
-// apart workflows the AI originally proposed from ones the user added via
-// chat. For reports generated before that hook existed, validate-finalize.js
-// captures one as a fallback (source: 'finalize-fallback').
+// A copy of the numbers the AI produced, taken before the user checks them over,
+// filed by workflow name.
 //
-// Runs inline in the report-generation insert, which is the money path for
-// every user — must never throw. Malformed/missing input just yields a
-// smaller (possibly empty) snapshot rather than aborting the caller.
+// We take it as the report is generated (pages/api/roi-agent.js), before any
+// chat edit or wizard change can touch anything. Comparing against it later
+// tells us which workflows the AI proposed itself and which ones the user added
+// through chat. For reports made before that hook existed,
+// validate-finalize.js takes one instead, marked as a fallback.
+//
+// This runs inside the same step that saves a new report — the path that
+// matters for every paying user — so it must never throw. Bad or missing input
+// simply produces a smaller, possibly empty, copy rather than stopping the
+// caller.
 export function buildBaselineSnapshot(workflows, capturedAt, source) {
   const snapshot = {}
   try {

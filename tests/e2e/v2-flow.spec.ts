@@ -1,23 +1,96 @@
 /**
- * /v2 POC route (LYR-182, screens: LYR-183, interview: LYR-184, scan panel:
- * LYR-185) — runs in the `anon` project.
+ * The /v2 POC (LYR-182, screens: LYR-183, questions: LYR-184, side panel:
+ * LYR-185, real research: LYR-199, reveal: LYR-188). Runs signed out.
  *
- * Five guarantees: the route is reachable without auth, flow state survives
- * all four steps (landing → company → interview → reveal) and going back,
- * submitting the company form does not wait on the canned scan, every
- * interview answer — across more than one pain point — reaches the end, and
- * the scan panel resolves sourced facts with working sources while rendering
- * nothing at all when there was no scan.
+ * Six promises:
+ *   1. You can reach the page without signing in.
+ *   2. Answers survive all four steps and survive going back.
+ *   3. Submitting the company form does not wait for the research to finish.
+ *   4. Every answer, across more than one pain point, reaches the reveal as
+ *      real figures.
+ *   5. The money figure can be traced back to the calculator's own sums.
+ *   6. The side panel shows findings with working links, and shows nothing at
+ *      all when the research found nothing.
  *
- * The whole flow is also walkable with no keyboard at all, which is how the
+ * The reveal shows one sentence and two figures. It does NOT repeat the pain
+ * point text, the team, or the raw answers back. So "did this reach the end" is
+ * checked through the numbers, not through the words.
+ *
+ * The whole flow can also be walked with no typing at all, which is how the
  * demo is given.
+ *
+ * We fake the research endpoint in every test here, on purpose. The real one
+ * crawls a real company with real API keys and a real model call. CI has none
+ * of those, so left real it would spend its whole 30-second budget failing,
+ * once per test, over the network. What these tests own is how the panel
+ * behaves given a stream of findings. What is IN that stream is the research
+ * system's own tests and `npm run eval:research`.
  */
-import { test, expect } from '@playwright/test'
+import { test, expect, type Page } from '@playwright/test'
+
+/* The four numbers the calculator needs, typed as plain digits, because plain
+   digits are what our reader actually accepts.
+   The pay and "still needs a person" boxes suggest "$70k a year" and "about a
+   third", but our reader rejects anything with a word on the end, so those
+   formats leave the field empty and the money figure held back. That is a known
+   gap, tracked under TODO(agent), and deliberately not tested here.
+   The example texts belong to harbourfield.com, so both callers research that
+   company. */
+async function answerTheNumbers(page: Page) {
+  await page.getByPlaceholder('4', { exact: true }).fill('4')
+  await page.getByPlaceholder('12', { exact: true }).fill('12')
+  await page.getByPlaceholder('$70k a year', { exact: true }).fill('70000')
+  await page.getByPlaceholder('about a third', { exact: true }).fill('30')
+}
+
+/* Two findings in the shape the research agent now emits. Every one of them is
+   read live during the run — there is no bought data set any more, so no row
+   carries an "as of" date. */
+const FINDINGS = [
+  {
+    says: 'You are about 38 people',
+    about: 'size',
+    link: 'https://example.com/about',
+  },
+  {
+    says: 'You are hiring a paralegal whose first listed duty is chasing outstanding client documents',
+    about: 'hiring',
+    link: 'https://example.com/careers/paralegal',
+  },
+]
+
+/* Fakes the research response. The delay is what makes the "still looking" state
+   visible: a response that arrives instantly never shows the state the panel
+   spends most of a real run in.
+   Playwright sends the whole body at once, so the findings arrive together
+   here. That they really do arrive one at a time is covered by the analyst's
+   own test. */
+async function stubResearch(page: Page, findings = FINDINGS, delayMs = 1200) {
+  await page.route('**/api/v2/research*', async (route) => {
+    await new Promise((resolve) => setTimeout(resolve, delayMs))
+    await route.fulfill({
+      status: 200,
+      contentType: 'text/event-stream',
+      body:
+        findings
+          .map(
+            (finding) =>
+              `data: ${JSON.stringify({ type: 'finding', finding })}\n\n`,
+          )
+          .join('') + `data: ${JSON.stringify({ type: 'done' })}\n\n`,
+    })
+  })
+}
 
 test.describe('/v2', () => {
+  test.beforeEach(async ({ page }) => {
+    await stubResearch(page)
+  })
+
   test('@smoke walks all four steps and carries state', async ({ page }) => {
     await page.goto('/v2')
-    // Landing is out of the flow: one CTA, no step counter, no splash.
+    // The first screen sits outside the flow: one button, no step counter, no
+    // splash.
     await expect(page.getByRole('heading', { level: 1 })).toContainText(
       'Tell us how your teams actually work.',
     )
@@ -30,36 +103,39 @@ test.describe('/v2', () => {
     await page.getByLabel('Website').fill('harbourfield.com')
     await page.getByRole('button', { name: 'Next', exact: true }).click()
 
-    // The canned scan takes ~1.5s per fact; the interview must already be here.
+    // We start the research and move on immediately. The questions are on screen
+    // at once, well before the first finding arrives.
     await expect(page.getByText('Step 3 of 4')).toBeVisible({ timeout: 1000 })
 
-    // Back preserves what was typed rather than resetting the step.
-    // `exact` throughout — the Sentry widget's "Share feedback" label contains
-    // "back" (production build only), and Next's dev-tools button is named
-    // "Open Next.js Dev Tools", which substring-matches "Next".
+    // Going back keeps what was typed rather than clearing the step.
+    // We match button names exactly throughout, because the Sentry widget's
+    // "Share feedback" label contains the word "back" in a production build,
+    // and Next's dev-tools button contains the word "Next".
     await page.getByRole('button', { name: 'Back', exact: true }).click()
     await expect(page.getByLabel('Website')).toHaveValue('harbourfield.com')
     await page.getByRole('button', { name: 'Next', exact: true }).click()
 
-    // First pain point. The open question is the hero: it is the first field
-    // on the screen, above the segmented number questions.
+    // The first pain point. The open question comes first, above the number
+    // questions.
     const open = page.getByRole('textbox', { name: /Where do your teams lose/ })
     await open.fill('Re-keying intake forms')
     await page
       .getByRole('textbox', { name: /Which team or department/ })
       .fill('Paralegals')
 
-    // Exact is pre-selected on every number question, and the AI suggestion
-    // sits below the hero rather than inside it.
+    // "Exact" is already chosen on every number question, and our suggestion
+    // sits below the big box rather than inside it.
     await expect(
       page.getByRole('radio', { name: 'Exact' }).first(),
     ).toHaveAttribute('aria-checked', 'true')
     await expect(open).not.toHaveValue(/Contract review/)
 
-    await page.getByPlaceholder('4', { exact: true }).fill('6')
+    // Fully answered, so this pain point reaches the reveal as real figures
+    // rather than as "not enough here yet".
+    await answerTheNumbers(page)
 
-    // One pain point is fewer than the analyst wants, and it says so — but
-    // leaving is never blocked on it.
+    // One pain point is fewer than we would like, and we say so — but we never
+    // block anyone from leaving.
     await expect(page.getByText(/Two makes the report hold up/)).toBeVisible()
     await expect(
       page.getByRole('button', { name: 'That’s all for now' }),
@@ -73,33 +149,45 @@ test.describe('/v2', () => {
       .getByRole('textbox', { name: /What’s the second one/ })
       .fill('Rebuilding the Friday report')
 
-    // Going back to the first pain point shows what was typed there.
+    // Going back to the first pain point still shows what was typed there.
     await page.getByRole('button', { name: 'Back', exact: true }).click()
     await expect(open).toHaveValue('Re-keying intake forms')
     await page.getByRole('button', { name: 'I have another one' }).click()
-    // A third turn left blank falls back to the guess we showed for it; a
-    // fourth has no guess behind it, so it drops.
+    // A third pain point left blank falls back to the guess we showed for it. A
+    // fourth has no guess behind it, so it is dropped.
     await page.getByRole('button', { name: 'I have another one' }).click()
 
     await page.getByRole('button', { name: 'That’s all for now' }).click()
 
     await expect(page.getByText('Step 4 of 4')).toBeVisible()
     await expect(page.getByText('Harbourfield Legal')).toBeVisible()
-    // Both pain points, and the numbers typed against the first one, survive.
-    await expect(page.getByText(/Re-keying intake forms/)).toContainText(
-      'Paralegals',
-    )
-    await expect(page.getByText(/Re-keying intake forms/)).toContainText('6')
-    await expect(page.getByText(/Rebuilding the Friday report/)).toBeVisible()
-    await expect(page.getByRole('listitem')).toHaveCount(3)
-    // The filled-in one says whose words they are.
-    await expect(page.getByText(/Chasing missing documents/)).toContainText(
-      'our guess, not yours',
-    )
-    // And an untouched number resolves to the estimate, carrying its tag.
-    await expect(page.getByText(/Chasing missing documents/)).toContainText(
-      'about 12 hours (benchmarked)',
-    )
+
+    // The "I heard you" moment: their own numbers said back as a sentence,
+    // before any figure. Built in plain code from the answers above — 4 people x
+    // 12 hours x 50 working weeks.
+    await expect(
+      page.getByText(
+        'Four people spending twelve hours a week each adds up to about 2,400 hours a year.',
+      ),
+    ).toBeVisible()
+
+    // The typed answers survive the whole flow and come out as figures. We look
+    // inside each figure's own block, because the same digits also appear in the
+    // sentence above.
+    const spent = page.getByText('Hours currently spent').locator('..')
+    await expect(spent).toContainText('2,400')
+    await expect(spent).toContainText('hrs / year')
+
+    // The full path: the money figure only exists once both pay and "still needs
+    // a person" were readable.
+    const returned = page
+      .getByText(/Hours returned, and what that’s worth/)
+      .locator('..')
+    await expect(returned).toContainText('941')
+    await expect(returned).toContainText('$98,477')
+    await expect(
+      page.getByText(/don’t have enough here yet to put a return number/),
+    ).toHaveCount(0)
   })
 
   test('fills the scan panel while the interview is being answered', async ({
@@ -108,37 +196,39 @@ test.describe('/v2', () => {
     await page.goto('/v2')
     await page.getByRole('button', { name: 'Start with my company' }).click()
     await page.getByLabel('Company name').fill('Dr. Job Pro')
-    // Typed the way a person would, not the way the lookup key reads.
+    // Typed the way a person types it, not the way a domain is written.
     await page.getByLabel('Website').fill('https://www.drjobpro.com/')
     await page.getByRole('button', { name: 'Next', exact: true }).click()
 
     const panel = page.getByRole('complementary')
     await expect(panel).toContainText('What we could verify about Dr. Job Pro')
 
-    // In-flight: the panel is quietly looking and the interview is already
-    // usable — the first fact is still ~1.5s away.
-    await expect(panel).toContainText('Reading your site…')
+    // Mid-run: the panel is quietly looking and the questions are already
+    // usable. The first finding is still about 1.2 seconds away.
+    await expect(panel).toContainText('Reading what’s public about you')
     const open = page.getByRole('textbox', { name: /Where do your teams lose/ })
     await open.fill('Screening CVs by hand')
     await expect(open).toHaveValue('Screening CVs by hand')
 
-    // Resolved: facts arrive one at a time, each with a source you can open.
-    await expect(panel).toContainText('10M+ users since 2015')
+    // Finished: the agent's own sentence, printed exactly as written.
+    await expect(panel).toContainText(
+      'first listed duty is chasing outstanding client documents',
+    )
+    // Every line has a source you can click.
     await expect(
-      panel.getByRole('link', { name: 'drjobpro.com/about-us' }).first(),
-    ).toHaveAttribute('href', 'https://www.drjobpro.com/about-us')
-    await expect(panel).toContainText('Abu Dhabi, Giza, and Vellore')
+      panel.getByRole('link', { name: 'example.com/careers/paralegal' }),
+    ).toHaveAttribute('href', 'https://example.com/careers/paralegal')
+    await expect(panel).toContainText('You are about 38 people')
+    /* Everything is read live now, so no row may claim an age. The old bought
+       data set went when S1 did. */
+    await expect(panel).not.toContainText(/\(as of/)
 
-    // Nothing inferred: no workflow, no department, no operating model.
+    // Nothing guessed: no workflow, no department, no "operating model".
     await expect(panel).not.toContainText(
       /workflow|department|operating model/i,
     )
-
-    // The guess is this company's, and it cites this company's scan.
-    await expect(page.getByText(/Reading applications against/)).toBeVisible()
-    await expect(page.getByText(/8,000 live vacancies/)).toBeVisible()
-    // Nothing from the law firm's fact set leaks in.
-    await expect(page.getByText(/paralegals/i)).toHaveCount(0)
+    // And the "still looking" line disappears once the run is done.
+    await expect(panel).not.toContainText('Reading what’s public about you')
   })
 
   test('walks the whole flow without typing anything', async ({ page }) => {
@@ -149,47 +239,148 @@ test.describe('/v2', () => {
     await page.getByRole('button', { name: 'Next', exact: true }).click()
 
     await expect(page.getByText('Step 3 of 4')).toBeVisible()
-    // The fallback names itself, so the panel isn't addressed to "you".
-    await expect(page.getByRole('complementary')).toContainText(
-      'What we could verify about Dr. Job Pro',
-    )
+    // Nothing was typed, so there is nothing to research and no panel. The
+    // fallback company fills in the canned guesses only, never the panel.
+    await expect(page.getByRole('complementary')).toHaveCount(0)
 
-    // Straight to the reveal on the next click. Nothing was typed, so every
-    // pain point is the guess we showed and every number is the estimate —
-    // each one labelled as ours.
+    // Straight to the reveal on the next click. Nothing was typed, so every pain
+    // point is the guess we showed and every number is our estimate — each one
+    // labelled as ours.
     await page.getByRole('button', { name: 'That’s all for now' }).click()
 
     await expect(page.getByText('Step 4 of 4')).toBeVisible()
-    await expect(page.getByRole('listitem')).toHaveCount(1)
-    const only = page.getByRole('listitem').first()
-    await expect(only).toContainText('our guess, not yours')
-    await expect(only).toContainText('about 2,600 a month (benchmarked)')
+    // Nothing was typed, so every number is the estimate we already showed for
+    // Dr. Job Pro: 7 people x 18 hours x 50 weeks, with a quarter of it still
+    // needing a person. The demo has to show figures. What it must never do is
+    // pass them off as the prospect's own.
+    await expect(
+      page.getByText(/Seven people spending eighteen hours a week each/),
+    ).toBeVisible()
+    const spent = page
+      .locator('div')
+      .filter({ hasText: /^Hours currently spent/ })
+      .last()
+    await expect(spent).toContainText('6,300')
+    await expect(page.getByText('2,646')).toBeVisible()
+    await expect(page.getByText('$71,203')).toBeVisible()
+    // And it says so in words, once, not only through the dots.
+    await expect(
+      page.getByText(/You left the numbers to me, so these are my guesses/),
+    ).toBeVisible()
+    // Both figures are marked as ours. The money figure always is. Hours spent
+    // is too, here, because the numbers behind it were our estimates rather than
+    // typed answers. That second mark is the whole point of this fallback.
+    await expect(
+      page.getByRole('button', { name: /includes assumptions/ }),
+    ).toHaveCount(2)
+  })
+
+  test('reveals nothing to feature without crashing', async ({ page }) => {
+    // No research, so no guess to fall back on for a pain point nobody named.
+    // The reveal is handed an empty list. It used to crash on that (found in the
+    // PR #56 review).
+    await page.goto('/v2?scan=none')
+    await page.getByRole('button', { name: 'Start with my company' }).click()
+    await page.getByRole('button', { name: 'Next', exact: true }).click()
+    await page.getByRole('button', { name: 'That’s all for now' }).click()
+
+    await expect(page.getByText('Step 4 of 4')).toBeVisible()
+    await expect(
+      page.getByText("We don't have numbers for this one yet."),
+    ).toBeVisible()
+    await expect(
+      page.getByText(/Not enough here yet to put a number on it/),
+    ).toBeVisible()
+    await expect(page.getByText('Hours currently spent')).toHaveCount(0)
+    await expect(page.getByRole('button', { name: 'Start over' })).toBeVisible()
+  })
+
+  test('traces the return figure back to the calculator’s own arithmetic', async ({
+    page,
+  }) => {
+    await page.goto('/v2')
+    await page.getByRole('button', { name: 'Start with my company' }).click()
+    await page.getByLabel('Company name').fill('Harbourfield Legal')
+    await page.getByLabel('Website').fill('harbourfield.com')
+    await page.getByRole('button', { name: 'Next', exact: true }).click()
+
+    await page
+      .getByRole('textbox', { name: /Where do your teams lose/ })
+      .fill('Re-keying intake forms')
+    await answerTheNumbers(page)
+    await page.getByRole('button', { name: 'That’s all for now' }).click()
+
+    await expect(page.getByText('Step 4 of 4')).toBeVisible()
+
+    // Nothing is open until someone asks for it.
+    await expect(page.getByRole('dialog')).toHaveCount(0)
+
+    // Only the money figure is marked. Hours spent carries no guess beyond what
+    // was typed, so it gets no dot and no pop-up.
+    const mark = page.getByRole('button', { name: /includes assumptions/ })
+    await expect(mark).toHaveCount(1)
+    await mark.click()
+
+    const dialog = page.getByRole('dialog', {
+      name: 'How this number was calculated',
+    })
+    await expect(dialog).toBeVisible()
+
+    // Every line is text the calculator itself produced, not sums redone in the
+    // component. So the pop-up can never disagree with the figure.
+    await expect(dialog).toContainText(
+      '2,400 × 70% × 0.7 × 0.8 = 941 hours/year returned',
+    )
+    await expect(dialog).toContainText(
+      '($70,000 ÷ (50 × 40)) × 1.3 = $45.50/hour',
+    )
+    await expect(dialog).toContainText('941 × $45.50 = $42,816')
+    await expect(dialog).toContainText('$42,816 × 1.3 = $55,661')
+    // It ends on the same figure printed on the screen behind it.
+    await expect(dialog).toContainText('$42,816 + $55,661 = $98,477')
+
+    // The first figure's own formula is left out. It belongs to the unmarked
+    // number, not to the guesses behind this one.
+    await expect(dialog).not.toContainText('hours/year spent today')
+
+    // It closes with the close button...
+    await dialog.getByRole('button', { name: 'Close' }).click()
+    await expect(page.getByRole('dialog')).toHaveCount(0)
+
+    // ...and with Escape, which the reveal adds on top of the shared dialog.
+    await mark.click()
+    await expect(dialog).toBeVisible()
+    await page.keyboard.press('Escape')
+    await expect(page.getByRole('dialog')).toHaveCount(0)
   })
 
   test('renders no scan panel at all when nothing was found', async ({
     page,
   }) => {
-    // `?scan=none` is the door to the no-scan state: with the fallback in
-    // place, an unrecognised domain no longer reaches it.
+    // A real company we genuinely found nothing on: the run finishes and returns
+    // no findings. The ?scan=none switch also turns off the canned guesses,
+    // which is what the second half of this test is about.
+    await stubResearch(page, [], 0)
     await page.goto('/v2?scan=none')
     await page.getByRole('button', { name: 'Start with my company' }).click()
     await page
       .getByLabel('Company name')
       .fill('Somewhere We Know Nothing About')
+    await page.getByLabel('Website').fill('nothingknown.example')
     await page.getByRole('button', { name: 'Next', exact: true }).click()
 
-    // Not an empty panel — no panel. An empty one reads as broken.
+    // Not an empty panel — no panel at all. An empty one looks broken.
     await expect(page.getByRole('complementary')).toHaveCount(0)
     await expect(page.getByText('What we could verify')).toHaveCount(0)
-    // And the interview is unaffected.
+    // And the questions are unaffected.
     await expect(
       page.getByRole('textbox', { name: /Where do your teams lose/ }),
     ).toBeVisible()
 
-    // Scanned nothing, so it guesses nothing — no "from your website" block…
+    // We found nothing, so we guess nothing — no "from your website" box...
     await expect(page.getByText('A guess from your website')).toHaveCount(0)
-    // …and the estimate says why it hasn't got one rather than inventing a
-    // number the prospect would have to argue with.
+    // ...and the estimate says why it has none, rather than inventing a number
+    // the prospect would have to argue with.
     await page.getByRole('radio', { name: 'Let AI estimate' }).first().click()
     await expect(page.getByText('Nothing to base one on').first()).toBeVisible()
   })

@@ -1,5 +1,5 @@
-// Map a BulkRow → the camelCase formData shape that POST /api/roi-agent
-// expects (matches mapFormToPayload in pages/api/roi-agent.js).
+// Turns one row of a bulk upload into the shape POST /api/roi-agent expects —
+// the same shape mapFormToPayload builds in pages/api/roi-agent.js.
 
 import type { BulkRow } from './parseBulkCsv'
 import { countryToCurrency } from './countryToCurrency'

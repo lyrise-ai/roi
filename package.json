@@ -3,9 +3,9 @@
   "version": "0.1.0",
   "private": true,
   "scripts": {
-    "dev": "next dev --turbo",
-    "build": "next build",
-    "start": "next start",
+    "dev": "dotenvx run -- next dev --turbo",
+    "build": "dotenvx run -- next build",
+    "start": "dotenvx run -- next start",
     "lint": "ESLINT_USE_FLAT_CONFIG=false eslint . --ext .js,.jsx,.ts,.tsx --ignore-pattern .next --ignore-pattern node_modules",
     "lint:fix": "ESLINT_USE_FLAT_CONFIG=false eslint . --ext .js,.jsx,.ts,.tsx --ignore-pattern .next --ignore-pattern node_modules --fix",
     "deadcode": "knip",
@@ -17,7 +17,7 @@
     "test:e2e:smoke": "playwright test --grep @smoke",
     "dev:test": "next dev --turbo -p 3777",
     "prepare": "husky install",
-    "eval:research": "node evals/research/coverage.mjs"
+    "research": "dotenvx run -- node evals/research/look.mjs"
   },
   "dependencies": {
     "@ai-sdk/openai": "^3.0.48",
@@ -53,23 +53,21 @@
     "*.{json,css,md}": "prettier --write"
   },
   "devDependencies": {
-    "@next/env": "^15.5.19",
+    "@dotenvx/dotenvx": "^2.21.0",
+    "@next/env": "^15.5.9",
     "@playwright/test": "^1.61.0",
     "@types/react": "^18.3.12",
     "@types/react-dom": "^18.3.1",
     "autoprefixer": "^10.4.14",
     "esbuild": "^0.19.2",
     "eslint": "^9.39.4",
-    "eslint-config-airbnb": "^18.2.1",
     "eslint-config-next": "^15.5.19",
     "eslint-config-prettier": "^10.1.8",
     "eslint-plugin-jsx-a11y": "^6.10.2",
     "eslint-plugin-prettier": "^5.5.6",
     "eslint-plugin-react": "^7.37.5",
     "eslint-plugin-react-hooks": "^7.1.1",
-    "eslint-plugin-security": "^4.0.1",
     "eslint-plugin-simple-import-sort": "^13.0.0",
-    "eslint-plugin-sonarjs": "^4.1.0",
     "husky": "^9.1.7",
     "knip": "^6.24.0",
     "lint-staged": "^15.5.2",

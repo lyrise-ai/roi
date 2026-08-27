@@ -1,5 +1,6 @@
-// Map an Apollo "Country" string to a 3-letter ISO currency code.
-// Substring-matched, case-insensitive. Falls back to USD.
+// Turns a country name from an Apollo export into a three-letter currency code.
+// Matches anywhere in the string, ignoring capitalisation. Falls back to US
+// dollars.
 
 const RULES: Array<{ test: (c: string) => boolean; ccy: string }> = [
   {
@@ -47,7 +48,7 @@ const RULES: Array<{ test: (c: string) => boolean; ccy: string }> = [
   { test: (c) => c.includes('china'), ccy: 'CNY' },
   { test: (c) => c.includes('hong kong'), ccy: 'HKD' },
   {
-    // Eurozone countries (a representative set Apollo commonly exports)
+    // Euro countries — the ones Apollo exports most often
     test: (c) =>
       [
         'germany',

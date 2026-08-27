@@ -1,10 +1,10 @@
 // ─────────────────────────────────────────────────────────────────────────────
-// fetchPage — fetches a URL and returns clean markdown via Jina Reader
-// Free, no API key, works on any public URL
+// fetchPage — downloads a page and gives back clean text, using Jina Reader.
+// Free, needs no API key, works on any public page.
 // ─────────────────────────────────────────────────────────────────────────────
 
 export async function fetchPage(url: string): Promise<string> {
-  // Normalise — add https:// if bare domain
+  // Add https:// on the front if we were given a bare domain
   const target = url.startsWith('http') ? url : `https://${url}`
   const jinaUrl = `https://r.jina.ai/${target}`
 
@@ -19,7 +19,7 @@ export async function fetchPage(url: string): Promise<string> {
     }
 
     const text = await res.text()
-    // Cap at ~8K chars to avoid blowing the context window
+    // Cut it to about 8,000 characters so we do not overload the model
     return text.slice(0, 8000)
   } catch (err) {
     return `[fetchPage: failed to fetch ${target} — ${(err as Error).message}]`

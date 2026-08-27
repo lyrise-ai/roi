@@ -1,60 +1,65 @@
 // ─────────────────────────────────────────────────────────────────────────────
 // miniCalculator — Profit Map POC (LYR-186 / POC 8)
 //
-// Deliberately standalone from src/lib/roi/pipeline/roiCalculator.ts. That
-// calculator models volume × minutes-per-item across workflows and is tied
-// to the full ReportState pipeline; this is a throwaway POC surface with its
-// own, much simpler people × hours-per-week shape. It owes the old pipeline
-// nothing — no shared types, no shared code path — but it does reuse a
-// handful of production's tuning constants (see each constant's comment for
-// where it came from) so the POC's numbers land in the same neighborhood as
-// a real report would produce.
+// Kept separate from src/lib/roi/pipeline/roiCalculator.ts on purpose. That one
+// works in volume × minutes per item across many workflows, and is wired into
+// the whole live report pipeline. This one is a throwaway POC with a much
+// simpler shape: people × hours a week.
 //
-// Pure function: no I/O, no imports beyond this file, safe to call from the
-// browser or from Node.
+// It shares no types and no code with the live calculator. It does reuse a few
+// of the live system's tuning numbers — each constant below says where it came
+// from — so the POC's figures land in roughly the same range a real report
+// would give.
+//
+// Nothing here reads a file or calls a server, and it imports nothing. Safe to
+// run in the browser or in Node.
 // ─────────────────────────────────────────────────────────────────────────────
 
-// Reused from production — src/lib/roi/agent.ts:762 and :1493, the fallback
-// adoptionRate applied to a workflow before the modeler LLM has produced its
-// own per-workflow adoption estimate.
+// Taken from the live system — src/lib/roi/agent.ts:762 and :1493. How much of
+// a team we assume actually uses the new system. This is the default we apply
+// before the model has worked out its own number for a given workflow.
 const ADOPTION = 0.7
 
-// Reused from production — src/lib/roi/prompts/roiModeler.ts:109 instructs
-// the modeler to pick a realizationFactor in 0.70–0.85; 0.8 is the same
-// midpoint value src/lib/roi/devMockReport.ts:151 uses as its default.
+// Taken from the live system. How much of the saving really lands in practice.
+// src/lib/roi/prompts/roiModeler.ts:109 tells the model to pick something
+// between 0.70 and 0.85; 0.8 is the middle, and the same default
+// src/lib/roi/devMockReport.ts:151 uses.
 const REALIZATION = 0.8
 
-// Reused from production — src/lib/roi/prompts/roiModeler.ts:107: "50 for
-// US/EU/UK" (the prompt uses 48 for GCC/Egypt instead).
-// TODO: swap to 48 if this POC is being pitched at a GCC/Egypt prospect.
+// Working weeks in a year. Taken from the live system —
+// src/lib/roi/prompts/roiModeler.ts:107 says "50 for US/EU/UK", and 48 for the
+// Gulf and Egypt.
+// TODO: switch to 48 if this POC is being shown to a Gulf or Egypt prospect.
 const WORKING_WEEKS = 50
 
-// Reused from production — src/lib/roi/prompts/roiModeler.ts:85, the
-// fully-loaded multiplier the modeler applies to raw pay to account for
-// benefits, payroll tax, and overhead before treating it as a billing rate.
+// Taken from the live system — src/lib/roi/prompts/roiModeler.ts:85. Salary is
+// not what an employee actually costs. This multiplier adds benefits, payroll
+// tax and overhead on top of raw pay before we treat it as an hourly cost.
 const OVERHEAD_MULTIPLIER = 1.3
 
-// Not a production value — POC-only. See LYR-186.
-// Applied as an INCREMENTAL multiplier here (uplift = OD × this), which is not
-// what production's globals.profitMultiplier means: that one is a TOTAL
-// multiplier of 1.8–4.0 (roiModeler.ts:110) applied as OD × (m − 1)
-// (roiCalculator.ts:363). 1.3 incremental sits inside production's implied
-// 0.8–3.0 incremental band, so don't "fix" this by copying 1.8–4.0 in.
+// POC-only number, not from the live system. See LYR-186.
+//
+// Careful: here it is an EXTRA multiplier — uplift = dividend × 1.3. The live
+// system's profitMultiplier means something different: it is a TOTAL of 1.8 to
+// 4.0 (roiModeler.ts:110), applied as dividend × (m − 1)
+// (roiCalculator.ts:363). Written as an extra, the live range works out to
+// roughly 0.8 to 3.0 — and 1.3 sits inside that. So do not "fix" this by
+// copying 1.8–4.0 across.
 const PROFIT_MULTIPLIER = 1.3
 
-// Full-time hours per week — the denominator that turns an annual salary into
-// an hourly rate. Not the same thing as the user's hoursPerWeek input, which is
-// how much of their week the workflow eats.
+// A full working week. We divide a yearly salary by this to get an hourly
+// cost. Do not confuse it with the user's hoursPerWeek answer, which is how
+// much of their week this one task eats.
 const FTE_HOURS_PER_WEEK = 40
 
 export interface MiniCalculatorInput {
   people: number
   hoursPerWeek: number
-  // Fully-loaded assumption applied below (OVERHEAD_MULTIPLIER) — pass the
-  // raw annual salary, not an already-loaded rate.
+  // Pass the plain yearly salary. We add benefits and overhead ourselves,
+  // below, using OVERHEAD_MULTIPLIER.
   annualPay: number
-  // 0–1, or 0–100 percentage points — anything above 1 is read as points.
-  // Clamped to 0–1 and rounded to a whole percent before it's used.
+  // Either 0 to 1, or 0 to 100. Anything above 1 is read as a percentage. We
+  // then force it into the 0 to 1 range and round it to a whole percent.
   automatablePct: number
   team?: string
 }
@@ -80,16 +85,17 @@ const round = (n: number) => Math.round(n)
 const comma = (n: number) => round(n).toLocaleString('en-US')
 const money = (n: number) => `$${comma(n)}`
 
-// Every input is user-typed and every one of them can be missing mid-interview
-// (the live preview renders before the last question is answered). A missing or
-// junk number becomes 0 — a $0 line reads as "not answered yet", a $NaN line
-// reads as a broken app in front of a prospect.
+// Every input here was typed by a user, and any of them can still be missing
+// while they are answering (the preview draws before the last question is
+// done). So anything missing or unreadable becomes 0. A line showing $0 reads
+// as "not answered yet"; a line showing $NaN reads as a broken app in front of
+// a prospect.
 const num = (n: number) => (Number.isFinite(n) ? Number(n) : 0)
 
-// Q4 answers arrive as either 0.4 or 40 depending on how the question was
-// phrased, so treat anything above 1 as percentage points. Rounded to a whole
-// percent because that's how it's displayed, and the shown formula has to be
-// the one that was actually computed.
+// The fifth answer arrives as either 0.4 or 40, depending on how the person
+// wrote it, so we read anything above 1 as a percentage. We round to a whole
+// percent because that is how it is shown on screen, and the formula we print
+// has to be the one we actually used.
 const toFraction = (n: number) => {
   const raw = num(n)
   const fraction = raw > 1 ? raw / 100 : raw
@@ -105,10 +111,10 @@ export function calculateMiniProfitMap(
   const annualPay = num(input.annualPay)
   const automatable = toFraction(input.automatablePct)
 
-  // Rounded at every step, not just at the end: these figures are also the
-  // operands of the formula strings below, and a prospect who checks the
-  // arithmetic by hand must get the same answer we printed. Presentable and
-  // self-consistent beats exact — see LYR-186 review.
+  // We round at every step, not only at the end. These same numbers are
+  // printed in the formula lines below, so a prospect checking the maths by
+  // hand has to reach the number we printed. Being consistent on screen beats
+  // being exact to more decimal places — see the LYR-186 review.
   const annualHours = round(people * hoursPerWeek * WORKING_WEEKS)
   const hoursReturned = round(
     annualHours * automatable * ADOPTION * REALIZATION,

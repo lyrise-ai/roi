@@ -3,7 +3,8 @@ import * as Sentry from '@sentry/nextjs'
 Sentry.init({
   dsn: 'https://35bc0693cb1fdcd1e6e5d2c146ca5c0b@o4511621876678656.ingest.de.sentry.io/4511621883428944',
   enabled: process.env.NODE_ENV !== 'development',
-  // See sentry.server.config.ts — console capture is off on purpose.
+  // See sentry.server.config.ts: picking up console output is off on
+  // purpose.
   integrations: [],
   dataCollection: {
     // To disable sending user data and HTTP bodies, uncomment the lines below. For more info visit:
@@ -11,8 +12,9 @@ Sentry.init({
     // userInfo: false,
     // httpBodies: [],
   },
-  // Development telemetry is disabled above; sample production traces at 10%.
+  // Tracking is off in development, above. In production we keep 10% of
+  // traces.
   tracesSampleRate: 0.1,
-  // Enable logs to be sent to Sentry
+  // Send our logs to Sentry as well
   enableLogs: true,
 })
