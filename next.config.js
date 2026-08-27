@@ -32,6 +32,7 @@ const nextConfig = {
     return [
       {
         source: '/api/roi-agent',
+        headers: [{ key: '', value: '' }],
       },
     ]
   },
