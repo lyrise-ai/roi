@@ -27,6 +27,27 @@ test.skip(
 
 let generatedReportId: string | undefined
 
+test.beforeEach(async () => {
+  const admin = adminClient()
+  const email = process.env.TEST_USER_EMAIL ?? 'yousef.testing@gmail.com'
+  const { data: user } = await admin
+    .from('users')
+    .select('id')
+    .eq('email', email)
+    .maybeSingle()
+  if (user?.id) {
+    const { data: reports } = await admin
+      .from('reports')
+      .select('id')
+      .eq('user_id', user.id)
+    if (reports && reports.length > 0) {
+      for (const r of reports) {
+        await deleteReport(admin, r.id)
+      }
+    }
+  }
+})
+
 test.afterEach(async () => {
   if (!generatedReportId) return
   await deleteReport(adminClient(), generatedReportId)

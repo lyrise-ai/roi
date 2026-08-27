@@ -30,12 +30,7 @@ const nextConfig = {
     ]
   },
   async headers() {
-    return [
-      {
-        source: '/api/roi-agent',
-        headers: [{ key: '', value: '' }],
-      },
-    ]
+    return []
   },
   webpack: (config) => {
     config.module.rules.push({
