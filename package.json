@@ -53,7 +53,7 @@
     "*.{json,css,md}": "prettier --write"
   },
   "devDependencies": {
-    "@next/env": "^16.2.10",
+    "@next/env": "^15.5.19",
     "@playwright/test": "^1.61.0",
     "@types/react": "^18.3.12",
     "@types/react-dom": "^18.3.1",

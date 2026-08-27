@@ -32,7 +32,6 @@ const nextConfig = {
     return [
       {
         source: '/api/roi-agent',
-        headers: [{ key: 'x-vercel-max-duration', value: '300' }],
       },
     ]
   },
