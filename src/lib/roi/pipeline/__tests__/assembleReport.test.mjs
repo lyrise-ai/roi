@@ -114,7 +114,7 @@ describe('assembleReport — annual revenue flagging', () => {
       assert.match(out.display.companySnapshotTableBody, /\$1M–\$5M/)
       assert.match(
         out.display.companySnapshotTableBody,
-        /class="badge-scraped">Provided</,
+        /class="badge-provided">Provided</,
       )
       assert.doesNotMatch(
         out.display.companySnapshotTableBody,
@@ -149,3 +149,78 @@ describe('assembleReport — annual revenue flagging', () => {
     })
   })
 })
+
+describe('assembleReport — headcount and country provenance & tier flagging', () => {
+  describe('headcount provenance', () => {
+    test('user-supplied headcount is marked Provided and Validated', () => {
+      const out = buildAssembled({
+        normInput: { teamSize: '50' },
+        company: { employees: 50 },
+      })
+      assert.match(
+        out.display.companySnapshotTableBody,
+        /class="badge-provided">Provided</,
+      )
+      const html = out.display.provenanceTableHTML
+      assert.match(html, /Headcount/)
+      assert.match(html, />Provided</)
+      assert.match(html, />Validated</)
+    })
+
+    test('scraped headcount is marked Scraped and Needs validation', () => {
+      const out = buildAssembled({
+        normInput: { teamSize: '' },
+        company: { employees: 35 },
+      })
+      assert.match(
+        out.display.companySnapshotTableBody,
+        /class="badge-scraped">Scraped — LinkedIn</,
+      )
+      const html = out.display.provenanceTableHTML
+      assert.match(html, /Headcount/)
+      assert.match(html, />Scraped — LinkedIn \/ Apollo</)
+      assert.match(html, />Needs validation</)
+    })
+  })
+
+  describe('country provenance', () => {
+    test('user-supplied country is marked Provided and Validated', () => {
+      const out = buildAssembled({
+        normInput: { country: 'Egypt' },
+        company: { country: 'United States' },
+      })
+      assert.match(
+        out.display.companySnapshotTableBody,
+        /Country: Egypt/,
+      )
+      assert.match(
+        out.display.companySnapshotTableBody,
+        /class="badge-provided">Provided</,
+      )
+      const html = out.display.provenanceTableHTML
+      assert.match(html, /Country/)
+      assert.match(html, />Provided</)
+      assert.match(html, />Validated</)
+    })
+
+    test('scraped country is marked Scraped and Needs validation', () => {
+      const out = buildAssembled({
+        normInput: { country: '' },
+        company: { country: 'United States' },
+      })
+      assert.match(
+        out.display.companySnapshotTableBody,
+        /Country: United States/,
+      )
+      assert.match(
+        out.display.companySnapshotTableBody,
+        /class="badge-scraped">Scraped</,
+      )
+      const html = out.display.provenanceTableHTML
+      assert.match(html, /Country/)
+      assert.match(html, />Scraped</)
+      assert.match(html, />Needs validation</)
+    })
+  })
+})
+
