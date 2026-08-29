@@ -30,12 +30,7 @@ const nextConfig = {
     ]
   },
   async headers() {
-    return [
-      {
-        source: '/api/roi-agent',
-        headers: [{ key: 'x-vercel-max-duration', value: '300' }],
-      },
-    ]
+    return []
   },
   webpack: (config) => {
     config.module.rules.push({

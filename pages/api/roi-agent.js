@@ -341,11 +341,16 @@ export default async function handler(req, res) {
   // An alpha tester gets one report per account, which keeps the guided tour to
   // a single run. Normal clients and our own staff can generate as many as they
   // like.
+  //
+  // We filter specifically for finished reports ('SUCCESS'). Counting anything
+  // except explicit failures would treat in-progress or abandoned states like
+  // DRAFT as finished runs, locking testers out after a single failed attempt.
   if (mode === 'generate' && isAlpha && user) {
     const { data: existingReport } = await supabase
       .from('reports')
       .select('id')
       .eq('user_id', user.id)
+      .eq('status', 'SUCCESS')
       .limit(1)
       .maybeSingle()
     if (existingReport) {

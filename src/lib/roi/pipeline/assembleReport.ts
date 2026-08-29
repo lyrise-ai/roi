@@ -452,7 +452,7 @@ export function assembleReport(state: ReportState): AssembleReportOutput {
         const monthlyValue = Math.round(wf.monthlyHours * wf.effectiveRate)
         const srcClass =
           wf.sourceType === 'user_stated'
-            ? 'badge-scraped'
+            ? 'badge-provided'
             : wf.sourceType === 'research_derived'
               ? 'badge-scraped'
               : 'badge-benchmarked'
