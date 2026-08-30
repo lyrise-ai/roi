@@ -58,4 +58,13 @@ export const EVENTS = {
    *  real page. A spike means the agent is inventing citations, which is the
    *  exact failure the whole research system was rebuilt to make impossible. */
   RESEARCH_FINDING_REFUSED: 'research_finding_refused',
+  /** One V2 agent woke, took a turn and went back to sleep. Carries which agent,
+   *  how many turns it took, what it cost and whether it stopped to ask a
+   *  question. Waking often is only cheap if each wake is small, and this is
+   *  what tells us whether it is. */
+  AGENT_WAKE: 'agent_wake',
+  /** An agent's saved state crossed the size line. Almost always page text in
+   *  `messages` instead of a URL — a row that is read and rewritten on every
+   *  wake, getting worse each time, and invisible until somebody looks. */
+  AGENT_RUN_TOO_BIG: 'agent_run_too_big',
 } as const
