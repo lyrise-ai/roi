@@ -498,6 +498,12 @@ const QUANT = [
     estimate: 'Nothing to base one on',
     kind: 'estimated',
     why: 'We couldn’t find anything public about you, so an estimate here would be a guess about a guess. This one matters most — it multiplies everything below it — so it’s worth your real number.',
+    bands: [
+      { label: 'under 20', low: 0, high: 20 },
+      { label: '20–100', low: 20, high: 100 },
+      { label: '100–500', low: 100, high: 500 },
+      { label: '500 or more', low: 500, high: 1000 },
+    ],
   },
   {
     label: 'How many people do it?',
@@ -505,6 +511,12 @@ const QUANT = [
     estimate: 'Nothing to base one on',
     kind: 'estimated',
     why: 'Nothing we found tells us how many people touch this. Your number is the only one worth having.',
+    bands: [
+      { label: '1–3', low: 1, high: 3 },
+      { label: '4–10', low: 4, high: 10 },
+      { label: '10–25', low: 10, high: 25 },
+      { label: '25 or more', low: 25, high: 50 },
+    ],
   },
   {
     label: 'Hours a week, each?',
@@ -512,6 +524,12 @@ const QUANT = [
     estimate: 'Nothing to base one on',
     kind: 'estimated',
     why: 'This one varies more between two companies of the same size than almost anything else, and we have nothing on yours to narrow it.',
+    bands: [
+      { label: 'under 5', low: 0, high: 5 },
+      { label: '5–15', low: 5, high: 15 },
+      { label: '15–30', low: 15, high: 30 },
+      { label: '30 or more', low: 30, high: 40 },
+    ],
   },
   {
     label: 'Roughly what they earn?',
@@ -519,6 +537,12 @@ const QUANT = [
     estimate: 'Nothing to base one on',
     kind: 'estimated',
     why: 'Pay depends on the role and the market, and we don’t know either for you yet. A rough band is fine.',
+    bands: [
+      { label: 'under $30k', low: 0, high: 30000 },
+      { label: '$30k–$60k', low: 30000, high: 60000 },
+      { label: '$60k–$100k', low: 60000, high: 100000 },
+      { label: '$100k or more', low: 100000, high: 150000 },
+    ],
   },
   {
     label:
@@ -527,6 +551,12 @@ const QUANT = [
     estimate: 'about a third',
     kind: 'estimated',
     why: 'Our read across this kind of work, not a read of yours: the repetitive part follows rules, the odd cases still need judgment. Nothing scraped — correct it freely.',
+    bands: [
+      { label: 'under 25%', low: 0, high: 0.25 },
+      { label: '25%–50%', low: 0.25, high: 0.5 },
+      { label: '50%–75%', low: 0.5, high: 0.75 },
+      { label: '75% or more', low: 0.75, high: 1.0 },
+    ],
   },
 ]
 
@@ -1125,6 +1155,7 @@ function Interview({
               estimate={q.estimate}
               estimateBasis={q.why}
               estimateSource={q.kind}
+              bands={q.bands}
             />
           </Divider>
         ))}
@@ -1325,6 +1356,12 @@ function Reveal({ flow, demo, onRestart }) {
     fields.people.source === 'estimate' ||
     fields.hoursPerWeek.source === 'estimate'
 
+  const hasRange =
+    fields.people.isRange ||
+    fields.hoursPerWeek.isRange ||
+    fields.annualPay.isRange ||
+    fields.automatablePct.isRange
+
   // Piece 4: the pop-up that shows how the money figure was worked out. The
   // Escape-to-close code lives here, not in the shared Dialog component,
   // because Dialog has no Escape handling of its own (and neither does its
@@ -1381,7 +1418,9 @@ function Reveal({ flow, demo, onRestart }) {
               returned" or "hours saved", and never mark it, because it holds
               no guess beyond what was typed. */}
           <div>
-            <p style={FIGURE_LABEL}>Hours currently spent</p>
+            <p style={FIGURE_LABEL}>
+              Hours currently spent{hasRange ? ' (range midpoint)' : ''}
+            </p>
             <p style={FIGURE_VALUE}>
               {comma(figures.calc.annualHours)}
               <span style={FIGURE_UNIT}>hrs / year</span>
@@ -1400,7 +1439,10 @@ function Reveal({ flow, demo, onRestart }) {
 
           {figures.complete ? (
             <div>
-              <p style={FIGURE_LABEL}>Hours returned, and what that’s worth</p>
+              <p style={FIGURE_LABEL}>
+                Hours returned, and what that’s worth
+                {hasRange ? ' (range midpoint)' : ''}
+              </p>
               <p style={FIGURE_VALUE}>
                 {comma(figures.calc.hoursReturned)}
                 <span style={FIGURE_UNIT}>hrs / year</span>

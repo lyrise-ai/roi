@@ -92,30 +92,56 @@ export function SegmentedInput({
   estimateLoading = false,
   escapeLabel = "I'll give the real number",
   onEscape,
+  bands,
   style,
   ...rest
 }) {
   const mode = value.mode || 'exact'
-  const set = (patch) => onChange && onChange({ ...value, ...patch })
-  const escape = () => (onEscape ? onEscape() : set({ mode: 'exact' }))
+
+  const set = (patch) => {
+    if (!onChange) return
+    const nextMode = patch.mode || mode
+    onChange({ mode: nextMode, ...patch })
+  }
+
+  const DEFAULT_BANDS = [
+    { label: 'under 20', low: 0, high: 20 },
+    { label: '20–100', low: 20, high: 100 },
+    { label: '100–500', low: 100, high: 500 },
+    { label: '500 or more', low: 500, high: 1000 },
+  ]
+  const activeBands = bands || DEFAULT_BANDS
 
   return (
     <div
       style={{
         display: 'flex',
         flexDirection: 'column',
-        gap: 'var(--space-3)',
+        gap: 'var(--space-2)',
         ...style,
       }}
       {...rest}
     >
-      {label && (
-        <label
+      <div
+        style={{
+          display: 'flex',
+          alignItems: 'baseline',
+          justifyContent: 'space-between',
+        }}
+      >
+        <span
           style={{ font: 'var(--type-label)', color: 'var(--text-heading)' }}
         >
           {label}
-        </label>
-      )}
+        </span>
+        {hint && (
+          <span
+            style={{ font: 'var(--type-body)', color: 'var(--text-muted)' }}
+          >
+            {hint}
+          </span>
+        )}
+      </div>
 
       <div
         role="radiogroup"
@@ -124,33 +150,30 @@ export function SegmentedInput({
           display: 'grid',
           gridTemplateColumns: 'repeat(3, 1fr)',
           gap: 4,
-          padding: 4,
-          background: 'var(--neutral-100)',
+          padding: 3,
+          background: 'var(--surface-subtle)',
           borderRadius: 'var(--radius-pill)',
         }}
       >
         {MODES.map((m) => {
-          const on = m.value === mode
+          const selected = mode === m.value
           return (
             <button
               key={m.value}
               type="button"
               role="radio"
-              aria-checked={on}
+              aria-checked={selected}
               onClick={() => set({ mode: m.value })}
               style={{
-                minWidth: 0,
-                border: 'none',
+                border: 0,
                 cursor: 'pointer',
-                padding: '9px 12px',
+                padding: '8px 12px',
                 borderRadius: 'var(--radius-pill)',
                 font: 'var(--type-label)',
-                whiteSpace: 'normal',
                 textAlign: 'center',
-                textWrap: 'balance',
-                background: on ? 'var(--surface-card)' : 'transparent',
-                color: on ? 'var(--text-heading)' : 'var(--text-muted)',
-                boxShadow: on ? 'var(--shadow-xs)' : 'none',
+                background: selected ? 'var(--surface-card)' : 'transparent',
+                color: selected ? 'var(--text-heading)' : 'var(--text-muted)',
+                boxShadow: selected ? 'var(--shadow-xs)' : 'none',
                 transition: 'var(--transition-control)',
               }}
             >
@@ -171,26 +194,63 @@ export function SegmentedInput({
       )}
 
       {mode === 'range' && (
-        <div style={{ display: 'flex', alignItems: 'center', gap: 10 }}>
-          <Field
-            prefix={prefix}
-            suffix={suffix}
-            placeholder="Low"
-            value={value.low || ''}
-            onChange={(e) => set({ low: e.target.value })}
-          />
-          <span
-            style={{ font: 'var(--type-body)', color: 'var(--text-muted)' }}
-          >
-            to
-          </span>
-          <Field
-            prefix={prefix}
-            suffix={suffix}
-            placeholder="High"
-            value={value.high || ''}
-            onChange={(e) => set({ high: e.target.value })}
-          />
+        <div
+          role="radiogroup"
+          aria-label={`${label || 'Range'} options`}
+          style={{
+            display: 'grid',
+            gridTemplateColumns: 'repeat(auto-fit, minmax(100px, 1fr))',
+            gap: 8,
+          }}
+        >
+          {activeBands.map((b) => {
+            const labelStr = typeof b === 'string' ? b : b.label
+            const lowVal = typeof b === 'string' ? undefined : b.low
+            const highVal = typeof b === 'string' ? undefined : b.high
+            const isSelected =
+              value.band === labelStr ||
+              (value.low === lowVal &&
+                value.high === highVal &&
+                lowVal !== undefined)
+            return (
+              <button
+                key={labelStr}
+                type="button"
+                role="radio"
+                aria-checked={isSelected}
+                onClick={() =>
+                  set({
+                    mode: 'range',
+                    band: labelStr,
+                    low: lowVal,
+                    high: highVal,
+                  })
+                }
+                style={{
+                  border:
+                    '1px solid ' +
+                    (isSelected
+                      ? 'var(--lyrise-purple)'
+                      : 'var(--border-subtle)'),
+                  cursor: 'pointer',
+                  padding: '9px 12px',
+                  borderRadius: 'var(--radius-field)',
+                  font: 'var(--type-label)',
+                  textAlign: 'center',
+                  background: 'var(--surface-card)',
+                  color: isSelected
+                    ? 'var(--text-heading)'
+                    : 'var(--text-muted)',
+                  boxShadow: isSelected
+                    ? '0 0 0 1px var(--lyrise-purple)'
+                    : 'none',
+                  transition: 'var(--transition-control)',
+                }}
+              >
+                {labelStr}
+              </button>
+            )
+          })}
         </div>
       )}
 
