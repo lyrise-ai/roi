@@ -98,6 +98,7 @@ test('range: averages low and high', () => {
     value: 7.5,
     isEstimated: false,
     source: 'user',
+    isRange: true,
   })
 })
 
@@ -106,15 +107,50 @@ test('range: one bound alone is used as-is', () => {
     value: 5,
     isEstimated: false,
     source: 'user',
+    isRange: true,
   })
   assert.deepEqual(bridgeAnswer({ mode: 'range', high: '10' }), {
     value: 10,
     isEstimated: false,
     source: 'user',
+    isRange: true,
   })
 })
 
-test('range: neither bound is missing, not 0', () => {
+test('range: parses band selection and computes midpoint with user source', () => {
+  assert.deepEqual(bridgeAnswer({ mode: 'range', band: '20–100' }), {
+    value: 60,
+    isEstimated: false,
+    source: 'user',
+    isRange: true,
+  })
+  assert.deepEqual(bridgeAnswer({ mode: 'range', band: '4–10' }), {
+    value: 7,
+    isEstimated: false,
+    source: 'user',
+    isRange: true,
+  })
+  assert.deepEqual(bridgeAnswer({ mode: 'range', band: '$30k–$60k' }), {
+    value: 45_000,
+    isEstimated: false,
+    source: 'user',
+    isRange: true,
+  })
+  assert.deepEqual(bridgeAnswer({ mode: 'range', band: 'under 20' }), {
+    value: 10,
+    isEstimated: false,
+    source: 'user',
+    isRange: true,
+  })
+  assert.deepEqual(bridgeAnswer({ mode: 'range', band: '500 or more' }), {
+    value: 750,
+    isEstimated: false,
+    source: 'user',
+    isRange: true,
+  })
+})
+
+test('range: neither bound nor band is missing, not 0', () => {
   assert.deepEqual(bridgeAnswer({ mode: 'range' }), {
     value: null,
     isEstimated: false,
