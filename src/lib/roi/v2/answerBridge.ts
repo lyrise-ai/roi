@@ -29,22 +29,76 @@
 
 export type SegmentedAnswer =
   | { mode: 'exact'; exact?: string }
-  | { mode: 'range'; low?: string; high?: string }
+  | {
+      mode: 'range'
+      low?: string | number
+      high?: string | number
+      band?: string
+    }
   | { mode: 'estimate' }
 
 export interface BridgedField {
   value: number | null
   isEstimated: boolean
-  // Where the number came from. 'user' means they typed it. 'estimate' means
-  // they left it blank and we used the fixed estimate the questions page had
-  // already shown them for that question (DEMOS[].quant[].estimate in
-  // pages/v2/index.jsx) — POC only, see parseEstimateText below. There is
-  // still nothing that works a number out from research (POC 9 / LYR-187 area,
-  // Yousef); when that lands it replaces the fixed estimate, not this field.
+  // Where the number came from. 'user' means they typed it or chose a range band.
+  // 'estimate' means they left it blank and we used the fixed estimate.
   source: 'user' | 'estimate' | null
+  isRange?: boolean
 }
 
 const MISSING: BridgedField = { value: null, isEstimated: false, source: null }
+
+const PRESET_BAND_MIDPOINTS: Record<string, { low: number; high: number }> = {
+  // Volume
+  'under 20': { low: 0, high: 20 },
+  '20–100': { low: 20, high: 100 },
+  '100–500': { low: 100, high: 500 },
+  '500 or more': { low: 500, high: 1000 },
+  // People
+  '1–3': { low: 1, high: 3 },
+  '4–10': { low: 4, high: 10 },
+  '10–25': { low: 10, high: 25 },
+  '25 or more': { low: 25, high: 50 },
+  // Hours
+  'under 5': { low: 0, high: 5 },
+  '5–15': { low: 5, high: 15 },
+  '15–30': { low: 15, high: 30 },
+  '30 or more': { low: 30, high: 40 },
+  // Pay
+  'under $30k': { low: 0, high: 30000 },
+  '$30k–$60k': { low: 30000, high: 60000 },
+  '$60k–$100k': { low: 60000, high: 100000 },
+  '$100k or more': { low: 100000, high: 150000 },
+  // Automatable
+  'under 25%': { low: 0, high: 0.25 },
+  '25%–50%': { low: 0.25, high: 0.5 },
+  '50%–75%': { low: 0.5, high: 0.75 },
+  '75% or more': { low: 0.75, high: 1.0 },
+}
+
+export function parseBandText(
+  raw: string | undefined,
+): { low: number; high: number } | null {
+  if (!raw) return null
+  const trimmed = raw.trim().toLowerCase()
+  if (PRESET_BAND_MIDPOINTS[trimmed]) return PRESET_BAND_MIDPOINTS[trimmed]
+
+  if (trimmed.startsWith('under ') || trimmed.startsWith('less than ')) {
+    const num = parseNumeric(trimmed.replace(/^(under|less than)\s+/i, ''))
+    if (num !== null) return { low: 0, high: num }
+  }
+  if (trimmed.endsWith(' or more') || trimmed.endsWith('+')) {
+    const num = parseNumeric(trimmed.replace(/(\s*or more|\+)$/i, ''))
+    if (num !== null) return { low: num, high: num * 2 }
+  }
+  const parts = trimmed.split(/–|-|to/)
+  if (parts.length === 2) {
+    const low = parseNumeric(parts[0])
+    const high = parseNumeric(parts[1])
+    if (low !== null && high !== null) return { low, high }
+  }
+  return null
+}
 
 // TODO(agent) — the rule for every typed answer in this flow: if we ask the
 // user to type it, an agent has to read it, not a pattern match.
@@ -123,10 +177,7 @@ function orEstimate(field: BridgedField, estimate?: string): BridgedField {
 // use, with a note saying where it came from.
 // - 'exact': the number they typed, or missing if the box was empty or we
 //   could not read it.
-// - 'range': the middle of low and high. If only one of the two was filled in,
-//   we use that one.
-//   TODO: the team chose the middle (Amany/Yousef); revisit if they would
-//   rather be cautious and use the low end.
+// - 'range': the midpoint of the selected preset band or low/high bounds.
 // - 'estimate': they gave no number. We flag it as an estimate and leave the
 //   value empty rather than inventing one — see the `source` note above.
 export function bridgeAnswer(
@@ -141,14 +192,42 @@ export function bridgeAnswer(
         : { value, isEstimated: false, source: 'user' }
     }
     case 'range': {
-      const low = parseNumeric(answer.low)
-      const high = parseNumeric(answer.high)
+      let low = parseNumeric(
+        typeof answer.low === 'number' ? String(answer.low) : answer.low,
+      )
+      let high = parseNumeric(
+        typeof answer.high === 'number' ? String(answer.high) : answer.high,
+      )
+
+      if (low === null && high === null && answer.band) {
+        const bandBounds = parseBandText(answer.band)
+        if (bandBounds) {
+          low = bandBounds.low
+          high = bandBounds.high
+        }
+      }
+
       if (low === null && high === null) return MISSING
       if (low === null)
-        return { value: high, isEstimated: false, source: 'user' }
+        return {
+          value: high,
+          isEstimated: false,
+          source: 'user',
+          isRange: true,
+        }
       if (high === null)
-        return { value: low, isEstimated: false, source: 'user' }
-      return { value: (low + high) / 2, isEstimated: false, source: 'user' }
+        return {
+          value: low,
+          isEstimated: false,
+          source: 'user',
+          isRange: true,
+        }
+      return {
+        value: (low + high) / 2,
+        isEstimated: false,
+        source: 'user',
+        isRange: true,
+      }
     }
     case 'estimate':
       return { value: null, isEstimated: true, source: null }
