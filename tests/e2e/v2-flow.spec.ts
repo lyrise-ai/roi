@@ -404,33 +404,38 @@ test.describe('/v2', () => {
     ).toBeVisible()
   })
 
-  test('renders scan panel with gaps when site could not be reached (LYR-225)', async ({
+  test('allows selecting range bands and carries range provenance to reveal', async ({
     page,
   }) => {
-    const gaps = [
-      'Their site did not answer within 15 seconds. The site is real but slower than we waited — this says nothing about the company.',
-    ]
-    await page.route('**/api/v2/research*', async (route) => {
-      await route.fulfill({
-        status: 200,
-        contentType: 'text/event-stream',
-        body:
-          `data: ${JSON.stringify({ type: 'gaps', gaps })}\n\n` +
-          `data: ${JSON.stringify({ type: 'done' })}\n\n`,
-      })
-    })
-
     await page.goto('/v2')
     await page.getByRole('button', { name: 'Start with my company' }).click()
-    await page.getByLabel('Company name').fill('STA Law Firm')
-    await page.getByLabel('Website').fill('stalawfirm.com')
+    await page.getByLabel('Company name').fill('Harbourfield Legal')
+    await page.getByLabel('Website').fill('harbourfield.com')
     await page.getByRole('button', { name: 'Next', exact: true }).click()
 
-    const panel = page.getByRole('complementary')
-    await expect(panel).toBeVisible()
-    await expect(panel).toContainText('What we looked at for STA Law Firm')
-    await expect(panel).toContainText(
-      'Their site did not answer within 15 seconds',
-    )
+    await page
+      .getByRole('textbox', { name: /Where do your teams lose/ })
+      .fill('Re-keying intake forms')
+
+    // Switch People question to "A range" and pick "4–10" band
+    await page.getByRole('radio', { name: 'A range' }).nth(1).click()
+    await page.getByRole('radio', { name: '4–10' }).click()
+
+    // Answer the remaining quantity questions
+    await page.getByPlaceholder('12', { exact: true }).fill('12')
+    await page.getByPlaceholder('$70k a year', { exact: true }).fill('70000')
+    await page.getByPlaceholder('about a third', { exact: true }).fill('30')
+
+    await page.getByRole('button', { name: 'That’s all for now' }).click()
+
+    await expect(page.getByText('Step 4 of 4')).toBeVisible()
+
+    // Observation sentence uses range phrasing
+    await expect(
+      page.getByText(/Around seven people spending twelve hours a week/),
+    ).toBeVisible()
+
+    // Reveal indicates range midpoint
+    await expect(page.getByText(/range midpoint/).first()).toBeVisible()
   })
 })
