@@ -3,11 +3,18 @@ import type * as React from 'react'
 export type SegmentedInputMode = 'exact' | 'range' | 'estimate'
 export type ProvenanceKind = 'given' | 'scraped' | 'benchmarked' | 'estimated'
 
+export interface BandOption {
+  label: string
+  low?: number
+  high?: number
+}
+
 export interface SegmentedInputValue {
   mode?: SegmentedInputMode
   exact?: string | number
   low?: string | number
   high?: string | number
+  band?: string
 }
 
 /** One number question, three equal-weight ways to answer it. */
@@ -24,6 +31,8 @@ export interface SegmentedInputProps extends Omit<
   placeholder?: string
   value?: SegmentedInputValue
   onChange?: (next: SegmentedInputValue) => void
+  /** Preset range options for the range mode. */
+  bands?: (BandOption | string)[]
   /** Formatted estimate shown in the AI path. */
   estimate?: React.ReactNode
   /** One line saying where the estimate came from. Required whenever `estimate` is set. */
