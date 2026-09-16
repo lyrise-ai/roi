@@ -39,7 +39,6 @@ import Head from 'next/head'
 import { useRouter } from 'next/router'
 import Image from 'next/image'
 import Logo from '@/src/assets/logo.svg'
-import { fmtDate } from '@/src/lib/formatDate'
 import {
   Button,
   Dialog,

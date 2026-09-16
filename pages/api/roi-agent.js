@@ -341,11 +341,17 @@ export default async function handler(req, res) {
   // An alpha tester gets one report per account, which keeps the guided tour to
   // a single run. Normal clients and our own staff can generate as many as they
   // like.
+  //
+  // Only a finished report ('SUCCESS') counts. A run that never got that far
+  // left either no row at all or an older half-finished one — see the
+  // 'PENDING_VERIFICATION' rows still in the database — and neither is a
+  // report the tester got to see, so neither should use up their one go.
   if (mode === 'generate' && isAlpha && user) {
     const { data: existingReport } = await supabase
       .from('reports')
       .select('id')
       .eq('user_id', user.id)
+      .eq('status', 'SUCCESS')
       .limit(1)
       .maybeSingle()
     if (existingReport) {
