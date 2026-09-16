@@ -46,7 +46,7 @@ let tmpDir
 /* The fake database. `rows` is what has been written; `reads` and `writes` count
    the queries, which is how the "warm instance never reads" test can tell the
    difference between a memory hit and a lucky one. */
-const db = { rows: new Map(), reads: 0, writes: 0 }
+const db = { rows: new Map(), reads: 0, writes: 0, breakReads: false }
 
 before(async () => {
   const cacheRoot = path.resolve(here, '../../../../..', 'node_modules/.cache')
@@ -70,6 +70,9 @@ before(async () => {
                    return {
                      async maybeSingle() {
                        globalThis.__db.reads += 1
+                       if (globalThis.__db.breakReads) {
+                         return { data: null, error: { message: 'connection reset' } }
+                       }
                        const row = globalThis.__db.rows.get(id)
                        return { data: row ?? null, error: null }
                      },
@@ -128,6 +131,7 @@ beforeEach(() => {
   db.rows.clear()
   db.reads = 0
   db.writes = 0
+  db.breakReads = false
 })
 
 /* A stand-in agent. `turns` is a list of what each successive generate() call
@@ -352,6 +356,37 @@ test('a long run stays well under the size line', async () => {
   )
 })
 
+// ── A database blip must not wipe an interview ──────────────────────────────
+
+test('a run whose row could not be read is never written over', async () => {
+  /* Two wakes of real work, safely in the row. */
+  const agent = fakeAgent([answered('Noted.'), answered('Noted again.')])
+  await wake('run-j', 'report', agent, 'They have 12 people.')
+  await wake('run-j', 'report', agent, 'Four of them chase invoices.')
+
+  const saved = structuredClone(db.rows.get('run-j').state)
+  assert.equal(saved.wakes, 2)
+
+  /* A cold instance, and the database picks this moment to refuse the read.
+     The wake still happens — the person gets an answer — but what it builds is
+     a blank, and a blank must not go anywhere near the row. */
+  clearRunCache()
+  db.breakReads = true
+  const blip = await wake('run-j', 'report', agent, 'And another thing.')
+  assert.equal(blip.run.wakes, 1, 'it started from nothing, as expected')
+
+  assert.deepEqual(
+    db.rows.get('run-j').state,
+    saved,
+    'the row we could not read must still hold both earlier wakes',
+  )
+
+  /* And once the database is back, the real run comes back with it. */
+  db.breakReads = false
+  const back = await loadRun('run-j', 'report')
+  assert.equal(back.wakes, 2)
+})
+
 // ── Nothing here throws ─────────────────────────────────────────────────────
 
 test('a broken turn comes back as unfinished, and what was done is kept', async () => {
@@ -368,4 +403,77 @@ test('a broken turn comes back as unfinished, and what was done is kept', async 
   /* Saved regardless, so the next wake does not repeat what already happened. */
   assert.equal(db.writes, 1)
   assert.equal(result.run.messages.length, 1)
+})
+
+// ── A failed tool is not a question ─────────────────────────────────────────
+
+/* A turn that ended on a tool that RAN and threw. The ai library files a thrown
+   tool under `tool-error` in the step, NOT in `toolResults`, so the call looks
+   unanswered to anything that only reads `toolResults`. */
+function toolBroke() {
+  const call = {
+    toolCallId: 'call-9',
+    toolName: 'readPage',
+    input: { url: 'https://acmelaw.com/careers' },
+  }
+  return {
+    response: {
+      messages: [
+        { role: 'assistant', content: [{ type: 'tool-call', ...call }] },
+      ],
+    },
+    toolCalls: [call],
+    toolResults: [],
+    steps: [
+      {
+        content: [
+          { type: 'tool-error', toolCallId: 'call-9', toolName: 'readPage' },
+        ],
+      },
+    ],
+    totalUsage: { inputTokens: 50, outputTokens: 5 },
+  }
+}
+
+test('a tool that ran and threw is never shown to the person as a question', async () => {
+  const agent = fakeAgent([toolBroke()])
+  const result = await wake('run-k', 'report', agent, 'go')
+
+  /* Get this wrong and the person is asked "readPage: https://acmelaw.com/
+     careers", and the run parks on it forever — no later event can wake it. */
+  assert.equal(result.asking, null)
+  assert.equal(result.finished, true)
+})
+
+// ── Two wakes at once ───────────────────────────────────────────────────────
+
+test('two wakes on one run queue instead of overlapping', async () => {
+  /* The person answers a question at the same moment research finishes. Both
+     wake the same agent, and both hold the same list of messages. */
+  let inFlight = 0
+  let most = 0
+  const agent = {
+    async generate() {
+      inFlight += 1
+      most = Math.max(most, inFlight)
+      await new Promise((resolve) => setTimeout(resolve, 10))
+      inFlight -= 1
+      return answered('Noted.')
+    },
+  }
+
+  await Promise.all([
+    wake('run-j', 'report', agent, 'they answered question three'),
+    wake('run-j', 'report', agent, 'research finished'),
+  ])
+
+  assert.equal(most, 1, 'the second wake must wait for the first')
+
+  /* Nothing was lost and nothing was interleaved: one conversation, in order. */
+  const run = await loadRun('run-j', 'report')
+  assert.deepEqual(
+    run.messages.filter((m) => m.role === 'user').map((m) => m.content),
+    ['they answered question three', 'research finished'],
+  )
+  assert.equal(run.wakes, 2)
 })

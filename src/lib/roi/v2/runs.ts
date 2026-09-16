@@ -114,6 +114,10 @@ export type Run = {
   wakes: number
   tokensIn: number
   tokensOut: number
+  /* Set when the database would not hand this run's row over, so what you are
+     holding is a blank that only looks like the run. Never written to the row —
+     it is a fact about one read, not about the run. See `loadRun`. */
+  unreadable?: boolean
 }
 
 /* What one wake did. */
@@ -164,9 +168,16 @@ function supabaseConfigured(): boolean {
 
 /* Reads the row. Unlike `pages.ts`, a failure here is NOT harmless — losing this
    loses the agent's memory — so it says so out loud rather than swallowing it.
-   It still returns null instead of throwing, because starting the agent again
-   from nothing is a worse report, and a thrown error is no report at all. */
-async function readRow(id: string): Promise<Run | null> {
+   It still returns instead of throwing, because starting the agent again from
+   nothing is a worse report, and a thrown error is no report at all.
+
+   "The read broke" and "there is no such run" are different answers, and the
+   caller has to tell them apart: a broken read must not be remembered as an
+   empty run, nor written over the row it failed to see. So a break comes back
+   as FAILED and the ordinary absence comes back as null. */
+const FAILED = Symbol('read failed')
+
+async function readRow(id: string): Promise<Run | null | typeof FAILED> {
   if (!supabaseConfigured()) return null
   try {
     const { getSupabaseAdmin } = await import('../../supabaseAdmin')
@@ -175,7 +186,16 @@ async function readRow(id: string): Promise<Run | null> {
       .select('id, kind, state, expires_at')
       .eq('id', id)
       .maybeSingle()
-    if (error || !data) return null
+    /* supabase-js hands a database fault back as `error` rather than throwing,
+       so this is the branch that actually catches one. Silence here is how a
+       run quietly loses its memory. */
+    if (error) {
+      console.error(
+        `[run ${id}] could not read its state: ${error.message}. Not building over it.`,
+      )
+      return FAILED
+    }
+    if (!data) return null
     if (new Date(data.expires_at).getTime() <= Date.now()) return null
     const state = data.state ?? {}
     return {
@@ -191,19 +211,32 @@ async function readRow(id: string): Promise<Run | null> {
     }
   } catch (error) {
     console.error(
-      `[run ${id}] could not read its state: ${message(error)}. Starting from nothing.`,
+      `[run ${id}] could not read its state: ${message(error)}. Not building over it.`,
     )
-    return null
+    return FAILED
   }
 }
 
 /* Loads a run. Memory first — on a warm instance mid-interview that is every
-   wake after the first. */
+   wake after the first.
+
+   A run built after a FAILED read is deliberately not remembered, and is marked
+   so `saveRun` will not write it either. It is a blank that only looks like the
+   real run: remembering it would mean every later wake on this instance carried
+   on from nothing, and saving it would replace a row that is still perfectly
+   good with that nothing — a 200ms database blip wiping a whole interview.
+   Neither, and the next wake gets a fresh chance at the real row. */
 export async function loadRun(id: string, kind: RunKind): Promise<Run> {
   const held = memory.get(id)
   if (held) return held
 
   const row = await readRow(id)
+  if (row === FAILED) {
+    const blank = emptyRun(id, kind)
+    blank.unreadable = true
+    return blank
+  }
+
   const run = row ?? emptyRun(id, kind)
   memory.set(id, run)
   return run
@@ -216,6 +249,18 @@ export async function loadRun(id: string, kind: RunKind): Promise<Run> {
    still correct in memory. It is logged at error, because unlike a missing web
    page this is a real fault. */
 export async function saveRun(run: Run): Promise<void> {
+  /* We never read this run's row, so we do not know what is in it. Writing now
+     would replace an interview's whole memory — including a question it is
+     waiting on — with a blank, and that cannot be undone. Losing this one
+     wake's work is the smaller loss, and the next wake reads the row again. */
+  if (run.unreadable) {
+    console.error(
+      `[run ${run.id}] not saved: its row could not be read, and writing over ` +
+        `state we never saw would lose it for good. Next wake reads it again.`,
+    )
+    return
+  }
+
   memory.set(run.id, run)
 
   const state = {
@@ -249,7 +294,7 @@ export async function saveRun(run: Run): Promise<void> {
   if (!supabaseConfigured()) return
   try {
     const { getSupabaseAdmin } = await import('../../supabaseAdmin')
-    await getSupabaseAdmin()
+    const { error } = await getSupabaseAdmin()
       .from('agent_runs')
       .upsert(
         {
@@ -261,6 +306,14 @@ export async function saveRun(run: Run): Promise<void> {
         },
         { onConflict: 'id' },
       )
+    /* supabase-js reports a rejected write in `error` rather than by throwing.
+       Without this the catch below never fires for the case it was written for,
+       and the row silently stops being written at all. */
+    if (error) {
+      console.error(
+        `[run ${run.id}] could not save its state: ${error.message}`,
+      )
+    }
   } catch (error) {
     console.error(`[run ${run.id}] could not save its state: ${message(error)}`)
   }
@@ -318,12 +371,54 @@ export type WakeOptions = {
   abortSignal?: AbortSignal
 }
 
+/* One wake at a time per run, and the rest queue behind it.
+
+   Two things can reach the same agent at once: the person submitting an answer
+   while a research finding lands. They share one Run object and one list of
+   messages, so overlapping them interleaves what each adds, and the loser's
+   halted tool call is left in the list with nothing answering it and
+   `run.asking` overwritten by the winner. Every wake after that is rejected by
+   the provider, because a conversation where the agent asked for a tool and
+   nothing replied is not a legal one. The run is then stuck for good.
+
+   Queueing also makes "one read and one write per wake" true, which it is not
+   if two wakes are in the middle of each other.
+
+   ponytail: one server at a time. Two Vercel instances can still overlap; the
+   durable answer is a lock on the row, and that is only worth its cost if this
+   ever actually happens. */
+const queue = new Map<string, Promise<void>>()
+
+export function wake(
+  id: string,
+  kind: RunKind,
+  agent: Agent<never, ToolSet, any>,
+  nudge: Nudge,
+  options: WakeOptions = {},
+): Promise<Wake> {
+  const ahead = queue.get(id) ?? Promise.resolve()
+  const mine = ahead.then(() => oneWake(id, kind, agent, nudge, options))
+
+  /* What the next wake waits on. It must never reject, or one broken wake would
+     take every wake queued behind it down with it. */
+  const settled = mine.then(
+    () => {},
+    () => {},
+  )
+  queue.set(id, settled)
+  settled.then(() => {
+    if (queue.get(id) === settled) queue.delete(id)
+  })
+
+  return mine
+}
+
 /* Wake an agent, give it one turn, save, and go back to sleep.
 
    Never throws. This sits on the path that makes a report, and nothing there is
    allowed to throw — a broken wake comes back as `finished: false` with the run
    unchanged apart from what it had already done. */
-export async function wake(
+async function oneWake(
   id: string,
   kind: RunKind,
   agent: Agent<never, ToolSet, any>,
@@ -468,13 +563,23 @@ export async function wake(
 
    A tool with no `execute` produces a call with no result, so the loop cannot
    continue — that mismatch is how we recognise a question rather than the end of
-   a turn. There is at most one, because the loop stops at the first. */
+   a turn. There is at most one, because the loop stops at the first.
+
+   A tool that RAN and threw is answered too, even though it is not in
+   `toolResults` — the ai library files a thrown tool under `tool-error`
+   instead. Miss that and a failed `readPage` on the last step of a turn gets
+   shown to the person as if it were a question, and the run parks on it for
+   good. */
 function halted(result: any): Asking | null {
   const calls = result?.toolCalls ?? []
   if (calls.length === 0) return null
-  const answered = new Set(
-    (result?.toolResults ?? []).map((r: any) => r.toolCallId),
-  )
+  const lastStep = result?.steps?.[result.steps.length - 1]
+  const answered = new Set([
+    ...(result?.toolResults ?? []).map((r: any) => r.toolCallId),
+    ...(lastStep?.content ?? [])
+      .filter((part: any) => part?.type === 'tool-error')
+      .map((part: any) => part.toolCallId),
+  ])
   const open = calls.find((call: any) => !answered.has(call.toolCallId))
   if (!open) return null
   return {
