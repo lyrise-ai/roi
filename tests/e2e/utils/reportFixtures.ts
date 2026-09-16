@@ -143,7 +143,16 @@ export async function deleteReport(
 ): Promise<void> {
   await admin.from('chat_usage').delete().eq('report_id', reportId)
   await admin.from('chat_messages').delete().eq('report_id', reportId)
-  await admin.from('reports').delete().eq('id', reportId)
+  // alpha_feedback points at reports with ON DELETE NO ACTION, so this delete
+  // really can fail. Swallowing it leaves the row behind and the next run
+  // fails somewhere else entirely — a 409 from the alpha one-report cap — with
+  // nothing saying the cleanup was what broke.
+  const { error } = await admin.from('reports').delete().eq('id', reportId)
+  if (error) {
+    throw new Error(
+      `[reportFixtures] failed to delete report ${reportId}: ${error.message}`,
+    )
+  }
 }
 
 // Creates a throwaway account and its matching row, so tests that need

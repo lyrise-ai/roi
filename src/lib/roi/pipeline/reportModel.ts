@@ -41,7 +41,7 @@ export interface SourceRow {
 
 export interface SnapshotRow {
   text: string
-  tier: 'scraped' | 'benchmarked' | 'assumed' // -> badge CSS class in PDF, badge color in web
+  tier: 'provided' | 'scraped' | 'benchmarked' | 'assumed' // -> badge CSS class in PDF, badge color in web
   label: string // exact visible badge text, e.g. "Provided", "Scraped — LinkedIn", "Unknown"
 }
 
@@ -208,14 +208,14 @@ export function buildReportModel(state: ReportState): ReportModel {
   if (company.employees) {
     companySnapshot.push({
       text: `${company.employees.toLocaleString()} employees`,
-      tier: 'scraped',
+      tier: teamSizeFromForm ? 'provided' : 'scraped',
       label: teamSizeFromForm ? 'Provided' : 'Scraped — LinkedIn',
     })
   }
   if (revenueRangeFromForm) {
     companySnapshot.push({
       text: `Annual revenue ${revenueRangeFromForm}`,
-      tier: 'scraped',
+      tier: 'provided',
       label: 'Provided',
     })
   } else if (company.revenueEstimateM) {
@@ -234,7 +234,7 @@ export function buildReportModel(state: ReportState): ReportModel {
   if (countryFromForm) {
     companySnapshot.push({
       text: `Country: ${countryFromForm}`,
-      tier: 'scraped',
+      tier: 'provided',
       label: 'Provided',
     })
   } else if (company.country) {
@@ -302,7 +302,7 @@ export function buildReportModel(state: ReportState): ReportModel {
         ? 'Provided'
         : 'Scraped — LinkedIn / Apollo',
       sourceUrl: null,
-      status: 'Validated',
+      status: teamSizeFromForm ? 'Validated' : 'Needs validation',
     })
   }
   if (countryFromForm) {
@@ -319,7 +319,7 @@ export function buildReportModel(state: ReportState): ReportModel {
       detail: company.country,
       sourceLabel: 'Scraped',
       sourceUrl: null,
-      status: 'Validated',
+      status: 'Needs validation',
     })
   }
   workflows.forEach((wf) => {
