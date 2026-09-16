@@ -27,24 +27,41 @@ test.skip(
 
 let generatedReportId: string | undefined
 
+// An alpha account may only ever hold one report, so a run that crashed
+// half-way leaves a row behind that makes the next run fail with a 409.
+//
+// We clear ONLY the rows this test made. It runs against the one shared
+// Supabase project — the same database production uses — so "delete every
+// report this account owns" would destroy real customer reports and the share
+// links pointing at them the moment TEST_USER_EMAIL names a real account.
+// The company name below is the same prefix the test types into the form.
+const COMPANY_PREFIX = 'E2E Golden Path'
+
 test.beforeEach(async () => {
   const admin = adminClient()
-  const email = process.env.TEST_USER_EMAIL ?? 'yousef.testing@gmail.com'
-  const { data: user } = await admin
+  const email = process.env.TEST_USER_EMAIL
+  if (!email) return
+  const { data: user, error: userError } = await admin
     .from('users')
     .select('id')
     .eq('email', email)
     .maybeSingle()
-  if (user?.id) {
-    const { data: reports } = await admin
-      .from('reports')
-      .select('id')
-      .eq('user_id', user.id)
-    if (reports && reports.length > 0) {
-      for (const r of reports) {
-        await deleteReport(admin, r.id)
-      }
-    }
+  if (userError)
+    throw new Error(`[golden-path] user lookup failed: ${userError.message}`)
+  if (!user?.id) return
+
+  const { data: reports, error: reportsError } = await admin
+    .from('reports')
+    .select('id')
+    .eq('user_id', user.id)
+    .like('company_name', `${COMPANY_PREFIX}%`)
+  if (reportsError)
+    throw new Error(
+      `[golden-path] leftover lookup failed: ${reportsError.message}`,
+    )
+
+  for (const r of reports ?? []) {
+    await deleteReport(admin, r.id)
   }
 })
 
@@ -66,7 +83,7 @@ test('generate (mocked) → validate wizard → report view', async ({ page }) =
     await skipSplash.click()
   }
 
-  const companyName = `E2E Golden Path ${Date.now()}`
+  const companyName = `${COMPANY_PREFIX} ${Date.now()}`
   await page.getByPlaceholder('e.g. Acme Corp').fill(companyName)
   await page.getByRole('button', { name: /continue/i }).click()
 

@@ -189,10 +189,7 @@ describe('assembleReport — headcount and country provenance & tier flagging', 
         normInput: { country: 'Egypt' },
         company: { country: 'United States' },
       })
-      assert.match(
-        out.display.companySnapshotTableBody,
-        /Country: Egypt/,
-      )
+      assert.match(out.display.companySnapshotTableBody, /Country: Egypt/)
       assert.match(
         out.display.companySnapshotTableBody,
         /class="badge-provided">Provided</,
@@ -223,4 +220,3 @@ describe('assembleReport — headcount and country provenance & tier flagging', 
     })
   })
 })
-

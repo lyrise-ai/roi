@@ -29,9 +29,6 @@ const nextConfig = {
       },
     ]
   },
-  async headers() {
-    return []
-  },
   webpack: (config) => {
     config.module.rules.push({
       test: /\.m?js$/,

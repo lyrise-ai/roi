@@ -342,9 +342,10 @@ export default async function handler(req, res) {
   // a single run. Normal clients and our own staff can generate as many as they
   // like.
   //
-  // We filter specifically for finished reports ('SUCCESS'). Counting anything
-  // except explicit failures would treat in-progress or abandoned states like
-  // DRAFT as finished runs, locking testers out after a single failed attempt.
+  // Only a finished report ('SUCCESS') counts. A run that never got that far
+  // left either no row at all or an older half-finished one — see the
+  // 'PENDING_VERIFICATION' rows still in the database — and neither is a
+  // report the tester got to see, so neither should use up their one go.
   if (mode === 'generate' && isAlpha && user) {
     const { data: existingReport } = await supabase
       .from('reports')
