@@ -132,7 +132,9 @@ above any code you are about to change.
   through, and the Linear tickets — created by PostHog's own Linear alert
   setting, configured in its dashboard, with no code in this repo.
   Sentry owns readable stack traces and performance traces, and you reach it
-  FROM PostHog. Three rules that are easy to break by accident:
+  FROM PostHog. Vercel Web Analytics is also installed — the `<Analytics />` tag
+  in `pages/_app.js`, the file every page is wrapped in. Four rules that are easy
+  to break by accident:
   - **Never turn console capture back on in a Sentry config.** It turns every
     `console.error` in the repo — most of them deliberate, inside catch blocks
     that already handled the problem — into an issue, and therefore a ticket.
@@ -140,6 +142,15 @@ above any code you are about to change.
     switched off in its dashboard. Turning it back on doubles every ticket.
   - **Sentry session recording stays at zero.** PostHog records sessions. Paying
     two companies to record the same thing is exactly what this split avoids.
+  - **PostHog owns the page-view number. Vercel Web Analytics does not.** Both
+    count page views, so the two will never quite agree: PostHog counts once its
+    script has loaded in the browser and applies the bot filtering we set up,
+    while Vercel counts at its edge, before our code runs, using its own bot
+    rules. That makes Vercel's number the bigger one. It is there to show how
+    the site is being delivered — which pages get traffic, from where. Any number
+    we put in front of a customer, or use to make a decision, comes from PostHog.
+    When they disagree, PostHog is right by definition, because it is the one
+    measuring what we mean by a visit.
 - **Adding tracking:** the ROI pipeline's own event names live in `EVENTS`
   (`src/lib/analytics.ts`). Never type an event name in at the call site. Events
   that come from `pages/api/analytics/*` and `share-event.js` are named by those
