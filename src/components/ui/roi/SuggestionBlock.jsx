@@ -101,7 +101,14 @@ export function SuggestionBlock({
         </span>
       )}
       {(onUse || onDismiss) && (
-        <div style={{ display: 'flex', gap: 8, marginTop: 2 }}>
+        <div
+          style={{
+            display: 'flex',
+            flexWrap: 'wrap',
+            gap: 'var(--space-2)',
+            marginTop: 'var(--space-1)',
+          }}
+        >
           {onUse && (
             <button
               type="button"
@@ -109,11 +116,15 @@ export function SuggestionBlock({
               onMouseEnter={() => setHoverUse(true)}
               onMouseLeave={() => setHoverUse(false)}
               style={{
+                minHeight: 'var(--space-10)',
+                display: 'inline-flex',
+                alignItems: 'center',
+                justifyContent: 'center',
                 border: '1px solid var(--lyrise-purple)',
                 background: hoverUse ? 'var(--purple-50)' : 'transparent',
                 color: 'var(--lyrise-purple)',
                 borderRadius: 'var(--radius-pill)',
-                padding: '7px 15px',
+                padding: 'var(--space-2) var(--space-4)',
                 font: 'var(--weight-semibold) var(--text-xs)/1 var(--font-body)',
                 cursor: 'pointer',
                 whiteSpace: 'nowrap',
@@ -130,11 +141,15 @@ export function SuggestionBlock({
               onMouseEnter={() => setHoverDismiss(true)}
               onMouseLeave={() => setHoverDismiss(false)}
               style={{
+                minHeight: 'var(--space-10)',
+                display: 'inline-flex',
+                alignItems: 'center',
+                justifyContent: 'center',
                 border: '1px solid transparent',
                 background: hoverDismiss ? 'var(--neutral-100)' : 'transparent',
                 color: 'var(--text-heading)',
                 borderRadius: 'var(--radius-pill)',
-                padding: '7px 13px',
+                padding: 'var(--space-2) var(--space-3)',
                 font: 'var(--weight-semibold) var(--text-xs)/1 var(--font-body)',
                 cursor: 'pointer',
                 whiteSpace: 'nowrap',

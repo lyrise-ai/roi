@@ -18,7 +18,7 @@ export function Dialog({
         zIndex: 60,
         display: 'grid',
         placeItems: 'center',
-        padding: 'var(--space-6)',
+        padding: 'clamp(var(--space-3), 3vw, var(--space-6))',
       }}
     >
       <div
@@ -38,10 +38,12 @@ export function Dialog({
           position: 'relative',
           width: '100%',
           maxWidth: width,
+          maxHeight: 'calc(100dvh - var(--space-8))',
+          overflowY: 'auto',
           background: 'var(--surface-card)',
           borderRadius: 'var(--radius-xl)',
           boxShadow: 'var(--shadow-lg)',
-          padding: 'var(--space-8)',
+          padding: 'clamp(var(--space-5), 5vw, var(--space-8))',
           display: 'flex',
           flexDirection: 'column',
           gap: 'var(--space-4)',
@@ -91,14 +93,18 @@ export function Dialog({
               onClick={onClose}
               aria-label="Close"
               style={{
-                width: 32,
-                height: 32,
+                width: 'var(--space-10)',
+                height: 'var(--space-10)',
+                flexShrink: 0,
+                display: 'inline-flex',
+                alignItems: 'center',
+                justifyContent: 'center',
                 border: 'none',
                 background: 'var(--neutral-100)',
                 borderRadius: 'var(--radius-pill)',
                 cursor: 'pointer',
                 color: 'var(--text-muted)',
-                font: '600 14px/1 var(--font-body)',
+                font: 'var(--weight-semibold) var(--text-lg)/1 var(--font-body)',
               }}
             >
               ×

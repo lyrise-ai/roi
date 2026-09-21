@@ -63,7 +63,7 @@ const STEPS = ['landing', 'company', 'interview', 'reveal']
    a question. So both slide between two existing size tokens instead of adding
    new ones. */
 const HEADLINE = {
-  font: 'var(--weight-extrabold) clamp(var(--text-2xl), 6vw, var(--text-4xl))/var(--leading-snug) var(--font-display)',
+  font: 'var(--weight-extrabold) clamp(var(--text-xl), 6vw, var(--text-4xl))/var(--leading-snug) var(--font-display)',
   letterSpacing: 'var(--tracking-tight)',
   textWrap: 'pretty',
 }
@@ -88,6 +88,7 @@ const FIGURE_LABEL = {
 }
 const FIGURE_VALUE = {
   display: 'flex',
+  flexWrap: 'wrap',
   alignItems: 'baseline',
   gap: 'var(--space-2)',
   margin: 0,
@@ -116,7 +117,12 @@ const FORMULA_ROWS = [
 /* Each screen slides up 8px when it appears. It lives in this file, not in
    styles/global.css, so /v2 stays one folder you can delete. And it is a CSS
    class, not an inline style, because only a class can be overridden by the
-   "user asked for less motion" media query below. */
+   "user asked for less motion" media query below.
+
+   The mobile responsive styles also live here for the same reason: on a phone,
+   action buttons that sit side by side on desktop stack vertically with full width
+   for reliable tapping, and docking the action bar above the virtual keyboard ensures
+   the button you need next is never covered while typing. */
 const RISE_CSS = `
   .v2-rise { animation: v2-rise var(--duration-slow) var(--ease-out); }
   @keyframes v2-rise {
@@ -130,6 +136,61 @@ const RISE_CSS = `
   }
   @media (prefers-reduced-motion: reduce) {
     .v2-rise, .v2-pulse { animation: none; }
+  }
+
+  @media (max-width: 640px) {
+    .v2-company-actions {
+      flex-direction: column !important;
+      position: sticky;
+      bottom: var(--keyboard-inset, var(--space-0));
+      background: var(--surface-subtle);
+      padding-top: var(--space-4) !important;
+      padding-bottom: var(--space-4) !important;
+      z-index: 20;
+    }
+    .v2-company-actions > * {
+      width: 100% !important;
+    }
+    .v2-company-actions .v2-next-btn {
+      order: 1;
+    }
+    .v2-company-actions .v2-back-btn {
+      order: 2;
+    }
+
+    .v2-interview-actions-wrapper {
+      position: sticky;
+      bottom: var(--keyboard-inset, var(--space-0));
+      background: var(--surface-subtle);
+      padding-top: var(--space-4) !important;
+      padding-bottom: var(--space-4) !important;
+      margin-top: var(--space-4) !important;
+      z-index: 20;
+    }
+    .v2-interview-actions-wrapper p {
+      display: none;
+    }
+    .v2-interview-actions {
+      flex-direction: column !important;
+      width: 100% !important;
+      gap: var(--space-2) !important;
+    }
+    .v2-interview-forward-actions {
+      flex-direction: column !important;
+      width: 100% !important;
+      gap: var(--space-2) !important;
+      order: 1;
+    }
+    .v2-interview-forward-actions > * {
+      width: 100% !important;
+    }
+    .v2-action-back {
+      width: 100% !important;
+      order: 2;
+    }
+    .v2-start-over-btn {
+      width: 100% !important;
+    }
   }
 `
 
@@ -152,7 +213,7 @@ function Shell({ step, children }) {
           alignItems: 'center',
           justifyContent: 'space-between',
           gap: 'var(--space-4)',
-          padding: 'var(--space-5) var(--space-6)',
+          padding: 'var(--space-5) clamp(var(--space-4), 5vw, var(--space-6))',
         }}
       >
         {/* 70x24 keeps the logo file's own 138:47 shape at --space-6 tall. The
@@ -261,7 +322,8 @@ function Landing({ onStart }) {
         alignItems: 'center',
         justifyContent: 'center',
         textAlign: 'center',
-        padding: 'var(--space-10) var(--space-6) var(--space-20)',
+        padding:
+          'var(--space-10) clamp(var(--space-4), 5vw, var(--space-6)) var(--space-20)',
       }}
     >
       <h1 style={{ ...HEADLINE, maxWidth: '30ch' }}>
@@ -345,7 +407,8 @@ function Company({ value, onChange, onBack, onSubmit }) {
         width: '100%',
         maxWidth: 'var(--container-narrow)',
         margin: '0 auto',
-        padding: 'var(--space-8) var(--space-6) var(--space-20)',
+        padding:
+          'var(--space-8) clamp(var(--space-4), 5vw, var(--space-6)) var(--space-20)',
       }}
     >
       <AnalystMark />
@@ -375,12 +438,14 @@ function Company({ value, onChange, onBack, onSubmit }) {
             label="Company name"
             placeholder="e.g. Dr. Job Pro"
             value={value.name}
+            enterKeyHint="next"
             onChange={(e) => onChange({ name: e.target.value })}
           />
           <Input
             label="Website"
             placeholder="drjobpro.com"
             value={value.website}
+            enterKeyHint="go"
             onChange={(e) => onChange({ website: e.target.value })}
           />
         </div>
@@ -398,6 +463,7 @@ function Company({ value, onChange, onBack, onSubmit }) {
         </p>
 
         <div
+          className="v2-company-actions"
           style={{
             display: 'flex',
             flexWrap: 'wrap',
@@ -409,7 +475,12 @@ function Company({ value, onChange, onBack, onSubmit }) {
             marginTop: 'var(--space-8)',
           }}
         >
-          <Button variant="ghost" size="sm" onClick={onBack}>
+          <Button
+            variant="ghost"
+            size="sm"
+            className="v2-back-btn"
+            onClick={onBack}
+          >
             Back
           </Button>
           {/* The button works even with the fields empty. An empty company
@@ -417,6 +488,7 @@ function Company({ value, onChange, onBack, onSubmit }) {
               through without typing is not a demo. */}
           <Button
             type="submit"
+            className="v2-next-btn"
             iconRight={<Icon name="arrow-right" size={18} />}
           >
             Next
@@ -933,7 +1005,9 @@ function ScanPanel({ company, findings, looking }) {
       aria-label="Company scan"
       style={{
         flex: '1 1 17rem',
-        maxWidth: '20rem',
+        minWidth: 0,
+        width: '100%',
+        maxWidth: 'min(20rem, 100%)',
         position: 'sticky',
         top: 'var(--space-6)',
         border: '1px solid var(--border-subtle)',
@@ -1059,11 +1133,13 @@ function Interview({
         width: '100%',
         maxWidth: hasPanel ? COLUMN_PLUS_PANEL : COLUMN,
         margin: '0 auto',
-        padding: 'var(--space-8) var(--space-6) var(--space-20)',
+        padding:
+          'var(--space-8) clamp(var(--space-4), 5vw, var(--space-6)) var(--space-20)',
         display: 'flex',
         flexWrap: 'wrap',
         alignItems: 'flex-start',
-        gap: 'var(--space-12)',
+        gap: 'clamp(var(--space-6), 4vw, var(--space-12))',
+        scrollPaddingBottom: 'clamp(var(--space-24), 25vh, var(--space-32))',
       }}
     >
       <div style={{ flex: '1 1 30rem', minWidth: 0, maxWidth: COLUMN }}>
@@ -1152,6 +1228,7 @@ function Interview({
         </Divider>
 
         <div
+          className="v2-interview-actions-wrapper"
           style={{
             borderTop: '1px solid var(--border-subtle)',
             paddingTop: 'var(--space-6)',
@@ -1172,6 +1249,7 @@ function Interview({
               : 'Two makes the report hold up, and three lets me rank them and tell you which to fix first. Stop whenever you like — anything you leave blank, I fall back to my own guess and label it as mine.'}
           </p>
           <div
+            className="v2-interview-actions"
             style={{
               display: 'flex',
               flexWrap: 'wrap',
@@ -1180,10 +1258,16 @@ function Interview({
               gap: 'var(--space-4)',
             }}
           >
-            <Button variant="ghost" size="sm" onClick={onBack}>
+            <Button
+              variant="ghost"
+              size="sm"
+              className="v2-action-back"
+              onClick={onBack}
+            >
               Back
             </Button>
             <div
+              className="v2-interview-forward-actions"
               style={{
                 display: 'flex',
                 flexWrap: 'wrap',
@@ -1192,6 +1276,7 @@ function Interview({
               }}
             >
               <Button
+                className="v2-action-add"
                 onClick={onAdd}
                 iconRight={<Icon name="arrow-right" size={18} />}
               >
@@ -1199,7 +1284,11 @@ function Interview({
               </Button>
               {/* Never gated. Leaving now is always allowed; what a blank
                   answer costs is said above, not enforced here. */}
-              <Button variant="secondary" onClick={onFinish}>
+              <Button
+                variant="secondary"
+                className="v2-action-finish"
+                onClick={onFinish}
+              >
                 That&rsquo;s all for now
               </Button>
             </div>
@@ -1347,7 +1436,8 @@ function Reveal({ flow, demo, onRestart }) {
         width: '100%',
         maxWidth: 'var(--container-narrow)',
         margin: '0 auto',
-        padding: 'var(--space-8) var(--space-6) var(--space-20)',
+        padding:
+          'var(--space-8) clamp(var(--space-4), 5vw, var(--space-6)) var(--space-20)',
       }}
     >
       <h2 style={QUESTION}>
@@ -1464,7 +1554,11 @@ function Reveal({ flow, demo, onRestart }) {
         </Dialog>
       )}
 
-      <Button variant="secondary" onClick={onRestart}>
+      <Button
+        variant="secondary"
+        className="v2-start-over-btn"
+        onClick={onRestart}
+      >
         Start over
       </Button>
     </section>
@@ -1577,6 +1671,26 @@ export default function V2() {
      `interview`. A pain point the user has not reached yet gets a fresh blank
      set of answers added. One they have already visited is left exactly as
      they left it. */
+  React.useEffect(() => {
+    if (typeof window === 'undefined' || !window.visualViewport)
+      return undefined
+    const handleViewport = () => {
+      const vv = window.visualViewport
+      const inset = Math.max(0, window.innerHeight - vv.height - vv.offsetTop)
+      document.documentElement.style.setProperty(
+        '--keyboard-inset',
+        `${Math.round(inset)}px`,
+      )
+    }
+    window.visualViewport.addEventListener('resize', handleViewport)
+    window.visualViewport.addEventListener('scroll', handleViewport)
+    return () => {
+      window.visualViewport.removeEventListener('resize', handleViewport)
+      window.visualViewport.removeEventListener('scroll', handleViewport)
+      document.documentElement.style.removeProperty('--keyboard-inset')
+    }
+  }, [])
+
   const goTurn = (turn) => {
     setFlow((f) => ({
       ...f,
@@ -1591,6 +1705,10 @@ export default function V2() {
       <Head>
         <title>Profit Map</title>
         <meta name="robots" content="noindex" />
+        <meta
+          name="viewport"
+          content="width=device-width, initial-scale=1, interactive-widget=resizes-content"
+        />
         <style>{RISE_CSS}</style>
       </Head>
       <Shell step={flow.step}>

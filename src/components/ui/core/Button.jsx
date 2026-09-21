@@ -3,6 +3,7 @@ import React from 'react'
 const sizes = {
   sm: {
     padding: '8px 16px',
+    minHeight: 'var(--space-10)',
     font: 'var(--weight-semibold) var(--text-sm)/1 var(--font-body)',
     gap: '6px',
   },
@@ -111,6 +112,7 @@ export function Button({
       style={{
         display: fullWidth ? 'flex' : 'inline-flex',
         width: fullWidth ? '100%' : undefined,
+        maxWidth: '100%',
         alignItems: 'center',
         justifyContent: 'center',
         ...sizes[size],
