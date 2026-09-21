@@ -142,12 +142,22 @@ test('range: parses band selection and computes midpoint with user source', () =
     source: 'user',
     isRange: true,
   })
+})
+
+test("range: an open-ended band is our estimate, not the user's number", () => {
+  // The top of "500 or more" is made up, so the midpoint is our guess.
   assert.deepEqual(bridgeAnswer({ mode: 'range', band: '500 or more' }), {
     value: 750,
-    isEstimated: false,
-    source: 'user',
+    isEstimated: true,
+    source: 'estimate',
     isRange: true,
   })
+  // The input control sends the band's bounds too; the label still decides.
+  assert.equal(
+    bridgeAnswer({ mode: 'range', band: '25 or more', low: 25, high: 50 })
+      .source,
+    'estimate',
+  )
 })
 
 test('range: neither bound nor band is missing, not 0', () => {

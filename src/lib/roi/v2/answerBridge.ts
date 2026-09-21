@@ -178,6 +178,7 @@ function orEstimate(field: BridgedField, estimate?: string): BridgedField {
 // - 'exact': the number they typed, or missing if the box was empty or we
 //   could not read it.
 // - 'range': the midpoint of the selected preset band or low/high bounds.
+//   An open-ended band ("500 or more") is marked as our estimate, not theirs.
 // - 'estimate': they gave no number. We flag it as an estimate and leave the
 //   value empty rather than inventing one — see the `source` note above.
 export function bridgeAnswer(
@@ -208,26 +209,15 @@ export function bridgeAnswer(
       }
 
       if (low === null && high === null) return MISSING
-      if (low === null)
-        return {
-          value: high,
-          isEstimated: false,
-          source: 'user',
-          isRange: true,
-        }
-      if (high === null)
-        return {
-          value: low,
-          isEstimated: false,
-          source: 'user',
-          isRange: true,
-        }
-      return {
-        value: (low + high) / 2,
-        isEstimated: false,
-        source: 'user',
-        isRange: true,
-      }
+      // A band with no top ("500 or more") only works because we made the top
+      // up (1000 here). So its midpoint is our guess, not the user's number,
+      // and it is marked as ours — the reveal screen then flags it.
+      const openTop = /(or more|\+)\s*$/i.test(answer.band ?? '')
+      const who = openTop
+        ? { isEstimated: true, source: 'estimate' as const }
+        : { isEstimated: false, source: 'user' as const }
+      const value = low === null ? high : high === null ? low : (low + high) / 2
+      return { value, ...who, isRange: true }
     }
     case 'estimate':
       return { value: null, isEstimated: true, source: null }

@@ -38,3 +38,11 @@ alter table public.alpha_feedback
     foreign key (report_id) references public.reports (id) on delete cascade,
   add constraint alpha_feedback_invite_id_fkey
     foreign key (invite_id) references public.alpha_invites (id) on delete set null;
+
+-- The archive (the old feedback table, kept as history by 000014) points at
+-- reports too, and blocks their deletion the same way. History outlives the
+-- report, so an archived row keeps its content and just loses the link.
+alter table public.alpha_feedback_archive
+  drop constraint if exists alpha_feedback_report_id_fkey,
+  add constraint alpha_feedback_report_id_fkey
+    foreign key (report_id) references public.reports (id) on delete set null;
