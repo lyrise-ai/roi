@@ -24,39 +24,17 @@
 -- For invite_id, we use 'ON DELETE SET NULL' so that deleting an invite
 -- (if ever performed) does not delete historical feedback or block invite cleanup.
 
-do $$
-begin
-  -- Drop existing report_id foreign key constraint if it exists
-  if exists (
-    select 1 from pg_constraint
-    where conname = 'alpha_feedback_report_id_fkey'
-      and conrelid = 'public.alpha_feedback'::regclass
-  ) then
-    alter table public.alpha_feedback
-      drop constraint alpha_feedback_report_id_fkey;
-  end if;
+-- The live database names the report link alpha_feedback_report_id_fkey1,
+-- not ..._fkey. When migration 000014 renamed the old table to
+-- alpha_feedback_archive, that table kept the plain name, so Postgres added
+-- the 1. Dropping only ..._fkey would leave the old link in place, and it
+-- would keep blocking deletes. So we drop both names.
 
-  -- Add updated constraint with ON DELETE CASCADE
-  alter table public.alpha_feedback
-    add constraint alpha_feedback_report_id_fkey
-      foreign key (report_id)
-      references public.reports (id)
-      on delete cascade;
-
-  -- Drop existing invite_id foreign key constraint if it exists
-  if exists (
-    select 1 from pg_constraint
-    where conname = 'alpha_feedback_invite_id_fkey'
-      and conrelid = 'public.alpha_feedback'::regclass
-  ) then
-    alter table public.alpha_feedback
-      drop constraint alpha_feedback_invite_id_fkey;
-  end if;
-
-  -- Add updated constraint with ON DELETE SET NULL
-  alter table public.alpha_feedback
-    add constraint alpha_feedback_invite_id_fkey
-      foreign key (invite_id)
-      references public.alpha_invites (id)
-      on delete set null;
-end $$;
+alter table public.alpha_feedback
+  drop constraint if exists alpha_feedback_report_id_fkey,
+  drop constraint if exists alpha_feedback_report_id_fkey1,
+  drop constraint if exists alpha_feedback_invite_id_fkey,
+  add constraint alpha_feedback_report_id_fkey
+    foreign key (report_id) references public.reports (id) on delete cascade,
+  add constraint alpha_feedback_invite_id_fkey
+    foreign key (invite_id) references public.alpha_invites (id) on delete set null;

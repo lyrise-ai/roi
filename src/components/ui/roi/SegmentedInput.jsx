@@ -103,6 +103,10 @@ export function SegmentedInput({
     const nextMode = patch.mode || mode
     onChange({ mode: nextMode, ...patch })
   }
+  /* Must be defined here. Without it, `onClick={escape}` below still finds
+     the browser's own old `escape()` function, so nothing crashes, but the
+     "I'll give the real number" button silently does nothing. */
+  const escape = () => (onEscape ? onEscape() : set({ mode: 'exact' }))
 
   const DEFAULT_BANDS = [
     { label: 'under 20', low: 0, high: 20 },
@@ -134,13 +138,6 @@ export function SegmentedInput({
         >
           {label}
         </span>
-        {hint && (
-          <span
-            style={{ font: 'var(--type-body)', color: 'var(--text-muted)' }}
-          >
-            {hint}
-          </span>
-        )}
       </div>
 
       <div
