@@ -1428,6 +1428,141 @@ function Reveal({ flow, demo, onRestart }) {
     return () => window.removeEventListener('keydown', onKeyDown)
   }, [formulaOpen])
 
+  // Email delivery & colleague sharing (LYR-237)
+  const companyName = flow.company.name || (demo && demo.name) || 'Your company'
+  const reportId = React.useMemo(() => {
+    const slug = companyName
+      .toLowerCase()
+      .replace(/[^a-z0-9]+/g, '-')
+      .replace(/^-|-$/g, '')
+    let hash = 0
+    const str = JSON.stringify(flow.pains || [])
+    for (let i = 0; i < str.length; i++) {
+      hash = (hash << 5) - hash + str.charCodeAt(i)
+      hash |= 0
+    }
+    return `rep_${slug || 'demo'}_${Math.abs(hash).toString(36)}`
+  }, [companyName, flow.pains])
+
+  const reportPayload = React.useMemo(
+    () => ({
+      id: reportId,
+      company: {
+        name: companyName,
+        website: flow.company.website || (demo && demo.domain) || '',
+      },
+      createdAt: new Date().toISOString(),
+      pains: flow.pains,
+      featured: featured
+        ? {
+            pain: featured.pain,
+            figures: featured.figures,
+          }
+        : null,
+      observation,
+    }),
+    [
+      reportId,
+      companyName,
+      flow.company.website,
+      demo,
+      flow.pains,
+      featured,
+      observation,
+    ],
+  )
+
+  const [selfEmail, setSelfEmail] = React.useState('')
+  const [selfLoading, setSelfLoading] = React.useState(false)
+  const [selfSent, setSelfSent] = React.useState(false)
+  const [selfError, setSelfError] = React.useState(null)
+
+  const [colleagueEmail, setColleagueEmail] = React.useState('')
+  const [senderName, setSenderName] = React.useState('')
+  const [colleagueLoading, setColleagueLoading] = React.useState(false)
+  const [colleagueSent, setColleagueSent] = React.useState(false)
+  const [colleagueError, setColleagueError] = React.useState(null)
+
+  // Loading the page twice does not send twice (LYR-215)
+  React.useEffect(() => {
+    if (typeof window === 'undefined') return
+    const keySelf = `v2_email_sent_${reportId}_self`
+    const keyColleague = `v2_email_sent_${reportId}_colleague`
+    if (sessionStorage.getItem(keySelf)) setSelfSent(true)
+    if (sessionStorage.getItem(keyColleague)) setColleagueSent(true)
+  }, [reportId])
+
+  const handleSendSelf = async (e) => {
+    e.preventDefault()
+    const trimmed = selfEmail.trim()
+    if (!trimmed || selfLoading || selfSent) return
+    setSelfLoading(true)
+    setSelfError(null)
+    try {
+      const res = await fetch('/api/v2/email', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          reportId,
+          type: 'self',
+          to: trimmed,
+          report: reportPayload,
+        }),
+      })
+      const data = await res.json().catch(() => ({}))
+      if (!res.ok || !data.ok) {
+        throw new Error(data.error || 'Failed to send report email.')
+      }
+      setSelfSent(true)
+      try {
+        sessionStorage.setItem(`v2_email_sent_${reportId}_self`, 'true')
+      } catch {
+        // ignore storage quota
+      }
+    } catch (err) {
+      // Fail loudly (LYR-214 / P4)
+      setSelfError(err.message || 'Failed to send email.')
+    } finally {
+      setSelfLoading(false)
+    }
+  }
+
+  const handleSendColleague = async (e) => {
+    e.preventDefault()
+    const trimmed = colleagueEmail.trim()
+    if (!trimmed || colleagueLoading || colleagueSent) return
+    setColleagueLoading(true)
+    setColleagueError(null)
+    try {
+      const res = await fetch('/api/v2/email', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          reportId,
+          type: 'colleague',
+          to: trimmed,
+          senderName: senderName.trim(),
+          report: reportPayload,
+        }),
+      })
+      const data = await res.json().catch(() => ({}))
+      if (!res.ok || !data.ok) {
+        throw new Error(data.error || 'Failed to send colleague email.')
+      }
+      setColleagueSent(true)
+      try {
+        sessionStorage.setItem(`v2_email_sent_${reportId}_colleague`, 'true')
+      } catch {
+        // ignore storage quota
+      }
+    } catch (err) {
+      // Fail loudly (LYR-214 / P4)
+      setColleagueError(err.message || 'Failed to send email.')
+    } finally {
+      setColleagueLoading(false)
+    }
+  }
+
   return (
     <section
       className="v2-rise"
@@ -1553,6 +1688,201 @@ function Reveal({ flow, demo, onRestart }) {
           </div>
         </Dialog>
       )}
+
+      {/* Email Delivery & Colleague Sharing (LYR-237) */}
+      <div
+        style={{
+          borderTop: '1px solid var(--border-subtle)',
+          paddingTop: 'var(--space-8)',
+          marginBottom: 'var(--space-8)',
+          display: 'flex',
+          flexDirection: 'column',
+          gap: 'var(--space-6)',
+        }}
+      >
+        <div
+          style={{
+            background: 'var(--surface-card)',
+            border: '1px solid var(--border-subtle)',
+            borderRadius: 'var(--radius-card)',
+            padding: 'var(--space-5)',
+          }}
+        >
+          <h3
+            style={{
+              margin: 0,
+              font: 'var(--weight-semibold) var(--text-base)/var(--leading-normal) var(--font-body)',
+              color: 'var(--text-heading)',
+            }}
+          >
+            Email me this report
+          </h3>
+          <p
+            style={{
+              margin: 'var(--space-1) 0 var(--space-4)',
+              font: 'var(--weight-regular) var(--text-xs)/var(--leading-relaxed) var(--font-body)',
+              color: 'var(--text-muted)',
+            }}
+          >
+            We&rsquo;ll send you a link to your numbers and calculations so you
+            can return to them anytime.
+          </p>
+          {selfSent ? (
+            <div
+              style={{
+                display: 'flex',
+                alignItems: 'center',
+                gap: 'var(--space-2)',
+                color: 'var(--grow)',
+                font: 'var(--weight-semibold) var(--text-sm)/1 var(--font-body)',
+              }}
+            >
+              <span>✓</span>
+              <span>Report sent to {selfEmail}. Check your inbox.</span>
+            </div>
+          ) : (
+            <form onSubmit={handleSendSelf}>
+              <div
+                style={{
+                  display: 'flex',
+                  flexWrap: 'wrap',
+                  gap: 'var(--space-3)',
+                  alignItems: 'flex-end',
+                }}
+              >
+                <div style={{ flex: '1 1 14rem', minWidth: 0 }}>
+                  <Input
+                    label="Your email"
+                    type="email"
+                    placeholder="you@company.com"
+                    value={selfEmail}
+                    disabled={selfLoading}
+                    onChange={(e) => setSelfEmail(e.target.value)}
+                  />
+                </div>
+                <Button
+                  type="submit"
+                  disabled={!selfEmail.trim() || selfLoading}
+                  style={{ minHeight: 'var(--space-10)' }}
+                >
+                  {selfLoading ? 'Sending…' : 'Send to me'}
+                </Button>
+              </div>
+              {selfError && (
+                <div
+                  role="alert"
+                  style={{
+                    marginTop: 'var(--space-3)',
+                    padding: 'var(--space-2) var(--space-3)',
+                    borderRadius: 'var(--radius-md)',
+                    background: 'var(--purple-50)',
+                    border: '1px solid var(--power)',
+                    color: 'var(--power)',
+                    font: 'var(--weight-medium) var(--text-xs)/var(--leading-normal) var(--font-body)',
+                  }}
+                >
+                  Could not send email: {selfError}
+                </div>
+              )}
+            </form>
+          )}
+        </div>
+
+        <div
+          style={{
+            background: 'var(--surface-card)',
+            border: '1px solid var(--border-subtle)',
+            borderRadius: 'var(--radius-card)',
+            padding: 'var(--space-5)',
+          }}
+        >
+          <h3
+            style={{
+              margin: 0,
+              font: 'var(--weight-semibold) var(--text-base)/var(--leading-normal) var(--font-body)',
+              color: 'var(--text-heading)',
+            }}
+          >
+            Share with a colleague
+          </h3>
+          <p
+            style={{
+              margin: 'var(--space-1) 0 var(--space-4)',
+              font: 'var(--weight-regular) var(--text-xs)/var(--leading-relaxed) var(--font-body)',
+              color: 'var(--text-muted)',
+            }}
+          >
+            Loop in your finance director or team lead with the business case
+            and assumptions.
+          </p>
+          {colleagueSent ? (
+            <div
+              style={{
+                display: 'flex',
+                alignItems: 'center',
+                gap: 'var(--space-2)',
+                color: 'var(--grow)',
+                font: 'var(--weight-semibold) var(--text-sm)/1 var(--font-body)',
+              }}
+            >
+              <span>✓</span>
+              <span>Report sent to {colleagueEmail}.</span>
+            </div>
+          ) : (
+            <form onSubmit={handleSendColleague}>
+              <div
+                style={{
+                  display: 'grid',
+                  gridTemplateColumns:
+                    'repeat(auto-fit, minmax(min(12rem, 100%), 1fr))',
+                  gap: 'var(--space-3)',
+                  marginBottom: 'var(--space-3)',
+                }}
+              >
+                <Input
+                  label="Colleague’s email"
+                  type="email"
+                  placeholder="colleague@company.com"
+                  value={colleagueEmail}
+                  disabled={colleagueLoading}
+                  onChange={(e) => setColleagueEmail(e.target.value)}
+                />
+                <Input
+                  label="Your name or role"
+                  placeholder="e.g. Finance Lead (optional)"
+                  value={senderName}
+                  disabled={colleagueLoading}
+                  onChange={(e) => setSenderName(e.target.value)}
+                />
+              </div>
+              <Button
+                type="submit"
+                variant="secondary"
+                disabled={!colleagueEmail.trim() || colleagueLoading}
+                style={{ minHeight: 'var(--space-10)' }}
+              >
+                {colleagueLoading ? 'Sending…' : 'Send to colleague'}
+              </Button>
+              {colleagueError && (
+                <div
+                  role="alert"
+                  style={{
+                    marginTop: 'var(--space-3)',
+                    padding: 'var(--space-2) var(--space-3)',
+                    borderRadius: 'var(--radius-md)',
+                    background: 'var(--purple-50)',
+                    border: '1px solid var(--power)',
+                    color: 'var(--power)',
+                    font: 'var(--weight-medium) var(--text-xs)/var(--leading-normal) var(--font-body)',
+                  }}
+                >
+                  Could not send email: {colleagueError}
+                </div>
+              )}
+            </form>
+          )}
+        </div>
+      </div>
 
       <Button
         variant="secondary"
