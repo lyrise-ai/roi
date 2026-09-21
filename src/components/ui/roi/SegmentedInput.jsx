@@ -140,11 +140,13 @@ export function SegmentedInput({
               onClick={() => set({ mode: m.value })}
               style={{
                 minWidth: 0,
+                minHeight: 'var(--space-10)',
                 border: 'none',
                 cursor: 'pointer',
-                padding: '9px 12px',
+                padding:
+                  'var(--space-2) clamp(var(--space-1), 1.5vw, var(--space-3))',
                 borderRadius: 'var(--radius-pill)',
-                font: 'var(--type-label)',
+                font: 'var(--weight-semibold) clamp(var(--text-xs), 3.2vw, var(--text-sm))/var(--leading-snug) var(--font-body)',
                 whiteSpace: 'normal',
                 textAlign: 'center',
                 textWrap: 'balance',
@@ -283,15 +285,18 @@ export function SegmentedInput({
                 onClick={escape}
                 style={{
                   alignSelf: 'flex-start',
-                  marginTop: 2,
+                  marginTop: 'var(--space-1)',
+                  minHeight: 'var(--space-10)',
+                  maxWidth: '100%',
                   background: 'transparent',
                   border: '1px solid var(--lyrise-purple)',
                   color: 'var(--lyrise-purple)',
                   borderRadius: 'var(--radius-pill)',
-                  padding: '8px 16px',
+                  padding: 'var(--space-2) var(--space-4)',
                   font: 'var(--weight-semibold) var(--text-sm)/1 var(--font-body)',
                   cursor: 'pointer',
-                  whiteSpace: 'nowrap',
+                  whiteSpace: 'normal',
+                  textAlign: 'left',
                   transition: 'var(--transition-control)',
                 }}
               >
