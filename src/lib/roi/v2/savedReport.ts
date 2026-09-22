@@ -120,5 +120,37 @@ export function saveReportInMemory(report: SavedReport): void {
 }
 
 export function getReportFromMemory(id: string): SavedReport | undefined {
-  return inMemoryReports.get(id)
+  return inMemoryReports.get(id.trim())
+}
+
+export function resolveSavedReportForPublicView(
+  id?: string,
+):
+  | { status: 'ok'; report: SavedReport; message: string }
+  | { status: 'missing'; message: string }
+  | { status: 'not-found'; message: string } {
+  const cleanedId = typeof id === 'string' ? id.trim() : ''
+
+  if (!cleanedId) {
+    return {
+      status: 'missing',
+      message:
+        'This link is missing the report id. Please check the URL and try again.',
+    }
+  }
+
+  const report = getReportFromMemory(cleanedId)
+  if (report) {
+    return {
+      status: 'ok',
+      report,
+      message: 'Report loaded.',
+    }
+  }
+
+  return {
+    status: 'not-found',
+    message:
+      'We could not find this report. The link may be mistyped, the report may have been deleted, or it may have expired.',
+  }
 }
