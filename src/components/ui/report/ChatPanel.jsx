@@ -84,6 +84,7 @@ export function ChatPanel({
   status = 'open',
   onSend,
   onClose,
+  onOpen,
   style,
   ...rest
 }) {
@@ -189,7 +190,10 @@ export function ChatPanel({
             </p>
             <button
               type="button"
-              onClick={() => setReopened(true)}
+              onClick={() => {
+                setReopened(true)
+                onOpen?.()
+              }}
               style={{
                 minHeight: 'var(--space-10)',
                 padding: 'var(--space-2) var(--space-4)',

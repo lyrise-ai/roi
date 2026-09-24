@@ -14,6 +14,7 @@ export interface ChatPanelProps extends React.HTMLAttributes<HTMLElement> {
   status: 'open' | 'closed' | 'cap-reached' | 'expired'
   onSend: (text: string, scope: string | null) => void
   onClose: () => void
+  onOpen?: () => void
 }
 
 export function ChatPanel(props: ChatPanelProps): JSX.Element
