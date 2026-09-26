@@ -99,15 +99,28 @@ export function buildObservationSentence(
     : null
 
   const isPlural = peopleCount !== null && peopleCount !== 1
-  const peopleText =
+  const rawPeopleStr =
     peopleCount === null
       ? null
       : peopleCount === 1
-        ? 'One person'
-        : `${capitalize(spellOrDigits(peopleCount))} people`
+        ? 'one person'
+        : `${spellOrDigits(peopleCount)} people`
 
-  const hoursText =
+  const peopleText =
+    rawPeopleStr === null
+      ? null
+      : people?.isRange
+        ? `Around ${rawPeopleStr}`
+        : capitalize(rawPeopleStr)
+
+  const rawHoursStr =
     hoursValue === null ? null : `${spellOrDigits(hoursValue)} hours`
+  const hoursText =
+    rawHoursStr === null
+      ? null
+      : hoursPerWeek?.isRange
+        ? `about ${rawHoursStr}`
+        : rawHoursStr
 
   const annualText = isUsable(annualHours)
     ? `${friendlyAnnualHours(annualHours)} hours`
