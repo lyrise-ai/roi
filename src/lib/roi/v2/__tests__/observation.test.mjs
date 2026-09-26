@@ -54,6 +54,24 @@ test('complete pain point: full sentence with correct arithmetic', () => {
   )
 })
 
+test('range answers: indicates approximation with "Around" or "about"', () => {
+  const rangeField = (value) => ({
+    value,
+    isEstimated: false,
+    source: 'user',
+    isRange: true,
+  })
+  const sentence = buildObservationSentence(
+    rangeField(7),
+    rangeField(10),
+    3_500,
+  )
+  assert.equal(
+    sentence,
+    'Around seven people spending about ten hours a week each adds up to about 3,500 hours a year.',
+  )
+})
+
 test('complete pain point: one person uses singular phrasing, no "each"', () => {
   const sentence = buildObservationSentence(field(1), field(10), 500)
   assert.equal(
