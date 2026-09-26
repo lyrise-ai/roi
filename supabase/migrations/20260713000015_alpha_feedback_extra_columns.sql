@@ -15,7 +15,7 @@
 --   alpha_feedback answers — this makes it queryable alongside everything
 --   else on the same row.
 --
--- Additive only. The base table (20260713_000014_alpha_feedback_rebuild.sql)
+-- Additive only. The base table (20260713000014_alpha_feedback_rebuild.sql)
 -- is already applied — this migration only adds columns to it, nothing is
 -- renamed, dropped, or altered on existing columns.
 

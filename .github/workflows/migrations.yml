@@ -1,0 +1,62 @@
+# Applies database migrations: the files in supabase/migrations/.
+#
+# There is one Supabase database for production, CI and local (see CLAUDE.md),
+# so a migration merged into main goes live on production straight away.
+# That is why a pull request that adds one only prints what would run: the
+# reviewer sees exactly what merging will do before it happens.
+#
+# `supabase db push` compares the files here with the list of migrations the
+# database says it has applied (the table supabase_migrations.schema_migrations),
+# and runs only the files that list is missing, oldest first. So that list must
+# stay true. Never apply a migration by hand in the Supabase dashboard: the list
+# won't know, and the next run will try to apply it again.
+#
+# Needs one secret in the Production environment, SUPABASE_DB_URL: the
+# "Session pooler" connection string from Supabase (Connect → Session pooler).
+# Not the direct one: GitHub's machines can't reach the direct address.
+
+name: Database migrations
+
+on:
+  push:
+    branches: [main]
+    paths: ['supabase/migrations/**']
+  pull_request:
+    paths: ['supabase/migrations/**']
+  workflow_dispatch:
+
+# Two runs at once could both try to apply the same migration. Queue them.
+concurrency:
+  group: migrations
+  cancel-in-progress: false
+
+jobs:
+  migrate:
+    runs-on: ubuntu-latest
+    environment: Production
+    env:
+      SUPABASE_DB_URL: ${{ secrets.SUPABASE_DB_URL }}
+    steps:
+      - uses: actions/checkout@v4
+
+      # A file's version is the number before the first "_". Two files with
+      # the same number would make the database's list ambiguous.
+      - name: Every migration has its own version number
+        run: |
+          dupes=$(ls supabase/migrations | cut -d_ -f1 | sort | uniq -d)
+          if [ -n "$dupes" ]; then
+            echo "These version numbers are used by more than one file: $dupes"
+            exit 1
+          fi
+
+      - uses: supabase/setup-cli@v1
+        with:
+          version: 2.118.0
+
+      - name: What merging would apply
+        if: github.event_name == 'pull_request'
+        run: supabase db push --db-url "$SUPABASE_DB_URL" --dry-run
+
+      - name: Apply to the database
+        if: github.event_name != 'pull_request'
+        run: supabase db push --db-url "$SUPABASE_DB_URL"

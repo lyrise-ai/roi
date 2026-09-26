@@ -14,7 +14,7 @@
 -- alpha_invites (email, full_name) via report_id/invite_id instead of being
 -- duplicated onto every row. Validation deltas are deliberately absent too —
 -- those already live in reports.validation_data (see
--- 20260709_000013_reports_validation.sql) and have no reason to be
+-- 20260709000013_reports_validation.sql) and have no reason to be
 -- duplicated here.
 
 -- ── Step 1: archive the old, hand-created table ─────────────────────────────

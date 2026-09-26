@@ -197,12 +197,18 @@ refuses unknown settings, so this note cannot live inside the config file.
 `.env.local`, which git ignores — never commit them. Anything starting with
 `NEXT_PUBLIC_` is visible in the browser; everything else is server-only.
 
-Two things the list will not tell you:
+Three things the list will not tell you:
 
 - `SUPABASE_SERVICE_ROLE_KEY` is server-only, gives full access to the database,
   and ignores every access rule. Handle it carefully.
 - There is **one shared Supabase project** for local, CI and production. There is
   no staging database, so be careful with anything that deletes.
+- **Migrations apply themselves when merged.** `.github/workflows/migrations.yml`
+  runs every new file in `supabase/migrations/` on the database once it lands on
+  `main`, and shows a pull request what it would run. **Never apply one by hand**
+  (the Supabase dashboard, `apply_migration`, raw SQL): the database's list of
+  applied migrations won't know, and the next run tries it again. Name new files
+  `YYYYMMDDNNNNNN_what_it_does.sql`, the date plus the next number.
 
 ## Working norms
 
