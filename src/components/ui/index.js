@@ -29,3 +29,5 @@ export { ProvenanceMark } from './roi/ProvenanceMark'
 export { ScanFactRow } from './roi/ScanFactRow'
 export { SegmentedInput } from './roi/SegmentedInput'
 export { SuggestionBlock } from './roi/SuggestionBlock'
+
+export { ChatPanel } from './report/ChatPanel'

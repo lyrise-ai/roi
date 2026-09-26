@@ -9,6 +9,7 @@ import {
   Button,
   Card,
   Checkbox,
+  ChatPanel,
   Dialog,
   GlassPanel,
   Icon,
@@ -94,6 +95,27 @@ export default function UiKit() {
   const [pay, setPay] = React.useState({})
   const [hours, setHours] = React.useState({ mode: 'range' })
   const [seats, setSeats] = React.useState({ mode: 'estimate' })
+  const [chatStatus, setChatStatus] = React.useState('open')
+  const [chatMessages, setChatMessages] = React.useState([
+    {
+      kind: 'user',
+      text: 'Why does the uplift come out to $412,000?',
+    },
+    {
+      kind: 'analyst',
+      text: 'It starts with 26 hours a week across 38 people, then applies the take-up and human-review assumptions shown in the workflow row.',
+    },
+    {
+      kind: 'qa',
+      question: 'What changes the result most?',
+      text: 'The hours spent today and the share of the work that still needs a person have the largest effect on this figure.',
+    },
+    {
+      kind: 'scoped',
+      scopeLabel: 'Profit uplift',
+      text: 'This section shows the annual value of the hours returned. It is deliberately smaller than the total hours spent today.',
+    },
+  ])
   const tabs = [
     { value: 'one', label: 'Workflows' },
     { value: 'two', label: 'Assumptions' },
@@ -646,6 +668,50 @@ export default function UiKit() {
                 blank.
               </span>
             </div>
+          </Row>
+        </Section>
+
+        <Section title="ChatPanel">
+          <Row label="Canned report conversation" align="stretch">
+            <div
+              style={{
+                width: '100%',
+                maxWidth: 'var(--container-narrow)',
+                height: 'var(--container-max)',
+                maxHeight: '80vh',
+              }}
+            >
+              <ChatPanel
+                opener="One thing below I'd like you to check. Or ask me about any number in the report."
+                messages={chatMessages}
+                suggestions={[
+                  'How could this uplift be higher?',
+                  'Show me the hours behind it',
+                ]}
+                scope="Profit uplift"
+                status={chatStatus}
+                onSend={(text) => {
+                  setChatMessages((current) => [
+                    ...current,
+                    { kind: 'user', text },
+                  ])
+                }}
+                onClose={() => setChatStatus('closed')}
+                onOpen={() => setChatStatus('open')}
+              />
+            </div>
+          </Row>
+          <Row label="Status states">
+            {['open', 'closed', 'cap-reached', 'expired'].map((state) => (
+              <Button
+                key={state}
+                variant={chatStatus === state ? 'primary' : 'secondary'}
+                size="sm"
+                onClick={() => setChatStatus(state)}
+              >
+                {state}
+              </Button>
+            ))}
           </Row>
         </Section>
 
