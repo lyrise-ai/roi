@@ -17,12 +17,14 @@
 
 name: Database migrations
 
+# Also runs when this file or supabase/config.toml changes, since both change
+# how it runs. With nothing new to apply, `db push` does nothing.
 on:
   push:
     branches: [main]
-    paths: ['supabase/migrations/**']
+    paths: ['supabase/**', '.github/workflows/migrations.yml']
   pull_request:
-    paths: ['supabase/migrations/**']
+    paths: ['supabase/**', '.github/workflows/migrations.yml']
   workflow_dispatch:
 
 # Two runs at once could both try to apply the same migration. Queue them.
