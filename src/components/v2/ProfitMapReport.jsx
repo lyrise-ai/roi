@@ -55,6 +55,20 @@ function Metric({ label, value, detail, tone = '' }) {
   )
 }
 
+function publicMetric(metric) {
+  if (metric.label?.toLowerCase() === 'operational dividend') {
+    return {
+      ...metric,
+      label: 'Wages you get back',
+      detail: 'the operational dividend',
+    }
+  }
+  if (metric.label?.toLowerCase() === 'total financial gain') {
+    return { ...metric, label: 'Combined opportunity' }
+  }
+  return metric
+}
+
 function CompanySnapshot({ snapshot }) {
   if (!snapshot?.length) return null
 
@@ -299,7 +313,7 @@ function ReportScreen({ report }) {
             />
             <div className={styles.metricGrid}>
               {sections.profitUplift?.metrics?.map((metric) => (
-                <Metric key={metric.label} {...metric} />
+                <Metric key={metric.label} {...publicMetric(metric)} />
               ))}
             </div>
           </section>
