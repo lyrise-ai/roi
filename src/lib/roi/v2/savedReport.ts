@@ -97,6 +97,15 @@ export interface SavedReport {
   }
 }
 
+export function toPublicReport(report: SavedReport) {
+  return {
+    company: { name: report.company.name },
+    reportSections: report.reportSections,
+    legend: report.legend,
+    disclaimer: report.disclaimer,
+  }
+}
+
 /**
  * Example report with realistic sample numbers for testing, email previews,
  * and building dependent V2 screens before database persistence lands.
@@ -288,7 +297,7 @@ export const SAMPLE_SAVED_REPORT: SavedReport = {
           detail: 'capacity redirected into higher-value work',
         },
         {
-          label: 'Total financial gain',
+          label: 'Combined opportunity',
           value: '$106,115 / yr',
           detail: 'the combined opportunity',
         },
@@ -320,7 +329,7 @@ export const SAMPLE_SAVED_REPORT: SavedReport = {
         'Every month the current process stays in place carries a measurable opportunity cost.',
       value: '$8,843',
       period: 'per month of delay',
-      body: 'That is the first-year total financial gain spread across twelve months. Waiting does not keep the opportunity neutral; it gives the work another month to consume the team.',
+      body: 'That is the first-year combined opportunity spread across twelve months. Waiting does not keep the opportunity neutral; it gives the work another month to consume the team.',
     },
     roadmap: {
       intro:
