@@ -9,6 +9,7 @@ import { fileURLToPath, pathToFileURL } from 'node:url'
 const here = path.dirname(fileURLToPath(import.meta.url))
 
 let resolveSavedReportForPublicView
+let toPublicReport
 let SAMPLE_SAVED_REPORT
 let tmpDir
 
@@ -24,9 +25,11 @@ before(async () => {
     logLevel: 'silent',
   })
 
-  ;({ resolveSavedReportForPublicView, SAMPLE_SAVED_REPORT } = await import(
-    pathToFileURL(outfile).href
-  ))
+  ;({
+    resolveSavedReportForPublicView,
+    toPublicReport,
+    SAMPLE_SAVED_REPORT,
+  } = await import(pathToFileURL(outfile).href))
 })
 
 after(() => {
@@ -45,4 +48,18 @@ test('resolveSavedReportForPublicView: loads an existing saved report and explai
   const notFound = resolveSavedReportForPublicView('rep_deleted_123')
   assert.equal(notFound.status, 'not-found')
   assert.match(notFound.message, /couldn.t find|not available|deleted|link/i)
+})
+
+test('toPublicReport: includes only fields rendered by the public report page', () => {
+  const report = toPublicReport(SAMPLE_SAVED_REPORT)
+
+  assert.deepEqual(Object.keys(report).sort(), [
+    'company',
+    'disclaimer',
+    'legend',
+    'reportSections',
+  ])
+  assert.deepEqual(report.company, { name: SAMPLE_SAVED_REPORT.company.name })
+  assert.equal('recipientEmail' in report, false)
+  assert.equal('senderName' in report, false)
 })
