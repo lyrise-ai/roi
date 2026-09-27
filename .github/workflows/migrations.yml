@@ -18,7 +18,7 @@
 name: Database migrations
 
 # Also runs when this file or supabase/config.toml changes, since both change
-# how it runs. With nothing new to apply, `db push` does nothing.
+# how the job runs. With nothing new to apply, `db push` does nothing.
 on:
   push:
     branches: [main]
@@ -50,6 +50,13 @@ jobs:
             echo "These version numbers are used by more than one file: $dupes"
             exit 1
           fi
+
+      # The repo's .env is encrypted with dotenvx, and the Supabase CLI reads it
+      # on its own. It can't decrypt it here, so it stops with "failed to parse
+      # config: missing private key". This job needs nothing from .env, so it
+      # is removed from this throwaway checkout. The repo's copy is untouched.
+      - name: Keep the encrypted .env away from the Supabase CLI
+        run: rm -f .env
 
       - uses: supabase/setup-cli@v1
         with:
