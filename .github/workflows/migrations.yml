@@ -62,10 +62,15 @@ jobs:
         with:
           version: 2.118.0
 
+      # --include-all: also apply a file dated earlier than the newest one
+      # already applied. With two people on separate branches, a migration
+      # written on Monday can merge after one written on Wednesday. Without
+      # this flag the job would refuse it. Safe because each migration here
+      # stands alone: its own table, column or rule, guarded by `if not exists`.
       - name: What merging would apply
         if: github.event_name == 'pull_request'
-        run: supabase db push --db-url "$SUPABASE_DB_URL" --dry-run
+        run: supabase db push --db-url "$SUPABASE_DB_URL" --include-all --dry-run
 
       - name: Apply to the database
         if: github.event_name != 'pull_request'
-        run: supabase db push --db-url "$SUPABASE_DB_URL"
+        run: supabase db push --db-url "$SUPABASE_DB_URL" --include-all
