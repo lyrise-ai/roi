@@ -21,8 +21,9 @@ of the user who hit it and to the Sentry issue for the full stack trace.
 
 ## 1. Environment variables
 
-Get these from PostHog → Settings → Project, and paste into `.env.local` **and**
-Vercel (all environments):
+Get these from PostHog → Settings → Project. Save each into the repo's encrypted
+`.env` with `npx dotenvx set NAME value`, **and** into Vercel (all
+environments):
 
 | Var                                 | Where it comes from                                                         |
 | ----------------------------------- | --------------------------------------------------------------------------- |
@@ -134,7 +135,7 @@ Server-side has no such filter and _is_ covered by automated tests.
 
 To check the browser half:
 
-1. `npm run dev` with the PostHog vars set in `.env.local`.
+1. `npm run dev` with the PostHog vars set in `.env`.
 2. Open `http://localhost:3000/auth/login` in your normal browser, click around,
    navigate to another page.
 3. PostHog → **Activity** (live events). A `$pageview` should land within
