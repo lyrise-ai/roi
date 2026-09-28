@@ -151,6 +151,12 @@ above any code you are about to change.
     we put in front of a customer, or use to make a decision, comes from PostHog.
     When they disagree, PostHog is right by definition, because it is the one
     measuring what we mean by a visit.
+- **PostHog is our one analytics platform.** Every number we look at lives
+  there. Do not add analytics tables or in-app charts: send an event to PostHog
+  and build the chart there. The old home-made ones — the `events`, `roi_usage`
+  and `alpha_feedback` tables, `/dashboard` and `/dashboard/usage` — belong to
+  V1 and go with it (LYR-241). Our staff page will show a PostHog dashboard in
+  a window instead.
 - **Adding tracking:** the ROI pipeline's own event names live in `EVENTS`
   (`src/lib/analytics.ts`). Never type an event name in at the call site. Events
   that come from `pages/api/analytics/*` and `share-event.js` are named by those
