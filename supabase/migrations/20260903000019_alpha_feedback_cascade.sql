@@ -1,7 +1,7 @@
 -- Fix alpha_feedback FK constraints to CASCADE on report deletion (LYR-176).
 --
 -- Background:
--- In migration 20260713_000014_alpha_feedback_rebuild.sql, foreign keys for
+-- In migration 20260713000014_alpha_feedback_rebuild.sql, foreign keys for
 -- alpha_feedback were defined without explicit 'ON DELETE' clauses:
 --   invite_id uuid references public.alpha_invites (id)
 --   report_id uuid references public.reports (id)

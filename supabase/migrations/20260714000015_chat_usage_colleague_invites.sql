@@ -4,7 +4,7 @@
 -- invite is just a chat_usage row created ahead of time (user_id null until
 -- the invite is first claimed), keyed by a durable, revocable token embedded
 -- in the invite email. Mirrors the existing alpha_invites durable-token
--- pattern (see 20260705_000012_alpha_invites.sql) rather than emailing a
+-- pattern (see 20260705000012_alpha_invites.sql) rather than emailing a
 -- raw, single-use Supabase magic link.
 
 alter table public.chat_usage
