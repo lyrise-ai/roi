@@ -109,9 +109,13 @@ const FIGURE_UNIT = {
 const FORMULA_ROWS = [
   { key: 'hoursReturned', label: 'Hours returned' },
   { key: 'ratePerHour', label: 'Rate per hour' },
-  { key: 'operationalDividend', label: 'Operational dividend' },
+  {
+    key: 'operationalDividend',
+    label: 'Wages you get back',
+    detail: 'the operational dividend',
+  },
   { key: 'profitUplift', label: 'Profit uplift' },
-  { key: 'totalFinancialGain', label: 'Total financial gain' },
+  { key: 'totalFinancialGain', label: 'Combined opportunity' },
 ]
 
 /* Each screen slides up 8px when it appears. It lives in this file, not in
@@ -1721,12 +1725,16 @@ function Reveal({ flow, demo, onRestart }) {
 
       {hoursAreOurs && <p style={LEAD}>{OURS_NOT_YOURS}</p>}
 
-      {!figures.calc && (
+      {flow.pains.length === 0 ? (
+        <p style={LEAD}>
+          No pain points were added, so there is no calculation to show.
+        </p>
+      ) : !figures.calc ? (
         <p style={LEAD}>
           Not enough here yet to put a number on it — go back and answer at
           least how many people do this and how many hours a week.
         </p>
-      )}
+      ) : null}
 
       {figures.calc && (
         <div
@@ -1762,26 +1770,39 @@ function Reveal({ flow, demo, onRestart }) {
           </div>
 
           {figures.complete ? (
-            <div>
-              <p style={FIGURE_LABEL}>
-                Hours returned, and what that’s worth
-                {hasRange ? ' (range midpoint)' : ''}
-              </p>
-              <p style={FIGURE_VALUE}>
-                {comma(figures.calc.hoursReturned)}
-                <span style={FIGURE_UNIT}>hrs / year</span>
-              </p>
-              <p style={{ ...FIGURE_VALUE, marginTop: 'var(--space-2)' }}>
-                {money(figures.calc.totalFinancialGain)}
-                {/* This one holds our guesses about how much can be
-                    automated, how many people will use it, and how much of the
-                    saving really lands. Clicking it opens the pop-up below. */}
-                <ProvenanceMark
-                  kind="estimated"
-                  onClick={() => setFormulaOpen(true)}
-                />
-              </p>
-            </div>
+            <>
+              <div>
+                <p style={FIGURE_LABEL}>Hours returned</p>
+                <p style={FIGURE_VALUE}>
+                  {comma(figures.calc.hoursReturned)}
+                  <span style={FIGURE_UNIT}>hrs / year</span>
+                </p>
+              </div>
+              <div>
+                <p style={FIGURE_LABEL}>Wages you get back</p>
+                <p style={FIGURE_VALUE}>
+                  {money(figures.calc.operationalDividend)}
+                  <span style={FIGURE_UNIT}>/ year</span>
+                </p>
+                <p style={{ ...LEAD, marginTop: 'var(--space-1)' }}>
+                  the operational dividend
+                </p>
+              </div>
+              <div>
+                <p style={FIGURE_LABEL}>Combined opportunity</p>
+                <p style={FIGURE_VALUE}>
+                  {money(figures.calc.totalFinancialGain)}
+                  <span style={FIGURE_UNIT}>/ year</span>
+                  {/* This one holds our guesses about how much can be
+                      automated, how many people will use it, and how much of the
+                      saving really lands. Clicking it opens the pop-up below. */}
+                  <ProvenanceMark
+                    kind="estimated"
+                    onClick={() => setFormulaOpen(true)}
+                  />
+                </p>
+              </div>
+            </>
           ) : (
             <p style={LEAD}>
               We don’t have enough here yet to put a return number on this one —
@@ -1815,6 +1836,11 @@ function Reveal({ flow, demo, onRestart }) {
                 <p style={{ ...FIGURE_LABEL, margin: '0 0 var(--space-1)' }}>
                   {row.label}
                 </p>
+                {row.detail ? (
+                  <p style={{ ...LEAD, margin: '0 0 var(--space-1)' }}>
+                    {row.detail}
+                  </p>
+                ) : null}
                 <p
                   style={{
                     font: 'var(--type-body)',
