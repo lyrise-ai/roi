@@ -479,8 +479,8 @@ test('searchFor refuses a name that would break the phrase match', () => {
 
 // -- careersLinks (LYR-220) -----------------------------------------
 // The recall half of finding a careers page. Its ONLY job is to not lose the
-// real link; deciding which candidate to follow is a model call in the S2
-// scout. So every case below asks "did we keep it", never "did we keep only
+// real link; deciding which candidate to follow is the agent's call, in
+// tools.ts. So every case below asks "did we keep it", never "did we keep only
 // it" — a false positive costs a few tokens, a false negative costs the whole
 // company.
 
@@ -512,7 +512,7 @@ test('keeps a careers link whose address says nothing about jobs', () => {
 })
 
 test('keeps /join-us, which VACANCY_PATH does not match', () => {
-  /* S2 has always probed /join-us. Prefiltering candidates with `looksLikeJobs`
+  /* The old guess list probed /join-us. Prefiltering candidates with `looksLikeJobs`
      would have made this step narrower than the guess list it replaces. */
   assert.equal(s.looksLikeJobs('https://example.com/join-us'), false)
   const urls = s

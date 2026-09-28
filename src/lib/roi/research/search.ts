@@ -51,7 +51,7 @@ export type SiteOwner = 'theirs' | 'board' | 'secondHand' | 'stranger'
 
 /* Hiring platforms we trust as if they were the company's own site. Workday is
    first on merit: it turned up for 5 of the 22 firms we measured, more than
-   every other platform put together, and S2's guessing step never tries it
+   every other platform put together, and the old guessing step never tried it
    because its addresses cannot be guessed
    (`{tenant}.wd{N}.myworkdayjobs.com`). Search finds them; guessing never
    could. */
@@ -310,17 +310,17 @@ export function pickTheirPages(
     .map((s) => s.hit)
 }
 
-/* Short, because S2 has a 20-second budget in total and may try two search
-   engines. The shared search code defaults to 15 seconds, which suits the older
-   ROI agent, where there is no such limit. */
+/* Short, because the research agent runs while a person waits, and a search
+   may fall back to a second engine. The shared search code defaults to 15
+   seconds, which suits the older ROI agent, where nobody is waiting. */
 const SEARCH_TIMEOUT_MS = 6_000
 
 /* The search engines, their API keys, the order we fall back through and the
    error handling all live in `tools/webSearch`. This file used to keep a second
    copy of all that, and the two drifted apart (LYR-221).
    All this function does now is cut the rich result down to the {url, title}
-   pairs the scouts sort on. We deliberately throw away the snippet and the
-   engine's own summary, because a scout has to read the page itself rather
+   pairs the agent chooses from. We deliberately throw away the snippet and the
+   engine's own summary, because the agent has to read the page itself rather
    than trust a search engine's description of it. */
 export async function webSearch(query: string, limit = 8): Promise<Hit[]> {
   try {
@@ -339,9 +339,9 @@ export async function webSearch(query: string, limit = 8): Promise<Hit[]> {
 
 /* The search wording that found `tamimi.talentera.com` on the first try.
 
-   `companyName` comes from S1 — the firm's name as the firm writes it. It is
-   optional, and without it we fall back to the domain name, which is the old
-   behaviour, so this step still works when S1 found nothing.
+   `companyName` is the firm's name as the firm writes it. It is optional, and
+   without it we fall back to the domain name, which is the old behaviour, so
+   this step still works when the name is unknown.
 
    But the real name was worth passing through three function signatures,
    because the domain name is what was breaking the search. Measured over 25
@@ -449,8 +449,8 @@ export function jobLinks(
    collects candidates for a model to choose between, so a false positive costs
    a few tokens and a false negative costs the whole company.
 
-   `/join-us` is why the two cannot be the same regex. It is one of the five
-   paths S2 has always probed, and `JOB_WORDS` does not match it. Prefiltering
+   `/join-us` is why the two cannot be the same regex. It was one of the five
+   paths the old guess list probed, and `JOB_WORDS` does not match it. Prefiltering
    with `JOB_WORDS` would have made this step narrower than the guess list it
    replaces. */
 const CAREERS_WORDS =
@@ -459,8 +459,8 @@ const CAREERS_WORDS =
 /* Collects every link on a page that might be the company's careers page, with
    the words the page used for it.
 
-   This is the RECALL half of finding a careers page; `pickCareersLinks` in the
-   S2 scout is the precision half. Splitting them that way is the whole point of
+   This is the RECALL half of finding a careers page; the agent choosing among
+   the candidates (`tools.ts`) is the precision half. Splitting them that way is the whole point of
    LYR-220. Every retrieval bug this system has had came from one regex being
    asked to do both jobs at once — `/careers` missing `/career/`, an 8-character
    floor dropping a 6-character path, a five-entry list standing in for the shape
