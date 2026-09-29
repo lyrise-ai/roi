@@ -1,4 +1,5 @@
 import React from 'react'
+import { Button } from '../core/Button'
 import { Icon } from '../core/Icon'
 import { IconButton } from '../core/IconButton'
 
@@ -89,13 +90,14 @@ export function ChatPanel({
   ...rest
 }) {
   const [draft, setDraft] = React.useState('')
-  const [reopened, setReopened] = React.useState(false)
+  const logRef = React.useRef(null)
 
   React.useEffect(() => {
-    setReopened(false)
-  }, [status])
+    const log = logRef.current
+    if (log) log.scrollTop = log.scrollHeight
+  }, [messages, status])
 
-  const isClosed = status === 'closed' && !reopened
+  const isClosed = status === 'closed'
   const isUnavailable = status === 'cap-reached' || status === 'expired'
   const canSend = !isClosed && !isUnavailable
 
@@ -103,6 +105,10 @@ export function ChatPanel({
     const trimmed = text.trim()
     if (!trimmed || !canSend) return
     onSend(trimmed, scope)
+  }
+
+  const sendDraft = () => {
+    send(draft)
     setDraft('')
   }
 
@@ -156,12 +162,15 @@ export function ChatPanel({
             LyRise analyst
           </h2>
         </div>
-        <IconButton label="Close analyst chat" onClick={onClose}>
-          <Icon name="x" size={20} />
-        </IconButton>
+        {!isClosed && (
+          <IconButton label="Close analyst chat" onClick={onClose}>
+            <Icon name="x" size={20} />
+          </IconButton>
+        )}
       </header>
 
       <div
+        ref={logRef}
         aria-live="polite"
         style={{
           flex: '1 1 auto',
@@ -188,25 +197,9 @@ export function ChatPanel({
             <p style={{ font: 'var(--type-body)', color: 'var(--text-body)' }}>
               The analyst is ready when you are.
             </p>
-            <button
-              type="button"
-              onClick={() => {
-                setReopened(true)
-                onOpen?.()
-              }}
-              style={{
-                minHeight: 'var(--space-10)',
-                padding: 'var(--space-2) var(--space-4)',
-                border: '1px solid var(--lyrise-purple)',
-                borderRadius: 'var(--radius-pill)',
-                background: 'transparent',
-                color: 'var(--text-accent)',
-                font: 'var(--type-label)',
-                cursor: 'pointer',
-              }}
-            >
+            <Button variant="secondary" size="sm" onClick={onOpen}>
               Reopen the conversation
-            </button>
+            </Button>
           </div>
         ) : (
           <>
@@ -255,9 +248,9 @@ export function ChatPanel({
                 gap: 'var(--space-2)',
               }}
             >
-              {suggestions.map((suggestion) => (
+              {suggestions.map((suggestion, index) => (
                 <button
-                  key={suggestion}
+                  key={`${suggestion}-${index}`}
                   type="button"
                   onClick={() => send(suggestion)}
                   style={{
@@ -296,7 +289,7 @@ export function ChatPanel({
           <form
             onSubmit={(event) => {
               event.preventDefault()
-              send(draft)
+              sendDraft()
             }}
             style={{
               display: 'flex',
@@ -309,6 +302,16 @@ export function ChatPanel({
               <textarea
                 value={draft}
                 onChange={(event) => setDraft(event.target.value)}
+                onKeyDown={(event) => {
+                  if (
+                    event.key === 'Enter' &&
+                    !event.shiftKey &&
+                    !event.nativeEvent.isComposing
+                  ) {
+                    event.preventDefault()
+                    sendDraft()
+                  }
+                }}
                 placeholder={
                   canSend
                     ? 'Ask about a number in the report'
@@ -329,27 +332,16 @@ export function ChatPanel({
                 }}
               />
             </label>
-            <button
+            <IconButton
               type="submit"
+              variant="solid"
+              size="lg"
+              label="Send question"
               disabled={!canSend || !draft.trim()}
-              aria-label="Send question"
-              style={{
-                width: 'var(--space-12)',
-                height: 'var(--space-12)',
-                flexShrink: 0,
-                display: 'inline-flex',
-                alignItems: 'center',
-                justifyContent: 'center',
-                border: 0,
-                borderRadius: 'var(--radius-pill)',
-                background: 'var(--lyrise-purple)',
-                color: 'var(--text-inverse)',
-                cursor: canSend && draft.trim() ? 'pointer' : 'not-allowed',
-                opacity: canSend && draft.trim() ? 1 : 0.4,
-              }}
+              style={{ flexShrink: 0 }}
             >
               <Icon name="arrow-up" size={20} />
-            </button>
+            </IconButton>
           </form>
         </footer>
       )}

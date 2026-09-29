@@ -14,8 +14,9 @@ questions to the owner; it never calls a model or calculates a report value.
 />
 ```
 
-`status="closed"` shows a reopen nudge. `cap-reached` and `expired` keep the
-conversation visible while disabling the composer and showing their terminal
-message. A non-null `scope` is sent unchanged with every question, including a
-tapped suggestion. When `status` is controlled by the parent, pass `onOpen` so
-the reopen action can move the parent state back to `open`.
+`status="closed"` shows a reopen nudge. Its button calls the required `onOpen`
+callback; the parent must change `status` back to `open`. `cap-reached` and
+`expired` keep the conversation visible while disabling the composer and
+showing their terminal message. A non-null `scope` is sent unchanged with every
+question, including a tapped suggestion. Tapping a suggestion leaves any text
+in the composer untouched.

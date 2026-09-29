@@ -682,7 +682,7 @@ export default function UiKit() {
               }}
             >
               <ChatPanel
-                opener="One thing below I'd like you to check. Or ask me about any number in the report."
+                opener="You skipped this interview question: Which workflow takes the most time each week?"
                 messages={chatMessages}
                 suggestions={[
                   'How could this uplift be higher?',
