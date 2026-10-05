@@ -64,6 +64,9 @@ import {
   MINI_SETTINGS,
 } from '@/src/lib/roi/v2/miniCalculator'
 import { buildObservationSentence } from '@/src/lib/roi/v2/observation'
+import { SAMPLE_ANSWERS } from '@/src/lib/roi/v2/sampleReport'
+
+const IS_DEV = process.env.NODE_ENV === 'development'
 
 const STEPS = ['landing', 'company', 'interview', 'reveal']
 
@@ -319,7 +322,7 @@ function AnalystMark() {
 
 /* One line of text, one button, three small labels. No splash screen, no
    typewriter effect, no auto-advance. Holding back is the design (LYR-183). */
-function Landing({ onStart }) {
+function Landing({ onStart, onFastMock }) {
   const chips = ['~3 minutes', 'Free, no sales call', 'Your numbers stay yours']
   return (
     <section
@@ -352,13 +355,28 @@ function Landing({ onStart }) {
         answer: here&rsquo;s what this work costs you, and here&rsquo;s
         what&rsquo;s worth automating.
       </p>
-      <Button
-        size="lg"
-        onClick={onStart}
-        iconRight={<Icon name="arrow-right" size={18} />}
+      <div
+        style={{
+          display: 'flex',
+          flexWrap: 'wrap',
+          alignItems: 'center',
+          justifyContent: 'center',
+          gap: 'var(--space-3)',
+        }}
       >
-        Start with my company
-      </Button>
+        <Button
+          size="lg"
+          onClick={onStart}
+          iconRight={<Icon name="arrow-right" size={18} />}
+        >
+          Start with my company
+        </Button>
+        {IS_DEV && (
+          <Button size="lg" variant="secondary" onClick={onFastMock}>
+            Fast mock preview
+          </Button>
+        )}
+      </div>
       <div
         style={{
           display: 'flex',
@@ -2210,7 +2228,14 @@ export default function V2() {
         <style>{RISE_CSS}</style>
       </Head>
       <Shell step={flow.step}>
-        {flow.step === 'landing' && <Landing onStart={() => go(1)} />}
+        {flow.step === 'landing' && (
+          <Landing
+            onStart={() => go(1)}
+            onFastMock={() =>
+              setFlow({ ...emptyFlow(), ...SAMPLE_ANSWERS, step: 'reveal' })
+            }
+          />
+        )}
         {flow.step === 'company' && (
           <Company
             value={flow.company}
