@@ -53,7 +53,16 @@ import {
   assembleCalculatorInput,
   bridgePainQuant,
 } from '@/src/lib/roi/v2/answerBridge'
-import { calculateMiniProfitMap } from '@/src/lib/roi/v2/miniCalculator'
+import {
+  chain,
+  hoursReturned,
+  hoursSpent,
+  money,
+} from '@/src/lib/roi/v2/format'
+import {
+  calculateMiniProfitMap,
+  MINI_SETTINGS,
+} from '@/src/lib/roi/v2/miniCalculator'
 import { buildObservationSentence } from '@/src/lib/roi/v2/observation'
 
 const STEPS = ['landing', 'company', 'interview', 'reveal']
@@ -102,16 +111,16 @@ const FIGURE_UNIT = {
 }
 
 /* Piece 4 (LYR-188 / POC 10): the pop-up that shows how the money figure was
-   worked out. Each line is copied straight from calc.formulas — we never redo
+   worked out. Each line comes straight from format.chain() — we never redo
    the maths here — in the order the figure is actually built up. `annualHours`
    is left out on purpose: it belongs to the OTHER figure (hours spent), which
    carries no guesses, so it is not one of the assumptions behind this one. */
 const FORMULA_ROWS = [
-  { key: 'hoursReturned', label: 'Hours returned' },
-  { key: 'ratePerHour', label: 'Rate per hour' },
-  { key: 'operationalDividend', label: 'Operational dividend' },
-  { key: 'profitUplift', label: 'Profit uplift' },
-  { key: 'totalFinancialGain', label: 'Total financial gain' },
+  { line: 1, label: 'Hours returned' },
+  { line: 2, label: 'Rate per hour' },
+  { line: 3, label: 'Operational dividend' },
+  { line: 4, label: 'Profit uplift' },
+  { line: 5, label: 'Total financial gain' },
 ]
 
 /* Each screen slides up 8px when it appears. It lives in this file, not in
@@ -1443,9 +1452,6 @@ function Interview({
 const OURS_NOT_YOURS =
   'You left the numbers to me, so these are my guesses standing in — marked as mine, and worth replacing with your own before this goes in front of anyone.'
 
-const comma = (n) => Math.round(n).toLocaleString('en-US')
-const money = (n) => `$${comma(n)}`
-
 /* Takes one pain point's five number answers, reads them with answerBridge,
    and runs the calculator on them.
 
@@ -1466,7 +1472,10 @@ function figuresFor(pain, estimates) {
   const assembled = assembleCalculatorInput(fields, pain.team || undefined)
 
   if (!assembled.incomplete) {
-    return { complete: true, calc: calculateMiniProfitMap(assembled) }
+    const calc = calculateMiniProfitMap(assembled)
+    // format.chain()'s six lines; FORMULA_ROWS picks which ones the pop-up shows.
+    const lines = chain(assembled, calc, MINI_SETTINGS).split('\n')
+    return { complete: true, calc, lines }
   }
   if (fields.people.value === null || fields.hoursPerWeek.value === null) {
     return { complete: false, calc: null }
@@ -1746,7 +1755,7 @@ function Reveal({ flow, demo, onRestart }) {
               Hours currently spent{hasRange ? ' (range midpoint)' : ''}
             </p>
             <p style={FIGURE_VALUE}>
-              {comma(figures.calc.annualHours)}
+              {hoursSpent(figures.calc.annualHours)}
               <span style={FIGURE_UNIT}>hrs / year</span>
               {/* Only shown when there is a pop-up to open. The dot exists so
                   you can trace the number; a dot that opens nothing is just
@@ -1768,11 +1777,11 @@ function Reveal({ flow, demo, onRestart }) {
                 {hasRange ? ' (range midpoint)' : ''}
               </p>
               <p style={FIGURE_VALUE}>
-                {comma(figures.calc.hoursReturned)}
+                {hoursReturned(figures.calc.hoursReturned)}
                 <span style={FIGURE_UNIT}>hrs / year</span>
               </p>
               <p style={{ ...FIGURE_VALUE, marginTop: 'var(--space-2)' }}>
-                {money(figures.calc.totalFinancialGain)}
+                {money(figures.calc.totalFinancialGain, MINI_SETTINGS.currency)}
                 {/* This one holds our guesses about how much can be
                     automated, how many people will use it, and how much of the
                     saving really lands. Clicking it opens the pop-up below. */}
@@ -1811,7 +1820,7 @@ function Reveal({ flow, demo, onRestart }) {
             }}
           >
             {FORMULA_ROWS.map((row) => (
-              <div key={row.key}>
+              <div key={row.line}>
                 <p style={{ ...FIGURE_LABEL, margin: '0 0 var(--space-1)' }}>
                   {row.label}
                 </p>
@@ -1822,7 +1831,7 @@ function Reveal({ flow, demo, onRestart }) {
                     margin: 0,
                   }}
                 >
-                  {figures.calc.formulas[row.key]}
+                  {figures.lines[row.line]}
                 </p>
               </div>
             ))}

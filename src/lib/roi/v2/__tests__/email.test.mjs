@@ -122,7 +122,10 @@ test('generateReportEmailContent: strictly adheres to P10 terminology and analys
     !contentSelf.html.toLowerCase().includes('discover'),
     'Never use "discover"',
   )
-  assert.ok(!contentSelf.subject.includes('!'), 'No exclamation marks in subject')
+  assert.ok(
+    !contentSelf.subject.includes('!'),
+    'No exclamation marks in subject',
+  )
 
   // Check colleague format
   const contentColleague = generateReportEmailContent(
@@ -224,4 +227,65 @@ test('sendReportEmail: fails loudly when Resend rejects (LYR-214 / P4)', async (
     if (origKey) process.env.RESEND_API_KEY = origKey
     else delete process.env.RESEND_API_KEY
   }
+})
+
+test('generateReportEmailContent full text matches expected.', () => {
+  const { _, html, text } = generateReportEmailContent(
+    SAMPLE_SAVED_REPORT,
+    'self',
+    {
+      publicUrl: 'https://roi.lyrise.ai/v2/report/rep_test',
+    },
+  )
+  assert.equal(
+    html,
+    '<!DOCTYPE html>\n' +
+      '<html>\n' +
+      '<head>\n' +
+      '  <meta charset="utf-8">\n' +
+      '  <style>\n' +
+      "    body { font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Helvetica, Arial, sans-serif; line-height: 1.5; color: #111827; margin: 0; padding: 24px; }\n" +
+      '    .container { max-width: 560px; margin: 0 auto; }\n' +
+      '    .heading { font-size: 20px; font-weight: 700; margin-bottom: 12px; color: #111827; }\n' +
+      '    .sub { color: #4b5563; font-size: 14px; margin-bottom: 24px; }\n' +
+      '    .card { background: #f9fafb; border: 1px solid #e5e7eb; border-radius: 8px; padding: 20px; margin-bottom: 24px; }\n' +
+      '    .stat { margin-bottom: 12px; }\n' +
+      '    .stat-label { font-size: 12px; font-weight: 600; color: #6b7280; text-transform: uppercase; letter-spacing: 0.05em; }\n' +
+      '    .stat-val { font-size: 18px; font-weight: 700; color: #111827; margin-top: 2px; }\n' +
+      '    .btn { display: inline-block; background: #2957FF; color: #ffffff !important; padding: 12px 24px; border-radius: 9999px; text-decoration: none; font-weight: 600; font-size: 14px; margin: 16px 0; }\n' +
+      '    .footer { font-size: 12px; color: #9ca3af; border-top: 1px solid #e5e7eb; padding-top: 16px; margin-top: 32px; }\n' +
+      '  </style>\n' +
+      '</head>\n' +
+      '<body>\n' +
+      '  <div class="container">\n' +
+      '    <div class="heading">Your LyRise Profit Map: Acme Legal Services</div>\n' +
+      '    <div class="sub">Four people spend about 15 hours a week each on reconciling accounts — about 3,000 hours a year.</div>\n' +
+      '    <div class="card">\n' +
+      '      <div class="stat"><div class="stat-label">Hours currently spent</div><div class="stat-val">3,000 hrs / year</div></div>\n' +
+      '      <div class="stat"><div class="stat-label">Hours Returned</div><div class="stat-val">1,092 hrs / year</div></div>\n' +
+      '      <div class="stat"><div class="stat-label">Operational Dividend</div><div class="stat-val">$46,137</div></div>\n' +
+      '      <div class="stat"><div class="stat-label">Total Financial Gain</div><div class="stat-val">$106,115</div></div>\n' +
+      '    </div>\n' +
+      '    <div>\n' +
+      '      <a class="btn" href="https://roi.lyrise.ai/v2/report/rep_test">View full report</a>\n' +
+      '    </div>\n' +
+      '    <div class="footer">\n' +
+      '      This link remains active so you can review your figures or share them with colleagues at any time: <a href="https://roi.lyrise.ai/v2/report/rep_test" style="color: #4b5563;">https://roi.lyrise.ai/v2/report/rep_test</a>\n' +
+      '    </div>\n' +
+      '  </div>\n' +
+      '</body>\n' +
+      '</html>',
+  )
+  assert.equal(
+    text,
+    'Here is the LyRise Profit Map we prepared for Acme Legal Services.\n' +
+      'Four people spend about 15 hours a week each on reconciling accounts — about 3,000 hours a year.\n' +
+      'Hours currently spent: 3,000 hrs / year\n' +
+      'Hours Returned: 1,092 hrs / year\n' +
+      'Operational Dividend: $46,137\n' +
+      'Total Financial Gain: $106,115\n' +
+      'Review your full report and calculations:\n' +
+      'https://roi.lyrise.ai/v2/report/rep_test\n' +
+      'This link stays active so you can return to it whenever needed.',
+  )
 })
