@@ -142,7 +142,7 @@ function supabaseConfigured(): boolean {
 
 /* Both Supabase helpers swallow every error. This layer only makes things
    faster. A miss caused by a database problem means a slower run, not a failed
-   one, and must never show up as a scout error. */
+   one, and must never show up as a research error. */
 async function readPersisted(key: string): Promise<Page | null> {
   if (!supabaseConfigured()) return null
   try {
@@ -194,9 +194,9 @@ async function writePersisted(key: string, page: Page): Promise<void> {
    worth it at all. "We were refused" and "there is no such page" look identical
    if all you return is null, and mixing them up costs us both ways. Sending a
    clean 404 on to Firecrawl spends a credit, and the waiting time, to be told
-   again that the page does not exist. S2 tries five possible careers paths per
-   company and most of them genuinely do not exist, so this is the difference
-   between one credit and five. */
+   again that the page does not exist. Many addresses the agent tries, such as
+   likely careers paths, genuinely do not exist, so this is the difference
+   between one credit and several. */
 type PlainFetch =
   | { content: string; blocked: false; why: null }
   | { content: null; blocked: boolean; why: ReadFailure['why'] }
@@ -338,7 +338,7 @@ async function firecrawlFetch(url: string): Promise<string | null> {
       /* We ask for markdown, not raw HTML. Firecrawl charges one credit either
          way — checked against their own credit-usage endpoint — and raw HTML
          genuinely tells us more, in particular the machine-readable address
-         block S1 reads the country out of.
+         block that holds the company's country.
          Markdown still wins on size: 25KB against 546KB for the same page. And
          everything that uses this content either strips the tags anyway or
          feeds it to a model that charges by the word.
@@ -358,8 +358,8 @@ async function firecrawlFetch(url: string): Promise<string | null> {
     if (response.status === 429) {
       /* If Firecrawl tells us how long to wait, we listen. It also refuses when
          too many browsers are open at once, which clears faster than the
-         per-minute limit. We never sit and wait inside a request — a scout
-         waiting 30 seconds to fill one row is worse than the row being missing
+         per-minute limit. We never sit and wait inside a request — the agent
+         waiting 30 seconds for one page is worse than the page being missing
          — so this just parks Firecrawl and lets the run carry on. */
       const retryAfter = Number(response.headers?.get?.('retry-after'))
       const cooldown =

@@ -1,7 +1,8 @@
 import { defineConfig, devices } from '@playwright/test'
 import { loadEnvConfig } from '@next/env'
 
-// Make .env.local readable by the setup step and by this config file
+// Load env vars for the setup step and this file. `npm run test:e2e` has
+// already decrypted .env through dotenvx; this adds any local override
 loadEnvConfig(process.cwd())
 
 export default defineConfig({

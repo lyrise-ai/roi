@@ -56,8 +56,8 @@ export interface SearchResponse {
 
 const EMPTY: SearchResponse = { answer: null, results: [] }
 
-/* The research scouts have 20 seconds in total and cannot afford two 15-second
-   attempts. The older ROI agent has no such limit. So each caller passes what
+/* The research agent runs while a person waits, and cannot afford two
+   15-second attempts. The older ROI agent has no such limit. So each caller passes what
    it can afford, rather than everyone sharing one compromise. */
 export const DEFAULT_TIMEOUT_MS = 15_000
 

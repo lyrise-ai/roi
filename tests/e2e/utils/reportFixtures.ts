@@ -17,7 +17,7 @@ export function adminClient(): SupabaseClient {
   const key = process.env.SUPABASE_SERVICE_ROLE_KEY
   if (!url || !key) {
     throw new Error(
-      'NEXT_PUBLIC_SUPABASE_URL / SUPABASE_SERVICE_ROLE_KEY must be set to seed report fixtures — add them to .env.local.',
+      'NEXT_PUBLIC_SUPABASE_URL / SUPABASE_SERVICE_ROLE_KEY must be set to seed report fixtures — run through `npm run test:e2e`, which decrypts .env.',
     )
   }
   return createClient(url, key)
