@@ -173,8 +173,11 @@ above any code you are about to change.
 - Components check `process.env.NEXT_PUBLIC_ENV` — `production`, `ci`, or unset
   — to change behaviour such as links, redirects and whether alerts are sent.
   Keep that when editing them.
-- Nothing on the report-generation path may **ever throw**. Give back a partial
-  result instead. `pipeline/validationBaseline.ts` shows the pattern.
+- Nothing on the report-generation path may throw **to the person**. V1 gives
+  back a partial result (`pipeline/validationBaseline.ts`). V2's pure code
+  throws on impossible input (a `NaN`, an unrounded figure); `buildReport`
+  catches it per row and shows what failed and what to do (rule P4, LYR-162).
+  Never print a `0` in place of a value we don't have.
 
 ## Commands
 
