@@ -1,4 +1,5 @@
 import React from 'react'
+import { Badge } from '../core/Badge'
 import { Button } from '../core/Button'
 import { Icon } from '../core/Icon'
 import { IconButton } from '../core/IconButton'
@@ -271,20 +272,9 @@ export function ChatPanel({
             </div>
           )}
           {scope && (
-            <span
-              style={{
-                alignSelf: 'flex-start',
-                padding: 'var(--space-1) var(--space-3)',
-                borderRadius: 'var(--radius-pill)',
-                background: 'var(--surface-accent-subtle)',
-                color: 'var(--text-accent)',
-                font: 'var(--type-eyebrow)',
-                letterSpacing: 'var(--tracking-caps)',
-                textTransform: 'uppercase',
-              }}
-            >
+            <Badge tone="purple" style={{ alignSelf: 'flex-start' }}>
               Asking about {scope}
-            </span>
+            </Badge>
           )}
           <form
             onSubmit={(event) => {
