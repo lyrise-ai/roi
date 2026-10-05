@@ -202,8 +202,8 @@ refuses unknown settings, so this note cannot live inside the config file.
 ## Environment variables
 
 `.env.example` is the full list, and marks which are required. The real values
-live in `.env`, committed but encrypted with dotenvx. `npm run dev`, `build` and
-the test scripts unlock it with the key in `.env.keys`, which git ignores —
+live in `.env`, committed but encrypted with dotenvx. `npm run dev`, `build`,
+`start`, `research` and the browser test scripts unlock it with the key in `.env.keys`, which git ignores —
 never commit that file. Add or change a value with `npx dotenvx set NAME value`,
 which writes it encrypted. Anything starting with `NEXT_PUBLIC_` is visible in
 the browser; everything else is server-only.

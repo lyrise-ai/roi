@@ -23,7 +23,7 @@ export type ProviderKey =
   | 'BRAVE_API_KEY'
 
 /* Returns nothing rather than an empty string, so every caller can check it the
-   same way, and a blank line in .env.local reads as "no key" instead of as a
+   same way, and a blank value in .env reads as "no key" instead of as a
    key that will be rejected. */
 export function providerKey(name: ProviderKey): string | null {
   const value = process.env[name]
