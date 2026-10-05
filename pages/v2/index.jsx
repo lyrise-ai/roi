@@ -49,11 +49,8 @@ import {
   SegmentedInput,
   SuggestionBlock,
 } from '@components/ui'
-import {
-  assembleCalculatorInput,
-  bridgePainQuant,
-} from '@/src/lib/roi/v2/answerBridge'
-import { calculateMiniProfitMap } from '@/src/lib/roi/v2/miniCalculator'
+import { bridgePainQuant } from '@/src/lib/roi/v2/answerBridge'
+import { selectFeatured } from '@/src/lib/roi/v2/miniCalculator'
 import { buildObservationSentence } from '@/src/lib/roi/v2/observation'
 
 const STEPS = ['landing', 'company', 'interview', 'reveal']
@@ -1445,72 +1442,6 @@ const OURS_NOT_YOURS =
 
 const comma = (n) => Math.round(n).toLocaleString('en-US')
 const money = (n) => `$${comma(n)}`
-
-/* Takes one pain point's five number answers, reads them with answerBridge,
-   and runs the calculator on them.
-
-   `estimates` is the five estimate strings we showed this company during the
-   questions (quantFor(demo, i).estimate). answerBridge uses one of them
-   whenever the matching question was left blank. That is what makes the
-   click-through demo show real figures instead of "not enough here yet".
-   Anything filled in that way is flagged as an estimate and marked on screen
-   as ours — never passed off as the user's own number.
-
-   annualHours (hours spent per year) never looks at pay or at how much can be
-   automated. It is only people × hours a week × the calculator's own 50
-   working weeks. So a pain point missing only pay can still show hours spent.
-   The money side is what we hold back — we never make a number up. A pain
-   point missing people or hours a week has nothing to show at all. */
-function figuresFor(pain, estimates) {
-  const fields = bridgePainQuant(pain.quant, estimates)
-  const assembled = assembleCalculatorInput(fields, pain.team || undefined)
-
-  if (!assembled.incomplete) {
-    return { complete: true, calc: calculateMiniProfitMap(assembled) }
-  }
-  if (fields.people.value === null || fields.hoursPerWeek.value === null) {
-    return { complete: false, calc: null }
-  }
-  const calc = calculateMiniProfitMap({
-    people: fields.people.value,
-    hoursPerWeek: fields.hoursPerWeek.value,
-    annualPay: 0,
-    automatablePct: 0,
-  })
-  return { complete: false, calc: { annualHours: calc.annualHours } }
-}
-
-/* Picks which pain point to show on the reveal screen (LYR-188). The rules run
-   in order: biggest money figure wins; if two tie, more hours returned wins;
-   if they still tie, whichever the user entered first wins. Nothing random and
-   no model call, so the same answers always pick the same pain point, and we
-   can unit-test the choice.
-
-   A pain point with missing numbers always loses to one with complete numbers,
-   even if its partial hours figure happens to be bigger. A number with less
-   behind it should never beat a number with more behind it just because it
-   looks larger. */
-function selectFeatured(pains, estimates) {
-  return pains
-    .map((pain, index) => ({
-      pain,
-      index,
-      figures: figuresFor(pain, estimates),
-    }))
-    .sort((a, b) => {
-      if (a.figures.complete !== b.figures.complete)
-        return a.figures.complete ? -1 : 1
-      if (a.figures.complete && b.figures.complete) {
-        const gain =
-          b.figures.calc.totalFinancialGain - a.figures.calc.totalFinancialGain
-        if (gain !== 0) return gain
-        const hours =
-          b.figures.calc.hoursReturned - a.figures.calc.hoursReturned
-        if (hours !== 0) return hours
-      }
-      return a.index - b.index
-    })[0]
-}
 
 /* `demo` is handed in from above rather than looked up here. If the user left
    one of our estimates standing, the only honest thing to check it against is
