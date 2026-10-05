@@ -570,6 +570,12 @@ const QUANT = [
     estimate: 'Nothing to base one on',
     kind: 'estimated',
     why: 'We couldn’t find anything public about you, so an estimate here would be a guess about a guess. This one matters most — it multiplies everything below it — so it’s worth your real number.',
+    bands: [
+      { label: 'under 20', low: 0, high: 20 },
+      { label: '20–100', low: 20, high: 100 },
+      { label: '100–500', low: 100, high: 500 },
+      { label: '500 or more', low: 500, high: 1000 },
+    ],
   },
   {
     label: 'How many people do it?',
@@ -577,6 +583,12 @@ const QUANT = [
     estimate: 'Nothing to base one on',
     kind: 'estimated',
     why: 'Nothing we found tells us how many people touch this. Your number is the only one worth having.',
+    bands: [
+      { label: '1–3', low: 1, high: 3 },
+      { label: '4–10', low: 4, high: 10 },
+      { label: '10–25', low: 10, high: 25 },
+      { label: '25 or more', low: 25, high: 50 },
+    ],
   },
   {
     label: 'Hours a week, each?',
@@ -584,6 +596,12 @@ const QUANT = [
     estimate: 'Nothing to base one on',
     kind: 'estimated',
     why: 'This one varies more between two companies of the same size than almost anything else, and we have nothing on yours to narrow it.',
+    bands: [
+      { label: 'under 5', low: 0, high: 5 },
+      { label: '5–15', low: 5, high: 15 },
+      { label: '15–30', low: 15, high: 30 },
+      { label: '30 or more', low: 30, high: 40 },
+    ],
   },
   {
     label: 'Roughly what they earn?',
@@ -591,6 +609,12 @@ const QUANT = [
     estimate: 'Nothing to base one on',
     kind: 'estimated',
     why: 'Pay depends on the role and the market, and we don’t know either for you yet. A rough band is fine.',
+    bands: [
+      { label: 'under $30k', low: 0, high: 30000 },
+      { label: '$30k–$60k', low: 30000, high: 60000 },
+      { label: '$60k–$100k', low: 60000, high: 100000 },
+      { label: '$100k or more', low: 100000, high: 150000 },
+    ],
   },
   {
     label:
@@ -599,6 +623,12 @@ const QUANT = [
     estimate: 'about a third',
     kind: 'estimated',
     why: 'Our read across this kind of work, not a read of yours: the repetitive part follows rules, the odd cases still need judgment. Nothing scraped — correct it freely.',
+    bands: [
+      { label: 'under 25%', low: 0, high: 0.25 },
+      { label: '25%–50%', low: 0.25, high: 0.5 },
+      { label: '50%–75%', low: 0.5, high: 0.75 },
+      { label: '75% or more', low: 0.75, high: 1.0 },
+    ],
   },
 ]
 
@@ -992,11 +1022,55 @@ function sourceLabel(url) {
    findings for no reason the prospect can see. We print `says` exactly as
    written and use `link` as the link. This component calls no model and makes no
    decisions of its own (LYR-199). */
-function ScanPanel({ company, findings, looking }) {
-  /* Nothing found means nothing on screen, not an empty box. Once the search
-     is finished and found nothing, the panel disappears — the questions are
-     the whole product without it. */
-  if (findings.length === 0 && !looking) return null
+/* Turns a tool name emitted during research into a plain English sentence for
+   the wait state. "Reading their careers page" is a much better wait state than
+   a spinner. */
+function stepText(using = []) {
+  if (!using || using.length === 0) return 'Reading what’s public about you…'
+  const primary = using[0]
+  switch (primary) {
+    case 'readPage':
+      return 'Reading a page on your website…'
+    case 'searchWeb':
+      return 'Searching for public info about you…'
+    case 'findLinks':
+      return 'Looking for careers and role links…'
+    case 'noteFinding':
+      return 'Noting down a finding…'
+    case 'countRepeats':
+      return 'Analyzing role listings…'
+    default:
+      return 'Reading what’s public about you…'
+  }
+}
+
+/* What the research found, shown beside the questions rather than in front of
+   them. It only ever shows things it can point at, and it never fills in an
+   answer for the user.
+
+   Three cases:
+   1. Findings appear one by one as they arrive;
+   2. While the search is still running, it shows the agent's current action quietly;
+   3. If nothing was found, but gaps were logged (e.g. site timeout or refusal),
+      it says what we looked at and why it came back empty rather than vanishing (LYR-225).
+
+   If a run returns no findings and no gaps, the panel disappears.
+   We print `says` exactly as written and use `link` as the link. This component
+   calls no model and makes no decisions of its own (LYR-199, LYR-225). */
+function ScanPanel({
+  company,
+  findings = [],
+  gaps = [],
+  looking = false,
+  stepUsing = [],
+}) {
+  const hasFindings = findings.length > 0
+  const hasGaps = gaps.length > 0
+  /* Nothing found and no gaps means nothing on screen, not an empty box. Once
+     the search is finished and found nothing and has no gaps to explain why,
+     the panel disappears — the questions are the whole product without it. */
+  if (!hasFindings && !hasGaps && !looking) return null
+
   return (
     <aside
       /* The label is what keeps this a landmark for screen readers. An <aside>
@@ -1033,21 +1107,71 @@ function ScanPanel({ company, findings, looking }) {
           color: 'var(--text-muted)',
         }}
       >
-        {`What we could verify about ${company || 'you'} — each with a source.`}
+        {hasFindings || looking
+          ? `What we could verify about ${company || 'you'} — each with a source.`
+          : `What we looked at for ${company || 'you'} — and why we found no public details.`}
       </p>
-      {findings.map((f, i) => (
-        <ScanFactRow
-          /* The agent may say more than one thing about one page, so the link
-             alone is not a key. */
-          key={`${f.link}\n${f.says}`}
-          stacked
-          fact={f.about}
-          value={f.says}
-          source={sourceLabel(f.link)}
-          sourceUrl={f.link}
-          last={!looking && i === findings.length - 1}
-        />
-      ))}
+      {hasFindings &&
+        findings.map((f, i) => (
+          <ScanFactRow
+            /* The agent may say more than one thing about one page, so the link
+               alone is not a key. */
+            key={`${f.link}\n${f.says}`}
+            stacked
+            fact={f.about}
+            value={f.says}
+            source={sourceLabel(f.link)}
+            sourceUrl={f.link}
+            last={!looking && i === findings.length - 1}
+          />
+        ))}
+      {!hasFindings && !looking && hasGaps && (
+        <div
+          style={{
+            display: 'flex',
+            flexDirection: 'column',
+            gap: 'var(--space-3)',
+            marginBottom: 'var(--space-3)',
+          }}
+        >
+          {gaps.map((gap, i) => (
+            <div
+              key={i}
+              style={{
+                display: 'flex',
+                alignItems: 'flex-start',
+                gap: 'var(--space-3)',
+                padding: 'var(--space-2) 0',
+                borderBottom:
+                  i === gaps.length - 1
+                    ? 'none'
+                    : '1px solid var(--border-subtle)',
+              }}
+            >
+              <span
+                style={{
+                  flex: '0 0 auto',
+                  width: 14,
+                  display: 'inline-flex',
+                  justifyContent: 'center',
+                  color: 'var(--text-muted)',
+                  marginTop: 2,
+                }}
+              >
+                <Icon name="info" size={14} strokeWidth={2} />
+              </span>
+              <span
+                style={{
+                  font: 'var(--weight-regular) var(--text-xs)/var(--leading-relaxed) var(--font-body)',
+                  color: 'var(--text-muted)',
+                }}
+              >
+                {gap}
+              </span>
+            </div>
+          ))}
+        </div>
+      )}
       {looking && (
         <div
           style={{
@@ -1073,7 +1197,7 @@ function ScanPanel({ company, findings, looking }) {
               color: 'var(--text-muted)',
             }}
           >
-            Reading what&rsquo;s public about you&hellip;
+            {stepText(stepUsing)}
           </span>
         </div>
       )}
@@ -1119,7 +1243,10 @@ function Interview({
      re-centre the questions once, the moment we learn there is nothing. The
      alternative is an empty gap beside the questions for the rest of the
      session. */
-  const hasPanel = scan.findings.length > 0 || scan.looking
+  const hasPanel =
+    scan.findings.length > 0 ||
+    (scan.gaps && scan.gaps.length > 0) ||
+    scan.looking
 
   const set = (fields) => onChange(fields)
   const setQuant = (i, value) =>
@@ -1201,6 +1328,7 @@ function Interview({
               estimate={q.estimate}
               estimateBasis={q.why}
               estimateSource={q.kind}
+              bands={q.bands}
             />
           </Divider>
         ))}
@@ -1299,7 +1427,9 @@ function Interview({
       <ScanPanel
         company={company}
         findings={scan.findings}
+        gaps={scan.gaps}
         looking={scan.looking}
+        stepUsing={scan.stepUsing}
       />
     </section>
   )
@@ -1413,6 +1543,12 @@ function Reveal({ flow, demo, onRestart }) {
   const hoursAreOurs =
     fields.people.source === 'estimate' ||
     fields.hoursPerWeek.source === 'estimate'
+
+  const hasRange =
+    fields.people.isRange ||
+    fields.hoursPerWeek.isRange ||
+    fields.annualPay.isRange ||
+    fields.automatablePct.isRange
 
   // Piece 4: the pop-up that shows how the money figure was worked out. The
   // Escape-to-close code lives here, not in the shared Dialog component,
@@ -1606,7 +1742,9 @@ function Reveal({ flow, demo, onRestart }) {
               returned" or "hours saved", and never mark it, because it holds
               no guess beyond what was typed. */}
           <div>
-            <p style={FIGURE_LABEL}>Hours currently spent</p>
+            <p style={FIGURE_LABEL}>
+              Hours currently spent{hasRange ? ' (range midpoint)' : ''}
+            </p>
             <p style={FIGURE_VALUE}>
               {comma(figures.calc.annualHours)}
               <span style={FIGURE_UNIT}>hrs / year</span>
@@ -1625,7 +1763,10 @@ function Reveal({ flow, demo, onRestart }) {
 
           {figures.complete ? (
             <div>
-              <p style={FIGURE_LABEL}>Hours returned, and what that’s worth</p>
+              <p style={FIGURE_LABEL}>
+                Hours returned, and what that’s worth
+                {hasRange ? ' (range midpoint)' : ''}
+              </p>
               <p style={FIGURE_VALUE}>
                 {comma(figures.calc.hoursReturned)}
                 <span style={FIGURE_UNIT}>hrs / year</span>
@@ -1927,14 +2068,19 @@ const emptyFlow = () => ({
    nothing, draws nothing. That is the right outcome for a company we know
    nothing about. */
 function useScan(website) {
-  const [scan, setScan] = React.useState({ findings: [], looking: false })
+  const [scan, setScan] = React.useState({
+    findings: [],
+    gaps: [],
+    looking: false,
+    stepUsing: [],
+  })
 
   React.useEffect(() => {
     if (!website) {
-      setScan({ findings: [], looking: false })
+      setScan({ findings: [], gaps: [], looking: false, stepUsing: [] })
       return undefined
     }
-    setScan({ findings: [], looking: true })
+    setScan({ findings: [], gaps: [], looking: true, stepUsing: [] })
 
     const stream = new EventSource(
       `/api/v2/research?domain=${encodeURIComponent(website)}`,
@@ -1954,12 +2100,25 @@ function useScan(website) {
         stop()
         return
       }
+      if (event.type === 'step') {
+        setScan((current) => ({
+          ...current,
+          stepUsing: Array.isArray(event.using) ? event.using : [],
+        }))
+        return
+      }
+      if (event.type === 'gaps') {
+        setScan((current) => ({
+          ...current,
+          gaps: Array.isArray(event.gaps) ? event.gaps : [],
+        }))
+        return
+      }
       /* The server already throws away any finding pointing at a page it did
          not open, so a missing link should be impossible. We check again
          anyway: if it ever did happen we would print a line with no source
          under it, which is the exact thing this panel promises never to do.
-         No link, no row.
-         Other event types — `step` and `gaps` — are ignored here for now. */
+         No link, no row. */
       if (event.type !== 'finding' || !event.finding?.link) return
       setScan((current) => ({
         ...current,

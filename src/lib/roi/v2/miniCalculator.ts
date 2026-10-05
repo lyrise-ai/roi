@@ -71,6 +71,7 @@ export interface MiniCalculatorOutput {
   operationalDividend: number
   profitUplift: number
   totalFinancialGain: number
+  automatable: number // the fraction actually used, after rounding; chain() prints it
   formulas: {
     annualHours: string
     hoursReturned: string
@@ -140,6 +141,7 @@ export function calculateMiniProfitMap(
     operationalDividend,
     profitUplift,
     totalFinancialGain,
+    automatable,
     formulas: {
       annualHours: `${people} × ${hoursPerWeek} × ${WORKING_WEEKS} = ${comma(annualHours)} hours/year spent today${forTeam}`,
       hoursReturned: `${comma(annualHours)} × ${pct} × ${ADOPTION} × ${REALIZATION} = ${comma(hoursReturned)} hours/year returned`,
