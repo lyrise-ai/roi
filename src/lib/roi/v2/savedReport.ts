@@ -94,15 +94,6 @@ export const SAMPLE_SAVED_REPORT: SavedReport = {
         profitUplift: 59978,
         totalFinancialGain: 106115,
         automatable: 0.65,
-        formulas: {
-          annualHours: '4 people × 15 hrs/wk × 50 wks = 3,000 hrs/yr',
-          hoursReturned:
-            '3,000 hrs × 65% automatable × 70% adoption × 80% realization = 1,092 hrs/yr',
-          ratePerHour: '$65,000 salary × 1.3 overhead ÷ 2,000 hrs = $42.25/hr',
-          operationalDividend: '1,092 hrs × $42.25/hr = $46,137',
-          profitUplift: '$46,137 dividend × 1.3 = $59,978',
-          totalFinancialGain: '$46,137 dividend + $59,978 uplift = $106,115',
-        },
       },
     },
   },

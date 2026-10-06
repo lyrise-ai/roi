@@ -18,9 +18,18 @@ Requires **Node >= 24**.
 
 ```bash
 npm ci
-cp .env.example .env.local   # then fill it in — see below
+# put .env.keys in the repo root (see below)
 npm run dev                  # http://localhost:3000
 ```
+
+The secrets are already in the repo, encrypted, in `.env`. `npm run dev` and
+`npm run build` unlock them through [dotenvx](https://dotenvx.com). To do that
+they need the key, which lives in a file called `.env.keys`. Git ignores that
+file, so it never reaches the repo. Ask the team for it, over a secure channel
+and never in chat.
+
+`.env.example` lists every variable and says what it is for. Read it; you do not
+need to copy it.
 
 ### Minimum env to boot
 
@@ -42,8 +51,10 @@ the generation flow.
 
 ### Database
 
-Supabase Postgres. Schema lives in `supabase/migrations/`, applied through the
-Supabase dashboard or CLI. There is one shared project — local, CI, and
+Supabase Postgres. Schema lives in `supabase/migrations/`. A new migration
+applies itself when its pull request merges to `main`
+(`.github/workflows/migrations.yml`), and the pull request shows what it will
+run. Never apply one by hand. There is one shared project — local, CI, and
 production all point at it. There is no staging database, so be deliberate with
 destructive queries.
 
@@ -56,7 +67,6 @@ You'll need a Supabase user to log in with; ask the team, or sign up through
 
 ```bash
 npm run dev            # dev server (turbopack) on :3000
-npm run dev:test       # dev server on :3777, matching the Playwright config
 npm run build          # production build (note: ignores lint errors)
 npm start              # serve a build
 
@@ -66,10 +76,12 @@ npm run prettier       # format everything
 npm run deadcode       # knip — unused files/exports/deps
 
 npm test               # unit tests (node --test, src/**/__tests__/*.test.mjs)
-npm run test:e2e       # full Playwright suite
+npm run test:e2e       # full Playwright suite (starts its own server on :3777)
 npm run test:e2e:smoke # @smoke subset, ~1 min
 
 npm run eval:roi       # ROI report quality eval harness (evals/roi/README.md)
+npm run research -- <domain>  # run the V2 research agent on one company;
+                       # costs real API spend
 ```
 
 **Before you push:** `npm run lint && npm test`. CI runs both plus the full
@@ -80,10 +92,18 @@ only, so it won't catch a break somewhere you didn't touch.
 
 ## Layout
 
+Two versions of the app live side by side. V1 is in production and frozen; V2
+is where new work goes, and replaces V1 whole when it is ready. `CLAUDE.md`
+explains the rules.
+
 ```text
 pages/                    routes (Pages Router)
-pages/api/roi-agent.js    the main endpoint — generation + chat editing, SSE
-src/lib/roi/              the ROI pipeline (most active area)
+pages/v2/                 V2: the interview
+pages/api/v2/             V2: its server side
+src/lib/roi/research/     V2: the research agent and its tools
+src/lib/roi/v2/           V2: everything else
+pages/api/roi-agent.js    V1: the main endpoint — generation + chat editing, SSE
+src/lib/roi/              V1: the ROI pipeline
   agent.ts                orchestrator: one agent, tools mutate ReportState
   tools/                  web search (Tavily→Brave), page fetch
   prompts/                LLM prompts

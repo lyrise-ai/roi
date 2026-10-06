@@ -58,6 +58,7 @@ const VALUES = [
   ['spelled', [20], 'twenty'],
   ['spelled', [21], '21'],
   ['spelled', [1500], '1,500'],
+  ['spelled', [11.4], '11.4'],
   ['hoursLine', [4, 15, 50, 3000], '4 people × 15 hrs × 50 weeks = 3,000 hrs'],
   ['hoursLine', [1, 8, 50, 400], '1 person × 8 hrs × 50 weeks = 400 hrs'],
   [
@@ -78,7 +79,7 @@ for (const [fn, args, expected] of VALUES) {
 }
 
 // [function, arguments] that must throw a RangeError naming the function
-const WHOLE = ['hoursSpent', 'hoursReturned', 'count', 'percent', 'spelled']
+const WHOLE = ['hoursSpent', 'hoursReturned', 'count', 'percent']
 const THROWS = [
   ...WHOLE.flatMap((fn) => [NaN, Infinity, 1.5].map((bad) => [fn, [bad]])),
   ['money', [NaN, 'USD']],
@@ -88,6 +89,8 @@ const THROWS = [
   ['rate', [NaN, 'USD']],
   ['rate', [Infinity, 'USD']],
   ['rate', [42.255, 'USD']],
+  ['spelled', [NaN]],
+  ['spelled', [Infinity]],
   ['about', [NaN]],
   ['about', [Infinity]],
   ['hoursLine', [NaN, 15, 50, 3000]],
@@ -124,17 +127,48 @@ const INPUTS = [
     automatablePct: 65,
     team: 'Finance & Compliance',
   },
-  { people: 12, hoursPerWeek: 10, annualPay: 60000, automatablePct: 0.4 },
-  { people: 2.5, hoursPerWeek: 7.5, annualPay: 48000, automatablePct: 33 },
+  {
+    people: 12,
+    hoursPerWeek: 10,
+    annualPay: 60000,
+    automatablePct: 0.4,
+  },
+  {
+    people: 2.5,
+    hoursPerWeek: 7.5,
+    annualPay: 48000,
+    automatablePct: 33,
+  },
 ]
 
-for (const input of INPUTS) {
+const OUTPUTS = [
+  `4 × 15 × 50 = 3,000 hours/year spent today for Finance & Compliance
+3,000 × 65% × 0.7 × 0.8 = 1,092 hours/year returned
+($65,000 ÷ (50 × 40)) × 1.3 = $42.25/hour
+1,092 × $42.25 = $46,137
+$46,137 × 1.3 = $59,978
+$46,137 + $59,978 = $106,115`,
+
+  `12 × 10 × 50 = 6,000 hours/year spent today
+6,000 × 40% × 0.7 × 0.8 = 1,344 hours/year returned
+($60,000 ÷ (50 × 40)) × 1.3 = $39.00/hour
+1,344 × $39.00 = $52,416
+$52,416 × 1.3 = $68,141
+$52,416 + $68,141 = $120,557`,
+
+  `2.5 × 7.5 × 50 = 938 hours/year spent today
+938 × 33% × 0.7 × 0.8 = 173 hours/year returned
+($48,000 ÷ (50 × 40)) × 1.3 = $31.20/hour
+173 × $31.20 = $5,398
+$5,398 × 1.3 = $7,017
+$5,398 + $7,017 = $12,415`,
+]
+
+for (const [indx, input] of INPUTS.entries()) {
   test(`chain matches the calculator's own lines for ${JSON.stringify(input)}`, () => {
     const out = calculateMiniProfitMap(input)
-    assert.equal(
-      format.chain(input, out, SETTINGS),
-      Object.values(out.formulas).join('\n'),
-    )
+
+    assert.equal(format.chain(input, out, SETTINGS), OUTPUTS[indx])
   })
 }
 

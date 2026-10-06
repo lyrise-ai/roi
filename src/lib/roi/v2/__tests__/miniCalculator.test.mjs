@@ -21,7 +21,29 @@ let calculateReport
 let SETTINGS
 let pickFeatured
 let selectFeatured
+let MINI_SETTINGS
+let chain
 let tmpDir
+
+// The six lines format.chain() prints, by name.
+const formulas = (input) => {
+  const [
+    annualHours,
+    hoursReturned,
+    ratePerHour,
+    operationalDividend,
+    profitUplift,
+    totalFinancialGain,
+  ] = chain(input, calculateMiniProfitMap(input), MINI_SETTINGS).split('\n')
+  return {
+    annualHours,
+    hoursReturned,
+    ratePerHour,
+    operationalDividend,
+    profitUplift,
+    totalFinancialGain,
+  }
+}
 
 before(async () => {
   tmpDir = fs.mkdtempSync(path.join(os.tmpdir(), 'mini-calc-test-'))
@@ -38,8 +60,20 @@ before(async () => {
   calculateMiniProfitMap = mod.calculateMiniProfitMap
   calculateReport = mod.calculateReport
   SETTINGS = mod.SETTINGS
+  MINI_SETTINGS = mod.MINI_SETTINGS
   pickFeatured = mod.pickFeatured
   selectFeatured = mod.selectFeatured
+
+  const formatFile = path.join(tmpDir, 'format.mjs')
+  await esbuild.build({
+    entryPoints: [path.join(here, '../format.ts')],
+    bundle: true,
+    platform: 'node',
+    format: 'esm',
+    outfile: formatFile,
+    logLevel: 'silent',
+  })
+  ;({ chain } = await import(pathToFileURL(formatFile).href))
 })
 
 after(() => {
@@ -59,13 +93,14 @@ test('SETTINGS exported with the exact required values', () => {
 })
 
 test('worked example: 12 people, 10 hrs/wk, $60k/yr, 40% automatable', () => {
-  const out = calculateMiniProfitMap({
+  const input = {
     people: 12,
     hoursPerWeek: 10,
     annualPay: 60_000,
     automatablePct: 0.4,
     team: 'Finance',
-  })
+  }
+  const out = calculateMiniProfitMap(input)
 
   // annualHours = 12 × 10 × 50 (WORKING_WEEKS)
   assert.equal(out.annualHours, 6_000)
@@ -88,14 +123,15 @@ test('worked example: 12 people, 10 hrs/wk, $60k/yr, 40% automatable', () => {
   // annualHours and hoursReturned must never collapse into one field
   assert.notEqual(out.annualHours, out.hoursReturned)
 
-  // Formula strings
+  // The lines format.chain() prints for these figures
+  const lines = formulas(input)
   assert.equal(
-    out.formulas.annualHours,
+    lines.annualHours,
     '12 × 10 × 50 = 6,000 hours/year spent today for Finance',
   )
-  assert.match(out.formulas.hoursReturned, /^6,000 × 40% × 0\.7 × 0\.8 = /)
-  assert.match(out.formulas.ratePerHour, /\$39\.00\/hour$/)
-  assert.match(out.formulas.totalFinancialGain, /^\$52,416 \+ \$68,141 = /)
+  assert.match(lines.hoursReturned, /^6,000 × 40% × 0\.7 × 0\.8 = /)
+  assert.match(lines.ratePerHour, /\$39\.00\/hour$/)
+  assert.match(lines.totalFinancialGain, /^\$52,416 \+ \$68,141 = /)
 })
 
 const value = (s) => Number(s.replace(/[$,%]/g, '').match(/-?\d+(\.\d+)?/)[0])
@@ -119,7 +155,7 @@ test('every formula string adds up as written', () => {
     for (const hoursPerWeek of [2, 7, 10]) {
       for (const annualPay of [48_000, 55_000, 60_000, 91_000]) {
         for (const automatablePct of [0.2, 0.35, 0.4, 0.65]) {
-          const out = calculateMiniProfitMap({
+          const lines = formulas({
             people,
             hoursPerWeek,
             annualPay,
@@ -133,8 +169,8 @@ test('every formula string adds up as written', () => {
             'totalFinancialGain',
           ]) {
             assert.ok(
-              selfAdds(out.formulas[key]),
-              `${key} does not add up at ${where}: ${out.formulas[key]}`,
+              selfAdds(lines[key]),
+              `${key} does not add up at ${where}: ${lines[key]}`,
             )
           }
         }
@@ -143,6 +179,18 @@ test('every formula string adds up as written', () => {
   }
 })
 
+test('chain refuses a missing pay instead of printing $NaN', () => {
+  const input = {
+    people: 5,
+    hoursPerWeek: 8,
+    annualPay: undefined,
+    automatablePct: 0.4,
+  }
+  assert.throws(
+    () => chain(input, calculateMiniProfitMap(input), MINI_SETTINGS),
+    { name: 'RangeError', message: /chain Expects a finite number/ },
+  )
+})
 test('automatablePct accepts percentage points and clamps to 0–1', () => {
   const asPoints = calculateMiniProfitMap({
     people: 5,
@@ -171,13 +219,13 @@ test('automatablePct accepts percentage points and clamps to 0–1', () => {
 })
 
 test('repeating fractions never leak raw floats into a formula', () => {
-  const out = calculateMiniProfitMap({
+  const lines = formulas({
     people: 5,
     hoursPerWeek: 2,
     annualPay: 48_000,
     automatablePct: 1 / 3,
   })
-  assert.match(out.formulas.hoursReturned, /× 33% ×/)
+  assert.match(lines.hoursReturned, /× 33% ×/)
 })
 
 test('automatablePct of 0 returns zero hours and zero dollars, not NaN', () => {

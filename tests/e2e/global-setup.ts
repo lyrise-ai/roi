@@ -6,7 +6,7 @@ import * as path from 'path'
 const AUTH_FILE = path.join(__dirname, '../.auth/session.json')
 
 export default async function globalSetup(_config: FullConfig) {
-  // Load .env.local so TEST_USER_* vars are available when running via CLI
+  // Load env vars so TEST_USER_* are set when running via CLI
   loadEnvConfig(process.cwd())
 
   const email = process.env.TEST_USER_EMAIL
@@ -15,7 +15,7 @@ export default async function globalSetup(_config: FullConfig) {
   if (!email || !password) {
     console.warn(
       '[globalSetup] TEST_USER_EMAIL / TEST_USER_PASSWORD not set — ' +
-        'authenticated tests will fail. Add them to .env.local to enable them.',
+        'authenticated tests will fail. Add them with `npx dotenvx set`, and run through `npm run test:e2e`.',
     )
     fs.mkdirSync(path.dirname(AUTH_FILE), { recursive: true })
     fs.writeFileSync(AUTH_FILE, JSON.stringify({ cookies: [], origins: [] }))

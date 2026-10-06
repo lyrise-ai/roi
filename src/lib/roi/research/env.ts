@@ -9,10 +9,9 @@
 // See .env.example for what each key buys, and what still works without it.
 // ─────────────────────────────────────────────────────────────────────────────
 
-/* Apollo and Explorium are missing on purpose: we have accounts with neither,
-   so S1 tries PDL and then the company's own site. Adding one later means
-   adding its key here and its adapter in scouts/s1.ts. Nothing after the scout
-   changes.
+/* No company-data provider (PDL, Apollo, Explorium) is here. The old scouts
+   that called PDL were replaced by the one research agent, which reads the
+   company's own pages instead.
 
    The two search keys are read through here by `tools/webSearch`, which since
    LYR-221 is the only place either is read. The research path and the older ROI
@@ -20,12 +19,11 @@
    the same "no key is fine" behaviour. */
 export type ProviderKey =
   | 'FIRECRAWL_API_KEY'
-  | 'PDL_API_KEY'
   | 'TAVILY_API_KEY'
   | 'BRAVE_API_KEY'
 
 /* Returns nothing rather than an empty string, so every caller can check it the
-   same way, and a blank line in .env.local reads as "no key" instead of as a
+   same way, and a blank value in .env reads as "no key" instead of as a
    key that will be rejected. */
 export function providerKey(name: ProviderKey): string | null {
   const value = process.env[name]

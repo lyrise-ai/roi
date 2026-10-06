@@ -111,10 +111,11 @@ const NUMBER_WORDS = [
   'twenty',
 ]
 
-export const spelled = (n: number) => {
-  const text = whole(n, 'spelled')
-  return (n >= 0 && n < NUMBER_WORDS.length ? NUMBER_WORDS[n] : text) as Figure
-}
+// Takes what the person typed, so 7.5 hours prints as "7.5".
+export const spelled = (n: number) =>
+  (Number.isInteger(n) && n >= 0 && n < NUMBER_WORDS.length
+    ? NUMBER_WORDS[n]
+    : given(n, 'spelled')) as Figure
 
 // A row's formula: "4 people × 15 hrs × 50 weeks = 3,000 hrs".
 export const hoursLine = (
@@ -170,6 +171,7 @@ export const chain = (
   s: ChainSettings,
 ) => {
   const g = (n: number) => given(n, 'chain')
+  g(input.annualPay) // throws on a missing pay; Intl would print "$NaN"
   const pay = currencyText(input.annualPay, s.currency, 0, 2, 'chain')
   const perHour = rate(out.ratePerHour, s.currency)
   const od = money(out.operationalDividend, s.currency)

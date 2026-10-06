@@ -39,6 +39,8 @@ export const SETTINGS: CalculatorSettings = {
   currency: 'USD',
 }
 
+export const MINI_SETTINGS = SETTINGS
+
 export interface MiniCalculatorInput {
   people: number
   hoursPerWeek: number
@@ -59,19 +61,9 @@ export interface MiniCalculatorOutput {
   profitUplift: number
   totalFinancialGain: number
   automatable: number // the fraction actually used, after rounding; chain() prints it
-  formulas: {
-    annualHours: string
-    hoursReturned: string
-    ratePerHour: string
-    operationalDividend: string
-    profitUplift: string
-    totalFinancialGain: string
-  }
 }
 
 const round = (n: number) => Math.round(n)
-const comma = (n: number) => round(n).toLocaleString('en-US')
-const money = (n: number) => `$${comma(n)}`
 
 // The fifth answer arrives as either 0.4 or 40, depending on how the person
 // wrote it, so we read anything above 1 as a percentage. We round to a whole
@@ -86,11 +78,11 @@ export function calculateMiniProfitMap(
   input: MiniCalculatorInput,
   settings: CalculatorSettings = SETTINGS,
 ): MiniCalculatorOutput {
-  const { team, people, hoursPerWeek, annualPay } = input
+  const { people, hoursPerWeek, annualPay } = input
   const automatable = toFraction(input.automatablePct)
 
   // We round at every step, not only at the end. These same numbers are
-  // printed in the formula lines below, so a prospect checking the maths by
+  // printed in the formula lines (format.chain()), so a prospect checking the maths by
   // hand has to reach the number we printed. Being consistent on screen beats
   // being exact to more decimal places — see the LYR-186 review.
   const annualHours = round(people * hoursPerWeek * settings.workingWeeks)
@@ -107,10 +99,6 @@ export function calculateMiniProfitMap(
   const profitUplift = round(operationalDividend * settings.profitMultiplier)
   const totalFinancialGain = operationalDividend + profitUplift
 
-  const forTeam = team ? ` for ${team}` : ''
-  const pct = `${round(automatable * 100)}%`
-  const rate = `$${ratePerHour.toFixed(2)}`
-
   return {
     annualHours,
     hoursReturned,
@@ -119,14 +107,6 @@ export function calculateMiniProfitMap(
     profitUplift,
     totalFinancialGain,
     automatable,
-    formulas: {
-      annualHours: `${people} × ${hoursPerWeek} × ${settings.workingWeeks} = ${comma(annualHours)} hours/year spent today${forTeam}`,
-      hoursReturned: `${comma(annualHours)} × ${pct} × ${settings.adoption} × ${settings.realization} = ${comma(hoursReturned)} hours/year returned`,
-      ratePerHour: `(${money(annualPay)} ÷ (${settings.workingWeeks} × ${settings.fteHoursPerWeek})) × ${settings.overhead} = ${rate}/hour`,
-      operationalDividend: `${comma(hoursReturned)} × ${rate} = ${money(operationalDividend)}`,
-      profitUplift: `${money(operationalDividend)} × ${settings.profitMultiplier} = ${money(profitUplift)}`,
-      totalFinancialGain: `${money(operationalDividend)} + ${money(profitUplift)} = ${money(totalFinancialGain)}`,
-    },
   }
 }
 

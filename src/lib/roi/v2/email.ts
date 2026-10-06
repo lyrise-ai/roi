@@ -18,6 +18,8 @@
 
 import { outboundEmailBlockedReason } from '../../outboundEmail'
 import type { SavedReport } from './savedReport'
+import { hoursReturned as hrs, hoursSpent as spent, money } from './format'
+import { MINI_SETTINGS } from './miniCalculator'
 
 export const EMAIL_RE = /^[^\s@]+@[^\s@]+\.[^\s@]+$/
 const DEFAULT_FROM = 'LyRise AI <reports@roi.lyrise.ai>'
@@ -84,15 +86,10 @@ export function resetSentRegistryForTests(): void {
   sentEmailKeys.clear()
 }
 
-function comma(val: number | null | undefined): string {
-  if (val == null || isNaN(val)) return '0'
-  return Math.round(val).toLocaleString('en-US')
-}
+const dollars = (n: number) => money(n, MINI_SETTINGS.currency)
 
-function money(val: number | null | undefined): string {
-  if (val == null || isNaN(val)) return '$0'
-  return '$' + Math.round(val).toLocaleString('en-US')
-}
+// A figure we can't print is left out, never shown as 0.
+const known = (n: number | null | undefined) => (Number.isFinite(n) ? n : null)
 
 export interface EmailContent {
   subject: string
@@ -117,10 +114,10 @@ export function generateReportEmailContent(
 ): EmailContent {
   const companyName = report.company.name || 'Your company'
   const figures = report.featured?.figures?.calc
-  const hoursSpent = figures?.annualHours
-  const hoursReturned = figures?.hoursReturned
-  const dividend = figures?.operationalDividend
-  const totalGain = figures?.totalFinancialGain
+  const hoursSpent = known(figures?.annualHours)
+  const hoursReturned = known(figures?.hoursReturned)
+  const dividend = known(figures?.operationalDividend)
+  const totalGain = known(figures?.totalFinancialGain)
   const url = options.publicUrl
 
   if (type === 'self') {
@@ -131,13 +128,13 @@ export function generateReportEmailContent(
       report.observation ? `${report.observation}` : '',
       '',
       hoursSpent != null
-        ? `Hours currently spent: ${comma(hoursSpent)} hrs / year`
+        ? `Hours currently spent: ${spent(hoursSpent)} hrs / year`
         : '',
       hoursReturned != null
-        ? `Hours Returned: ${comma(hoursReturned)} hrs / year`
+        ? `Hours Returned: ${hrs(hoursReturned)} hrs / year`
         : '',
-      dividend != null ? `Operational Dividend: ${money(dividend)}` : '',
-      totalGain != null ? `Total Financial Gain: ${money(totalGain)}` : '',
+      dividend != null ? `Operational Dividend: ${dollars(dividend)}` : '',
+      totalGain != null ? `Total Financial Gain: ${dollars(totalGain)}` : '',
       '',
       `Review your full report and calculations:`,
       `${url}`,
@@ -172,22 +169,22 @@ export function generateReportEmailContent(
     <div class="card">
       ${
         hoursSpent != null
-          ? `<div class="stat"><div class="stat-label">Hours currently spent</div><div class="stat-val">${comma(hoursSpent)} hrs / year</div></div>`
+          ? `<div class="stat"><div class="stat-label">Hours currently spent</div><div class="stat-val">${spent(hoursSpent)} hrs / year</div></div>`
           : ''
       }
       ${
         hoursReturned != null
-          ? `<div class="stat"><div class="stat-label">Hours Returned</div><div class="stat-val">${comma(hoursReturned)} hrs / year</div></div>`
+          ? `<div class="stat"><div class="stat-label">Hours Returned</div><div class="stat-val">${hrs(hoursReturned)} hrs / year</div></div>`
           : ''
       }
       ${
         dividend != null
-          ? `<div class="stat"><div class="stat-label">Operational Dividend</div><div class="stat-val">${money(dividend)}</div></div>`
+          ? `<div class="stat"><div class="stat-label">Operational Dividend</div><div class="stat-val">${dollars(dividend)}</div></div>`
           : ''
       }
       ${
         totalGain != null
-          ? `<div class="stat"><div class="stat-label">Total Financial Gain</div><div class="stat-val">${money(totalGain)}</div></div>`
+          ? `<div class="stat"><div class="stat-label">Total Financial Gain</div><div class="stat-val">${dollars(totalGain)}</div></div>`
           : ''
       }
     </div>
@@ -211,13 +208,13 @@ export function generateReportEmailContent(
       report.observation ? `${report.observation}` : '',
       '',
       hoursSpent != null
-        ? `Hours currently spent: ${comma(hoursSpent)} hrs / year`
+        ? `Hours currently spent: ${spent(hoursSpent)} hrs / year`
         : '',
       hoursReturned != null
-        ? `Hours Returned: ${comma(hoursReturned)} hrs / year`
+        ? `Hours Returned: ${hrs(hoursReturned)} hrs / year`
         : '',
-      dividend != null ? `Operational Dividend: ${money(dividend)}` : '',
-      totalGain != null ? `Total Financial Gain: ${money(totalGain)}` : '',
+      dividend != null ? `Operational Dividend: ${dollars(dividend)}` : '',
+      totalGain != null ? `Total Financial Gain: ${dollars(totalGain)}` : '',
       '',
       `Review the full breakdown and calculations:`,
       `${url}`,
@@ -250,22 +247,22 @@ export function generateReportEmailContent(
     <div class="card">
       ${
         hoursSpent != null
-          ? `<div class="stat"><div class="stat-label">Hours currently spent</div><div class="stat-val">${comma(hoursSpent)} hrs / year</div></div>`
+          ? `<div class="stat"><div class="stat-label">Hours currently spent</div><div class="stat-val">${spent(hoursSpent)} hrs / year</div></div>`
           : ''
       }
       ${
         hoursReturned != null
-          ? `<div class="stat"><div class="stat-label">Hours Returned</div><div class="stat-val">${comma(hoursReturned)} hrs / year</div></div>`
+          ? `<div class="stat"><div class="stat-label">Hours Returned</div><div class="stat-val">${hrs(hoursReturned)} hrs / year</div></div>`
           : ''
       }
       ${
         dividend != null
-          ? `<div class="stat"><div class="stat-label">Operational Dividend</div><div class="stat-val">${money(dividend)}</div></div>`
+          ? `<div class="stat"><div class="stat-label">Operational Dividend</div><div class="stat-val">${dollars(dividend)}</div></div>`
           : ''
       }
       ${
         totalGain != null
-          ? `<div class="stat"><div class="stat-label">Total Financial Gain</div><div class="stat-val">${money(totalGain)}</div></div>`
+          ? `<div class="stat"><div class="stat-label">Total Financial Gain</div><div class="stat-val">${dollars(totalGain)}</div></div>`
           : ''
       }
     </div>
