@@ -103,6 +103,17 @@ export const SAMPLE_SAVED_REPORT: SavedReport = {
   senderName: 'Elena Rostova',
 }
 
+export interface V2ReportRow {
+  id: string
+  company: Record<string, unknown>
+  pains: Record<string, unknown>[] | Record<string, unknown>
+  research: Record<string, unknown>
+  words: Record<string, unknown>
+  settings: Record<string, unknown>
+  created_at?: string
+  updated_at?: string
+}
+
 // In-memory store for reports generated in V2 sessions before database schema lands.
 const inMemoryReports = new Map<string, SavedReport>()
 inMemoryReports.set(SAMPLE_SAVED_REPORT.id, SAMPLE_SAVED_REPORT)
