@@ -52,6 +52,7 @@ export interface SavedReport {
 
 export interface V2ReportRow {
   id: string
+  owner_id?: string | null
   company: Record<string, unknown>
   pains: Record<string, unknown>[] | Record<string, unknown>
   research: Record<string, unknown>
@@ -108,6 +109,7 @@ export async function saveReport(row: V2ReportRow): Promise<boolean> {
     const admin = getSupabaseAdmin()
     const { error } = await admin.from('v2_reports').upsert({
       id: row.id.trim(),
+      ...(row.owner_id !== undefined ? { owner_id: row.owner_id } : {}),
       company: row.company ?? {},
       pains: row.pains ?? [],
       research: row.research ?? {},
@@ -126,6 +128,56 @@ export async function saveReport(row: V2ReportRow): Promise<boolean> {
     return true
   } catch (err) {
     console.error(`[v2_reports] save failed for ${row?.id}:`, err)
+    return false
+  }
+}
+
+/**
+ * Claims a report for an authenticated user on /v2 post-reveal.
+ * Fills owner_id on the report row; the report id and link remain unchanged.
+ *
+ * Why the admin client is used here:
+ * Admin key is used for writes because claiming attaches ownership to an anonymously
+ * created report that had no owner attached initially.
+ */
+export async function claimReport(
+  id: string,
+  userId: string,
+): Promise<boolean> {
+  if (
+    !id ||
+    typeof id !== 'string' ||
+    !id.trim() ||
+    !userId ||
+    typeof userId !== 'string' ||
+    !userId.trim()
+  ) {
+    return false
+  }
+
+  const cleanId = id.trim()
+  const cleanUserId = userId.trim()
+
+  try {
+    const admin = getSupabaseAdmin()
+    const { error } = await admin
+      .from('v2_reports')
+      .update({
+        owner_id: cleanUserId,
+        updated_at: new Date().toISOString(),
+      })
+      .eq('id', cleanId)
+
+    if (error) {
+      console.error(
+        `[v2_reports] claim failed for ${cleanId} by ${cleanUserId}: ${error.message ?? 'unknown database error'}`,
+      )
+      return false
+    }
+
+    return true
+  } catch (err) {
+    console.error(`[v2_reports] claim failed for ${cleanId}:`, err)
     return false
   }
 }

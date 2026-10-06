@@ -21,6 +21,7 @@ const repoRoot = path.resolve(here, '../../../../..')
 
 let saveReport
 let loadReport
+let claimReport
 let tmpDir
 
 const db = {
@@ -67,6 +68,20 @@ before(async () => {
                globalThis.__db.rows.set(row.id, JSON.parse(JSON.stringify(row)))
                return { error: null }
              },
+             update(updates) {
+               return {
+                 async eq(_col, id) {
+                   if (globalThis.__db.failWrites) {
+                     return { error: { message: 'write failed' } }
+                   }
+                   const existing = globalThis.__db.rows.get(id)
+                   if (!existing) return { error: null }
+                   const updated = { ...existing, ...updates }
+                   globalThis.__db.rows.set(id, updated)
+                   return { error: null }
+                 },
+               }
+             },
            }
          },
        }
@@ -76,7 +91,7 @@ before(async () => {
   const entry = path.join(tmpDir, 'entry.ts')
   fs.writeFileSync(
     entry,
-    `export { saveReport, loadReport, buildReport } from ${JSON.stringify(
+    `export { saveReport, loadReport, claimReport, buildReport } from ${JSON.stringify(
       path.join(here, '../savedReport.ts'),
     )}\n`,
   )
@@ -96,7 +111,9 @@ before(async () => {
   })
 
   globalThis.__db = db
-  ;({ saveReport, loadReport } = await import(pathToFileURL(outfile).href))
+  ;({ saveReport, loadReport, claimReport } = await import(
+    pathToFileURL(outfile).href
+  ))
 })
 
 after(() => {
@@ -163,4 +180,32 @@ test('saveReport returns false and never throws when invalid row is provided', a
   assert.equal(await saveReport(null), false)
   assert.equal(await saveReport({}), false)
   assert.equal(await saveReport({ id: '' }), false)
+})
+
+test('claimReport fills owner_id on anonymous report without changing id', async () => {
+  const reportId = '11111111-2222-3333-4444-555555555555'
+  const userId = 'user-auth-uuid-9999'
+
+  await saveReport({
+    id: reportId,
+    owner_id: null,
+    company: { name: 'Anonymous Law' },
+    pains: [],
+    research: {},
+    words: { thesis: 'Initial thesis.' },
+    settings: {},
+  })
+
+  const claimed = await claimReport(reportId, userId)
+  assert.equal(claimed, true, 'claimReport should succeed')
+
+  const storedRow = db.rows.get(reportId)
+  assert.equal(storedRow.id, reportId, 'id must not change')
+  assert.equal(storedRow.owner_id, userId, 'owner_id must be updated to user')
+})
+
+test('claimReport returns false when inputs are missing', async () => {
+  assert.equal(await claimReport('', 'user-123'), false)
+  assert.equal(await claimReport('rep-123', ''), false)
+  assert.equal(await claimReport(null, null), false)
 })

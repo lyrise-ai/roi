@@ -1,12 +1,18 @@
 -- ─────────────────────────────────────────────────────────────────────────────
--- v2_reports — Durable storage for completed V2 Profit Map journeys (LYR-203 / LYR-234).
+-- v2_reports — Durable storage for completed V2 Profit Map journeys (LYR-203 / LYR-234 / LYR-236).
 --
 -- V2 runs alongside V1 and never touches V1 tables (public.reports, etc.).
--- All reads/writes happen server-side via SUPABASE_SERVICE_ROLE_KEY.
+-- A report starts with no owner: owner_id stays empty until sign-in, and the link
+-- still works (the unguessable UUID link is the key).
+--
+-- Signing in on /v2 fills owner_id without changing id or the link.
+-- One RLS policy: a signed-in user reads rows where owner_id is theirs.
+-- Reading by link uses the admin key on the server by exact id, bypassing RLS.
 -- ─────────────────────────────────────────────────────────────────────────────
 
 create table if not exists public.v2_reports (
   id uuid primary key,
+  owner_id uuid references auth.users (id) on delete set null,
   company jsonb not null,
   pains jsonb not null,
   research jsonb not null,
@@ -20,9 +26,20 @@ create table if not exists public.v2_reports (
 create index if not exists v2_reports_created_at_idx
   on public.v2_reports (created_at desc);
 
--- RLS enabled with NO policies:
--- Anon and authenticated clients get 0 rows; access is gated via service-role API routes.
+-- Index for owner lookups and listing
+create index if not exists v2_reports_owner_id_idx
+  on public.v2_reports (owner_id);
+
+-- Enable RLS
 alter table public.v2_reports enable row level security;
+
+-- One RLS policy: a signed-in user reads rows where owner_id is theirs
+drop policy if exists "Users can read own v2 reports" on public.v2_reports;
+create policy "Users can read own v2 reports"
+  on public.v2_reports
+  for select
+  to authenticated
+  using (auth.uid() = owner_id);
 
 -- ── updated_at trigger ───────────────────────────────────────────────────────
 create or replace function public.set_v2_reports_updated_at()
@@ -41,4 +58,3 @@ create trigger v2_reports_set_updated_at
   before update on public.v2_reports
   for each row
   execute function public.set_v2_reports_updated_at();
-
