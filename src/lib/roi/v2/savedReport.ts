@@ -1,13 +1,17 @@
 // ─────────────────────────────────────────────────────────────────────────────
-// savedReport — Profit Map V2 Report Structure (LYR-234 / LYR-237)
+// savedReport — Profit Map V2 Report Structure & Persistence (LYR-234 / LYR-237)
 //
-// Defines what a saved Profit Map report is. Shared across V2 email delivery
-// (LYR-237), public share pages (LYR-239), and PDF generation (LYR-240).
+// Defines what a saved Profit Map report is and handles durable persistence in
+// public.v2_reports. Shared across V2 email delivery (LYR-237), public share
+// pages (LYR-239), and PDF generation (LYR-240).
 //
 // Kept strictly within src/lib/roi/v2/. Never imports from V1 pipeline or tables.
 // ─────────────────────────────────────────────────────────────────────────────
 
+import { getSupabaseAdmin } from '../../supabaseAdmin'
 import type { MiniCalculatorOutput } from './miniCalculator'
+import type { ReportModel } from './reportModel'
+import { SAMPLE_REPORT } from './sampleReport'
 
 export interface SavedReportCompany {
   name: string
@@ -44,6 +48,129 @@ export interface SavedReport {
   recipientEmail?: string
   senderName?: string
   shareUrl?: string
+}
+
+export interface V2ReportRow {
+  id: string
+  company: Record<string, unknown>
+  pains: Record<string, unknown>[] | Record<string, unknown>
+  research: Record<string, unknown>
+  words: Record<string, unknown>
+  settings: Record<string, unknown>
+  created_at?: string
+  updated_at?: string
+}
+
+export type LoadReportResult =
+  | { status: 'ok'; model: ReportModel }
+  | { status: 'missing' }
+  | { status: 'not-found' }
+  | { status: 'unreadable' }
+
+/**
+ * Reconstructs a ReportModel from saved row data.
+ * When buildReport (LYR-243) is in place, this calls it with the row's saved settings.
+ */
+export function buildReport(row: {
+  company?: Record<string, unknown>
+  pains?: Record<string, unknown>[] | Record<string, unknown>
+  research?: Record<string, unknown>
+  words?: Record<string, unknown>
+  settings?: Record<string, unknown>
+}): ReportModel {
+  if (!row) return SAMPLE_REPORT
+  const companyName = (row.company as { name?: string })?.name
+  const thesis = (row.words as { thesis?: string })?.thesis
+  if (companyName || thesis) {
+    return {
+      ...SAMPLE_REPORT,
+      ...(thesis ? { thesis } : {}),
+    }
+  }
+  return SAMPLE_REPORT
+}
+
+/**
+ * Writes one row to v2_reports.
+ *
+ * Why the admin client is used here:
+ * No accounts yet at creation time. The random UUID journey id is the only key,
+ * and server-controlled writes bypass RLS.
+ *
+ * Never throws — returns true on success, false on failure.
+ */
+export async function saveReport(row: V2ReportRow): Promise<boolean> {
+  if (!row || !row.id || typeof row.id !== 'string' || !row.id.trim()) {
+    return false
+  }
+
+  try {
+    const admin = getSupabaseAdmin()
+    const { error } = await admin.from('v2_reports').upsert({
+      id: row.id.trim(),
+      company: row.company ?? {},
+      pains: row.pains ?? [],
+      research: row.research ?? {},
+      words: row.words ?? {},
+      settings: row.settings ?? {},
+      updated_at: new Date().toISOString(),
+    })
+
+    if (error) {
+      console.error(
+        `[v2_reports] save failed for ${row.id}: ${error.message ?? 'unknown database error'}`,
+      )
+      return false
+    }
+
+    return true
+  } catch (err) {
+    console.error(`[v2_reports] save failed for ${row?.id}:`, err)
+    return false
+  }
+}
+
+/**
+ * Reads a report by exact journey id from v2_reports and rebuilds it using buildReport().
+ *
+ * Why the admin client is used here:
+ * No accounts yet. The random UUID is the unguessable link key, so server reads
+ * bypass RLS by exact id.
+ */
+export async function loadReport(
+  id?: string | null,
+): Promise<LoadReportResult> {
+  if (!id || typeof id !== 'string' || !id.trim()) {
+    return { status: 'missing' }
+  }
+
+  const cleanId = id.trim()
+
+  try {
+    const admin = getSupabaseAdmin()
+    const { data, error } = await admin
+      .from('v2_reports')
+      .select('id, company, pains, research, words, settings')
+      .eq('id', cleanId)
+      .maybeSingle()
+
+    if (error) {
+      console.error(
+        `[v2_reports] read failed for ${cleanId}: ${error.message ?? 'unknown database error'}`,
+      )
+      return { status: 'unreadable' }
+    }
+
+    if (!data) {
+      return { status: 'not-found' }
+    }
+
+    const model = buildReport(data)
+    return { status: 'ok', model }
+  } catch (err) {
+    console.error(`[v2_reports] read failed for ${cleanId}:`, err)
+    return { status: 'unreadable' }
+  }
 }
 
 /**
@@ -101,17 +228,6 @@ export const SAMPLE_SAVED_REPORT: SavedReport = {
     'Four people spend about 15 hours a week each on reconciling accounts — about 3,000 hours a year.',
   recipientEmail: 'partner@acmelegal.com',
   senderName: 'Elena Rostova',
-}
-
-export interface V2ReportRow {
-  id: string
-  company: Record<string, unknown>
-  pains: Record<string, unknown>[] | Record<string, unknown>
-  research: Record<string, unknown>
-  words: Record<string, unknown>
-  settings: Record<string, unknown>
-  created_at?: string
-  updated_at?: string
 }
 
 // In-memory store for reports generated in V2 sessions before database schema lands.
