@@ -12,6 +12,7 @@ import * as React from 'react'
 import Head from 'next/head'
 import Link from 'next/link'
 import { loadReport } from '@/src/lib/roi/v2/savedReport'
+import { createClient as createBrowserClient } from '@/src/lib/supabase-browser'
 import { Button } from '@components/ui'
 
 export async function getServerSideProps({ params }) {
@@ -42,6 +43,19 @@ export async function getServerSideProps({ params }) {
 }
 
 export default function V2ReportPage({ reportId, model, error }) {
+  React.useEffect(() => {
+    if (!reportId) return
+    const supabase = createBrowserClient()
+    supabase.auth.getUser().then(({ data: { user } }) => {
+      if (user) {
+        fetch('/api/v2/claim', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ reportId }),
+        }).catch(() => {})
+      }
+    })
+  }, [reportId])
   if (error) {
     return (
       <main

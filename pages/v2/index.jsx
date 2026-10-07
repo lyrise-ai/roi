@@ -36,6 +36,7 @@
    `clamp()`, `ch` widths, and flex rows that wrap. */
 import * as React from 'react'
 import Head from 'next/head'
+import Link from 'next/link'
 import { useRouter } from 'next/router'
 import Image from 'next/image'
 import Logo from '@/src/assets/logo.svg'
@@ -53,6 +54,8 @@ import {
   assembleCalculatorInput,
   bridgePainQuant,
 } from '@/src/lib/roi/v2/answerBridge'
+import { cleanDomain } from '@/src/lib/roi/v2/domain'
+import { createClient as createBrowserClient } from '@/src/lib/supabase-browser'
 import {
   chain,
   hoursReturned,
@@ -204,10 +207,85 @@ const RISE_CSS = `
       width: 100% !important;
     }
   }
+
+  /* Responsive Claim / Auth: Desktop = Option C (dock), Mobile = Option A (inline card) */
+  .v2-claim-dock {
+    position: fixed;
+    bottom: var(--space-6);
+    left: 50%;
+    transform: translateX(-50%);
+    z-index: 50;
+    background: var(--surface-card);
+    backdrop-filter: blur(16px);
+    border: 1px solid var(--border-subtle);
+    border-radius: var(--radius-pill);
+    box-shadow: 0 12px 32px -4px rgba(16, 24, 40, 0.15), 0 4px 12px -2px rgba(16, 24, 40, 0.08);
+    padding: var(--space-3) var(--space-6);
+    display: flex;
+    align-items: center;
+    gap: var(--space-4);
+    animation: v2-rise var(--duration-base) var(--ease-out);
+  }
+  .v2-claim-inline-card {
+    display: none;
+  }
+
+  @media (max-width: 640px) {
+    .v2-claim-dock {
+      display: none !important;
+    }
+    .v2-claim-inline-card {
+      display: block !important;
+    }
+  }
 `
+
+function GoogleIcon() {
+  return (
+    <svg
+      width="18"
+      height="18"
+      viewBox="0 0 24 24"
+      aria-hidden="true"
+      style={{ flexShrink: 0 }}
+    >
+      <path
+        fill="#4285F4"
+        d="M22.56 12.25c0-.78-.07-1.53-.2-2.25H12v4.26h5.92c-.26 1.37-1.04 2.53-2.21 3.31v2.77h3.57c2.08-1.92 3.28-4.74 3.28-8.09z"
+      />
+      <path
+        fill="#34A853"
+        d="M12 23c2.97 0 5.46-.98 7.28-2.66l-3.57-2.77c-.98.66-2.23 1.06-3.71 1.06-2.86 0-5.29-1.93-6.16-4.53H2.18v2.84C3.99 20.53 7.7 23 12 23z"
+      />
+      <path
+        fill="#FBBC05"
+        d="M5.84 14.09c-.22-.66-.35-1.36-.35-2.09s.13-1.43.35-2.09V7.06H2.18C1.43 8.55 1 10.22 1 12s.43 3.45 1.18 4.94l2.85-2.22.81-.63z"
+      />
+      <path
+        fill="#EA4335"
+        d="M12 5.38c1.62 0 3.06.56 4.21 1.64l3.15-3.15C17.45 2.09 14.97 1 12 1 7.7 1 3.99 3.47 2.18 7.06l3.66 2.84c.87-2.6 3.3-4.52 6.16-4.52z"
+      />
+    </svg>
+  )
+}
 
 function Shell({ step, children }) {
   const index = STEPS.indexOf(step)
+  const [user, setUser] = React.useState(null)
+
+  React.useEffect(() => {
+    const supabase = createBrowserClient()
+    supabase.auth.getUser().then(({ data: { user: currentUser } }) => {
+      setUser(currentUser || null)
+    })
+    const {
+      data: { subscription },
+    } = supabase.auth.onAuthStateChange((_event, session) => {
+      setUser(session?.user ?? null)
+    })
+    return () => subscription.unsubscribe()
+  }, [])
+
   return (
     <main
       style={{
@@ -228,49 +306,89 @@ function Shell({ step, children }) {
           padding: 'var(--space-5) clamp(var(--space-4), 5vw, var(--space-6))',
         }}
       >
-        {/* 70x24 keeps the logo file's own 138:47 shape at --space-6 tall. The
-            size is set with width/height attributes, not CSS, because
-            next/image warns when the size on screen does not match the size it
-            was told. */}
-        <Image src={Logo} alt="LyRise" width={70} height={24} priority />
-        {/* No progress bar on the first screen — nothing has started yet. */}
-        {index > 0 && (
-          <div
-            style={{
-              display: 'flex',
-              alignItems: 'center',
-              gap: 'var(--space-3)',
-            }}
-          >
+        <Link
+          href="/v2"
+          style={{ display: 'inline-flex', alignItems: 'center' }}
+        >
+          <Image src={Logo} alt="LyRise" width={70} height={24} priority />
+        </Link>
+        <div
+          style={{
+            display: 'flex',
+            alignItems: 'center',
+            gap: 'var(--space-4)',
+          }}
+        >
+          {index > 0 && (
             <div
               style={{
-                width: 'var(--space-20)',
-                height: 'var(--space-1)',
-                borderRadius: 'var(--radius-pill)',
-                background: 'var(--neutral-100)',
-                overflow: 'hidden',
+                display: 'flex',
+                alignItems: 'center',
+                gap: 'var(--space-3)',
               }}
             >
               <div
                 style={{
-                  height: '100%',
-                  width: `${((index + 1) / STEPS.length) * 100}%`,
+                  width: 'var(--space-20)',
+                  height: 'var(--space-1)',
                   borderRadius: 'var(--radius-pill)',
-                  background: 'var(--dark-blue)',
-                  transition: 'width var(--duration-base) var(--ease-out)',
+                  background: 'var(--neutral-100)',
+                  overflow: 'hidden',
                 }}
-              />
+              >
+                <div
+                  style={{
+                    height: '100%',
+                    width: `${((index + 1) / STEPS.length) * 100}%`,
+                    borderRadius: 'var(--radius-pill)',
+                    background: 'var(--dark-blue)',
+                    transition: 'width var(--duration-base) var(--ease-out)',
+                  }}
+                />
+              </div>
+              <span
+                style={{
+                  font: 'var(--weight-regular) var(--text-xs)/var(--leading-normal) var(--font-body)',
+                  color: 'var(--text-muted)',
+                }}
+              >
+                {`Step ${index + 1} of ${STEPS.length}`}
+              </span>
             </div>
-            <span
+          )}
+
+          {user ? (
+            <Link
+              href="/v2/dashboard"
               style={{
-                font: 'var(--weight-regular) var(--text-xs)/var(--leading-normal) var(--font-body)',
-                color: 'var(--text-muted)',
+                font: 'var(--weight-medium) var(--text-xs)/1 var(--font-body)',
+                color: 'var(--text-heading)',
+                textDecoration: 'none',
+                display: 'inline-flex',
+                alignItems: 'center',
+                gap: 'var(--space-2)',
+                padding: 'var(--space-2) var(--space-3)',
+                borderRadius: 'var(--radius-md)',
+                background: 'var(--surface-card)',
+                border: '1px solid var(--border-subtle)',
               }}
             >
-              {`Step ${index + 1} of ${STEPS.length}`}
-            </span>
-          </div>
-        )}
+              <span>My Reports</span>
+            </Link>
+          ) : (
+            <Link
+              href="/auth/login?next=/v2/dashboard"
+              style={{
+                font: 'var(--weight-medium) var(--text-xs)/1 var(--font-body)',
+                color: 'var(--text-muted)',
+                textDecoration: 'none',
+                padding: 'var(--space-2) var(--space-3)',
+              }}
+            >
+              Sign In
+            </Link>
+          )}
+        </div>
       </header>
       {children}
     </main>
@@ -422,8 +540,29 @@ function Landing({ onStart, onFastMock }) {
 /* Two fields, then straight into the questions. Submitting starts the research
    call but never waits for it — see `useScan`. */
 function Company({ value, onChange, onBack, onSubmit }) {
+  const [websiteError, setWebsiteError] = React.useState(null)
+
+  const handleWebsiteChange = (e) => {
+    const val = e.target.value
+    onChange({ website: val })
+    if (val.trim() && !cleanDomain(val)) {
+      setWebsiteError(
+        'Please enter a valid website address (e.g. drjobpro.com)',
+      )
+    } else {
+      setWebsiteError(null)
+    }
+  }
+
   const submit = (e) => {
     e.preventDefault()
+    if (value.website && value.website.trim() && !cleanDomain(value.website)) {
+      setWebsiteError(
+        'Please enter a valid website address (e.g. drjobpro.com)',
+      )
+      return
+    }
+    setWebsiteError(null)
     onSubmit()
   }
   return (
@@ -473,7 +612,8 @@ function Company({ value, onChange, onBack, onSubmit }) {
             placeholder="drjobpro.com"
             value={value.website}
             enterKeyHint="go"
-            onChange={(e) => onChange({ website: e.target.value })}
+            error={websiteError}
+            onChange={handleWebsiteChange}
           />
         </div>
 
@@ -1543,10 +1683,472 @@ function selectFeatured(pains, estimates) {
    one of our estimates standing, the only honest thing to check it against is
    the exact entry the questions actually showed them.
 
-   Piece 2 (LYR-188 / POC 10): the real figures for the chosen pain point.
-   Piece 3: the sentence above them — the "I heard you" moment — built by
-   buildObservationSentence() from the same numbers the figures came from,
-   never by a model. The final pitch styling is a later piece. */
+/* Responsive Post-Reveal Claim Section:
+   Option C on Desktop (floating dock + modal)
+   Option A on Mobile (inline card above email section) */
+function ClaimSection({ reportId, currentUser, claimed, onClaimSuccess }) {
+  const [modalOpen, setModalOpen] = React.useState(false)
+  const [authEmail, setAuthEmail] = React.useState('')
+  const [magicLinkLoading, setMagicLinkLoading] = React.useState(false)
+  const [magicLinkSent, setMagicLinkSent] = React.useState(false)
+  const [googleLoading, setGoogleLoading] = React.useState(false)
+  const [authError, setAuthError] = React.useState(null)
+
+  const handleGoogleAuth = async () => {
+    setGoogleLoading(true)
+    setAuthError(null)
+    try {
+      const returnUrl = `/v2/report/${reportId}`
+      document.cookie = `auth_next=${encodeURIComponent(returnUrl)}; path=/; max-age=300; SameSite=Lax`
+      const supabase = createBrowserClient()
+      await supabase.auth.signInWithOAuth({
+        provider: 'google',
+        options: {
+          redirectTo: `${window.location.origin}/auth/callback?next=${encodeURIComponent(returnUrl)}`,
+        },
+      })
+    } catch (err) {
+      setAuthError(err.message || 'Google sign-in failed.')
+      setGoogleLoading(false)
+    }
+  }
+
+  const handleMagicLink = async (e) => {
+    e.preventDefault()
+    const trimmed = authEmail.trim()
+    if (!trimmed || magicLinkLoading) return
+    setMagicLinkLoading(true)
+    setMagicLinkSent(false)
+    setAuthError(null)
+    try {
+      const returnUrl = `/v2/report/${reportId}`
+      document.cookie = `auth_next=${encodeURIComponent(returnUrl)}; path=/; max-age=300; SameSite=Lax`
+      const supabase = createBrowserClient()
+      const { error } = await supabase.auth.signInWithOtp({
+        email: trimmed,
+        options: {
+          emailRedirectTo: `${window.location.origin}/auth/callback?next=${encodeURIComponent(returnUrl)}`,
+        },
+      })
+      if (error) throw error
+      setMagicLinkSent(true)
+      if (onClaimSuccess) onClaimSuccess()
+    } catch (err) {
+      setAuthError(err.message || 'Could not send magic link.')
+    } finally {
+      setMagicLinkLoading(false)
+    }
+  }
+
+  return (
+    <>
+      {/* Mobile: Option A Inline Card */}
+      <section
+        className="v2-claim-inline-card"
+        aria-label="Save report to account"
+      >
+        <div
+          style={{
+            background: 'var(--surface-card)',
+            border: '1px solid var(--border-subtle)',
+            borderRadius: 'var(--radius-card)',
+            padding: 'var(--space-5)',
+            marginBottom: 'var(--space-6)',
+            boxShadow: 'var(--shadow-sm)',
+          }}
+        >
+          {claimed || currentUser ? (
+            <div>
+              <div
+                style={{
+                  display: 'flex',
+                  alignItems: 'center',
+                  gap: 'var(--space-2)',
+                  marginBottom: 'var(--space-2)',
+                }}
+              >
+                <span style={{ color: 'var(--grow)', fontWeight: 'bold' }}>
+                  ✓
+                </span>
+                <h3
+                  style={{
+                    margin: 0,
+                    font: 'var(--weight-semibold) var(--text-base)/var(--leading-normal) var(--font-body)',
+                    color: 'var(--text-heading)',
+                  }}
+                >
+                  Saved to your account
+                </h3>
+              </div>
+              <p
+                style={{
+                  margin: '0 0 var(--space-4)',
+                  font: 'var(--weight-regular) var(--text-xs)/var(--leading-relaxed) var(--font-body)',
+                  color: 'var(--text-muted)',
+                }}
+              >
+                Logged in as {currentUser?.email || 'authenticated user'}. You
+                can reopen this report anytime from your dashboard.
+              </p>
+              <Link href="/v2/dashboard">
+                <Button size="sm" variant="secondary">
+                  Go to My Reports →
+                </Button>
+              </Link>
+            </div>
+          ) : (
+            <div>
+              <div
+                style={{
+                  display: 'inline-flex',
+                  alignItems: 'center',
+                  gap: 'var(--space-1)',
+                  padding: '2px 8px',
+                  borderRadius: 'var(--radius-pill)',
+                  background: 'var(--neutral-100)',
+                  color: 'var(--text-muted)',
+                  fontSize: 'var(--text-xs)',
+                  fontWeight: 'var(--weight-medium)',
+                  marginBottom: 'var(--space-2)',
+                }}
+              >
+                <Icon name="lock" size={12} />
+                <span>Guest report</span>
+              </div>
+              <h3
+                style={{
+                  margin: '0 0 var(--space-1)',
+                  font: 'var(--weight-semibold) var(--text-base)/var(--leading-normal) var(--font-body)',
+                  color: 'var(--text-heading)',
+                }}
+              >
+                Save this Profit Map to your account
+              </h3>
+              <p
+                style={{
+                  margin: '0 0 var(--space-4)',
+                  font: 'var(--weight-regular) var(--text-xs)/var(--leading-relaxed) var(--font-body)',
+                  color: 'var(--text-muted)',
+                }}
+              >
+                Reopen your numbers, formulas, and assumptions anytime on any
+                device.
+              </p>
+
+              {magicLinkSent ? (
+                <div
+                  style={{
+                    padding: 'var(--space-3)',
+                    borderRadius: 'var(--radius-md)',
+                    background: 'rgba(22, 163, 74, 0.1)',
+                    color: 'var(--grow)',
+                    fontSize: 'var(--text-xs)',
+                    fontWeight: 'var(--weight-medium)',
+                  }}
+                >
+                  ✓ Magic link sent to {authEmail}! Check your inbox to sign in
+                  and save this report.
+                </div>
+              ) : (
+                <div>
+                  <Button
+                    type="button"
+                    variant="secondary"
+                    onClick={handleGoogleAuth}
+                    disabled={googleLoading}
+                    style={{
+                      width: '100%',
+                      display: 'flex',
+                      justifyContent: 'center',
+                      alignItems: 'center',
+                      gap: 'var(--space-2)',
+                      minHeight: 'var(--space-10)',
+                    }}
+                  >
+                    <GoogleIcon />
+                    <span>
+                      {googleLoading ? 'Connecting…' : 'Continue with Google'}
+                    </span>
+                  </Button>
+
+                  <div
+                    style={{
+                      display: 'flex',
+                      alignItems: 'center',
+                      margin: 'var(--space-4) 0',
+                      color: 'var(--text-muted)',
+                      fontSize: 'var(--text-xs)',
+                    }}
+                  >
+                    <div
+                      style={{
+                        flex: 1,
+                        height: 1,
+                        background: 'var(--border-subtle)',
+                      }}
+                    />
+                    <span style={{ padding: '0 var(--space-2)' }}>
+                      or with magic link
+                    </span>
+                    <div
+                      style={{
+                        flex: 1,
+                        height: 1,
+                        background: 'var(--border-subtle)',
+                      }}
+                    />
+                  </div>
+
+                  <form
+                    onSubmit={handleMagicLink}
+                    style={{
+                      display: 'flex',
+                      flexDirection: 'column',
+                      gap: 'var(--space-3)',
+                    }}
+                  >
+                    <Input
+                      type="email"
+                      placeholder="you@company.com"
+                      value={authEmail}
+                      disabled={magicLinkLoading}
+                      onChange={(e) => setAuthEmail(e.target.value)}
+                    />
+                    <Button
+                      type="submit"
+                      variant="primary"
+                      disabled={!authEmail.trim() || magicLinkLoading}
+                      style={{ width: '100%', minHeight: 'var(--space-10)' }}
+                    >
+                      {magicLinkLoading
+                        ? 'Sending magic link…'
+                        : 'Save with email'}
+                    </Button>
+                  </form>
+                </div>
+              )}
+
+              {authError && (
+                <div
+                  role="alert"
+                  style={{
+                    marginTop: 'var(--space-3)',
+                    padding: 'var(--space-2) var(--space-3)',
+                    borderRadius: 'var(--radius-md)',
+                    background: 'var(--purple-50)',
+                    color: 'var(--power)',
+                    fontSize: 'var(--text-xs)',
+                  }}
+                >
+                  {authError}
+                </div>
+              )}
+            </div>
+          )}
+        </div>
+      </section>
+
+      {/* Desktop: Option C Floating Action Dock */}
+      <aside className="v2-claim-dock" aria-label="Save report to account">
+        {claimed || currentUser ? (
+          <>
+            <div
+              style={{
+                display: 'flex',
+                alignItems: 'center',
+                gap: 'var(--space-2)',
+              }}
+            >
+              <span style={{ color: 'var(--grow)', fontWeight: 'bold' }}>
+                ✓
+              </span>
+              <span
+                style={{
+                  font: 'var(--weight-medium) var(--text-sm) var(--font-body)',
+                  color: 'var(--text-heading)',
+                }}
+              >
+                Saved to {currentUser?.email || 'your account'}
+              </span>
+            </div>
+            <Link href="/v2/dashboard">
+              <Button size="sm" variant="secondary">
+                My Reports →
+              </Button>
+            </Link>
+          </>
+        ) : (
+          <>
+            <div
+              style={{
+                display: 'flex',
+                alignItems: 'center',
+                gap: 'var(--space-2)',
+              }}
+            >
+              <Icon name="lock" size={16} color="var(--text-muted)" />
+              <span
+                style={{
+                  font: 'var(--weight-medium) var(--text-sm) var(--font-body)',
+                  color: 'var(--text-heading)',
+                }}
+              >
+                Report generated as guest
+              </span>
+            </div>
+            <Button size="sm" onClick={() => setModalOpen(true)}>
+              Save to My Account
+            </Button>
+          </>
+        )}
+      </aside>
+
+      {/* Option C Desktop Modal Dialog */}
+      <Dialog
+        open={modalOpen}
+        onClose={() => setModalOpen(false)}
+        title="Save this Profit Map to your account"
+        description="Reopen your numbers, formulas, and assumptions anytime on any device."
+      >
+        <div
+          style={{
+            display: 'flex',
+            flexDirection: 'column',
+            gap: 'var(--space-4)',
+            marginTop: 'var(--space-2)',
+          }}
+        >
+          {magicLinkSent ? (
+            <div
+              style={{
+                padding: 'var(--space-3)',
+                borderRadius: 'var(--radius-md)',
+                background: 'rgba(22, 163, 74, 0.1)',
+                color: 'var(--grow)',
+                fontSize: 'var(--text-xs)',
+                fontWeight: 'var(--weight-medium)',
+              }}
+            >
+              ✓ Magic link sent to {authEmail}! Check your inbox to sign in and
+              save this report.
+            </div>
+          ) : (
+            <>
+              <Button
+                type="button"
+                variant="secondary"
+                onClick={handleGoogleAuth}
+                disabled={googleLoading}
+                style={{
+                  width: '100%',
+                  display: 'flex',
+                  justifyContent: 'center',
+                  alignItems: 'center',
+                  gap: 'var(--space-2)',
+                  minHeight: 'var(--space-10)',
+                }}
+              >
+                <GoogleIcon />
+                <span>
+                  {googleLoading ? 'Connecting…' : 'Continue with Google'}
+                </span>
+              </Button>
+
+              <div
+                style={{
+                  display: 'flex',
+                  alignItems: 'center',
+                  margin: 'var(--space-2) 0',
+                  color: 'var(--text-muted)',
+                  fontSize: 'var(--text-xs)',
+                }}
+              >
+                <div
+                  style={{
+                    flex: 1,
+                    height: 1,
+                    background: 'var(--border-subtle)',
+                  }}
+                />
+                <span style={{ padding: '0 var(--space-2)' }}>
+                  or with magic link
+                </span>
+                <div
+                  style={{
+                    flex: 1,
+                    height: 1,
+                    background: 'var(--border-subtle)',
+                  }}
+                />
+              </div>
+
+              <form
+                onSubmit={handleMagicLink}
+                style={{
+                  display: 'flex',
+                  flexDirection: 'column',
+                  gap: 'var(--space-3)',
+                }}
+              >
+                <Input
+                  label="Your work email"
+                  type="email"
+                  placeholder="you@company.com"
+                  value={authEmail}
+                  disabled={magicLinkLoading}
+                  onChange={(e) => setAuthEmail(e.target.value)}
+                />
+                <Button
+                  type="submit"
+                  variant="primary"
+                  disabled={!authEmail.trim() || magicLinkLoading}
+                  style={{ width: '100%', minHeight: 'var(--space-10)' }}
+                >
+                  {magicLinkLoading ? 'Sending link…' : 'Send magic link'}
+                </Button>
+              </form>
+            </>
+          )}
+
+          {authError && (
+            <div
+              role="alert"
+              style={{
+                padding: 'var(--space-2) var(--space-3)',
+                borderRadius: 'var(--radius-md)',
+                background: 'var(--purple-50)',
+                color: 'var(--power)',
+                fontSize: 'var(--text-xs)',
+              }}
+            >
+              {authError}
+            </div>
+          )}
+
+          <div
+            style={{
+              borderTop: '1px solid var(--border-subtle)',
+              paddingTop: 'var(--space-3)',
+              textAlign: 'center',
+            }}
+          >
+            <Link
+              href={`/auth/login?next=${encodeURIComponent(`/v2/report/${reportId}`)}`}
+              style={{
+                fontSize: 'var(--text-xs)',
+                color: 'var(--brand)',
+                textDecoration: 'none',
+              }}
+            >
+              Have a password? Sign in here →
+            </Link>
+          </div>
+        </div>
+      </Dialog>
+    </>
+  )
+}
+
 function Reveal({ flow, demo, onRestart }) {
   // Every pain point can still be thrown away on the way in: blank, with no
   // guess to fall back on (open /v2?scan=none, name nothing, click finish). So
@@ -1593,19 +2195,71 @@ function Reveal({ flow, demo, onRestart }) {
 
   // Email delivery & colleague sharing (LYR-237)
   const companyName = flow.company.name || (demo && demo.name) || 'Your company'
-  const reportId = React.useMemo(() => {
-    const slug = companyName
-      .toLowerCase()
-      .replace(/[^a-z0-9]+/g, '-')
-      .replace(/^-|-$/g, '')
-    let hash = 0
-    const str = JSON.stringify(flow.pains || [])
-    for (let i = 0; i < str.length; i++) {
-      hash = (hash << 5) - hash + str.charCodeAt(i)
-      hash |= 0
+  const [reportId] = React.useState(() => {
+    if (typeof crypto !== 'undefined' && crypto.randomUUID) {
+      try {
+        return crypto.randomUUID()
+      } catch {}
     }
-    return `rep_${slug || 'demo'}_${Math.abs(hash).toString(36)}`
-  }, [companyName, flow.pains])
+    return 'xxxxxxxx-xxxx-4xxx-yxxx-xxxxxxxxxxxx'.replace(/[xy]/g, (c) => {
+      const r = (Math.random() * 16) | 0
+      const v = c === 'x' ? r : (r & 0x3) | 0x8
+      return v.toString(16)
+    })
+  })
+
+  const [currentUser, setCurrentUser] = React.useState(null)
+  const [claimed, setClaimed] = React.useState(false)
+
+  // Background save the report in public.v2_reports
+  React.useEffect(() => {
+    if (!reportId) return
+    fetch('/api/v2/save', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({
+        id: reportId,
+        company: {
+          name: companyName,
+          website: flow.company.website || (demo && demo.domain) || '',
+        },
+        pains: flow.pains || [],
+        research: {},
+        words: { observation },
+        settings: MINI_SETTINGS,
+      }),
+    }).catch((err) => {
+      console.warn('[v2] report background save failed:', err)
+    })
+  }, [
+    reportId,
+    companyName,
+    flow.company.website,
+    demo,
+    flow.pains,
+    observation,
+  ])
+
+  // Check auth and auto-claim if already signed in
+  React.useEffect(() => {
+    if (!reportId) return
+    const supabase = createBrowserClient()
+    supabase.auth.getUser().then(({ data: { user } }) => {
+      if (user) {
+        setCurrentUser(user)
+        fetch('/api/v2/claim', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ reportId }),
+        })
+          .then((res) => res.json())
+          .then((data) => {
+            if (data.ok) setClaimed(true)
+          })
+          .catch(() => {})
+      }
+    })
+  }, [reportId])
 
   const reportPayload = React.useMemo(
     () => ({
@@ -1857,6 +2511,14 @@ function Reveal({ flow, demo, onRestart }) {
         </Dialog>
       )}
 
+      {/* Account claiming: Option A on mobile, Option C on desktop */}
+      <ClaimSection
+        reportId={reportId}
+        currentUser={currentUser}
+        claimed={claimed}
+        onClaimSuccess={() => setClaimed(true)}
+      />
+
       {/* Email Delivery & Colleague Sharing (LYR-237) */}
       <div
         style={{
@@ -2103,14 +2765,15 @@ function useScan(website) {
   })
 
   React.useEffect(() => {
-    if (!website) {
+    const domain = cleanDomain(website)
+    if (!domain) {
       setScan({ findings: [], gaps: [], looking: false, stepUsing: [] })
       return undefined
     }
     setScan({ findings: [], gaps: [], looking: true, stepUsing: [] })
 
     const stream = new EventSource(
-      `/api/v2/research?domain=${encodeURIComponent(website)}`,
+      `/api/v2/research?domain=${encodeURIComponent(domain)}`,
     )
     const stop = () => {
       stream.close()
