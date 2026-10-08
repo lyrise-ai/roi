@@ -6,7 +6,9 @@ export default function PublicReportError({ status, message, reportId }) {
       ? 'This report link is incomplete'
       : status === 'not-found'
         ? 'This report is not available'
-        : 'Report unavailable'
+        : status === 'unauthorized'
+          ? 'This report is restricted'
+          : 'Report unavailable'
 
   return (
     <main className="v2-report-error">
