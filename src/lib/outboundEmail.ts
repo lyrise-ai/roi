@@ -4,7 +4,7 @@
  * report-access alerts, usage alerts, and alpha-tour notifications. Nothing
  * stopped any of them firing during a test run. The browser test suite drives
  * the real access and sharing flows against the real database, and both
- * `npm run dev` and a local `npm start` read `.env.local`, which holds a
+ * `npm run dev` and a local `npm start` read `.env`, which holds a
  * working Resend key. So alerts about made-up test companies were landing in
  * real inboxes.
  *
@@ -25,8 +25,8 @@
  * To really send from your own machine, set ALLOW_OUTBOUND_EMAIL=1.
  */
 
-// "ci" is what our GitHub workflow sets; "development" is what a developer's
-// .env.local sets. Neither should ever reach a real inbox.
+// "ci" is what our GitHub workflow sets; "development" is what .env sets
+// for local work. Neither should ever reach a real inbox.
 const TEST_ENVS = new Set(['ci', 'development', 'test'])
 
 /**

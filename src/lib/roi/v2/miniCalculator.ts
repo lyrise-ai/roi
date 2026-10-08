@@ -11,9 +11,11 @@
 // from — so the POC's figures land in roughly the same range a real report
 // would give.
 //
-// Nothing here reads a file or calls a server, and it imports nothing. Safe to
-// run in the browser or in Node.
+// Nothing here reads a file or calls a server. Safe to run in the browser or in
+// Node. It prints nothing either: format.chain() turns the figures into text.
 // ─────────────────────────────────────────────────────────────────────────────
+
+import type { ChainSettings } from './format'
 
 // Taken from the live system — src/lib/roi/agent.ts:762 and :1493. How much of
 // a team we assume actually uses the new system. This is the default we apply
@@ -71,19 +73,21 @@ export interface MiniCalculatorOutput {
   operationalDividend: number
   profitUplift: number
   totalFinancialGain: number
-  formulas: {
-    annualHours: string
-    hoursReturned: string
-    ratePerHour: string
-    operationalDividend: string
-    profitUplift: string
-    totalFinancialGain: string
-  }
+  automatable: number // the fraction actually used, after rounding; chain() prints it
+}
+
+// What format.chain() needs to print the six lines.
+export const MINI_SETTINGS: ChainSettings = {
+  workingWeeks: WORKING_WEEKS,
+  fteHoursPerWeek: FTE_HOURS_PER_WEEK,
+  overhead: OVERHEAD_MULTIPLIER,
+  adoption: ADOPTION,
+  realization: REALIZATION,
+  profitMultiplier: PROFIT_MULTIPLIER,
+  currency: 'USD',
 }
 
 const round = (n: number) => Math.round(n)
-const comma = (n: number) => round(n).toLocaleString('en-US')
-const money = (n: number) => `$${comma(n)}`
 
 // Every input here was typed by a user, and any of them can still be missing
 // while they are answering (the preview draws before the last question is
@@ -105,14 +109,13 @@ const toFraction = (n: number) => {
 export function calculateMiniProfitMap(
   input: MiniCalculatorInput,
 ): MiniCalculatorOutput {
-  const { team } = input
   const people = num(input.people)
   const hoursPerWeek = num(input.hoursPerWeek)
   const annualPay = num(input.annualPay)
   const automatable = toFraction(input.automatablePct)
 
   // We round at every step, not only at the end. These same numbers are
-  // printed in the formula lines below, so a prospect checking the maths by
+  // printed in the formula lines (format.chain()), so a prospect checking the maths by
   // hand has to reach the number we printed. Being consistent on screen beats
   // being exact to more decimal places — see the LYR-186 review.
   const annualHours = round(people * hoursPerWeek * WORKING_WEEKS)
@@ -129,10 +132,6 @@ export function calculateMiniProfitMap(
   const profitUplift = round(operationalDividend * PROFIT_MULTIPLIER)
   const totalFinancialGain = operationalDividend + profitUplift
 
-  const forTeam = team ? ` for ${team}` : ''
-  const pct = `${round(automatable * 100)}%`
-  const rate = `$${ratePerHour.toFixed(2)}`
-
   return {
     annualHours,
     hoursReturned,
@@ -140,13 +139,6 @@ export function calculateMiniProfitMap(
     operationalDividend,
     profitUplift,
     totalFinancialGain,
-    formulas: {
-      annualHours: `${people} × ${hoursPerWeek} × ${WORKING_WEEKS} = ${comma(annualHours)} hours/year spent today${forTeam}`,
-      hoursReturned: `${comma(annualHours)} × ${pct} × ${ADOPTION} × ${REALIZATION} = ${comma(hoursReturned)} hours/year returned`,
-      ratePerHour: `(${money(annualPay)} ÷ (${WORKING_WEEKS} × ${FTE_HOURS_PER_WEEK})) × ${OVERHEAD_MULTIPLIER} = ${rate}/hour`,
-      operationalDividend: `${comma(hoursReturned)} × ${rate} = ${money(operationalDividend)}`,
-      profitUplift: `${money(operationalDividend)} × ${PROFIT_MULTIPLIER} = ${money(profitUplift)}`,
-      totalFinancialGain: `${money(operationalDividend)} + ${money(profitUplift)} = ${money(totalFinancialGain)}`,
-    },
+    automatable,
   }
 }

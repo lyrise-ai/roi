@@ -1,5 +1,6 @@
 import Head from 'next/head'
 import PublicReportError from '@/src/components/v2/PublicReportError'
+import { hoursSpent, hoursReturned, money } from '@/src/lib/roi/v2/format'
 import {
   resolveSavedReportForPublicView,
   toPublicReport,
@@ -184,7 +185,7 @@ function PublicReportDisplay({ report }) {
                     color: 'var(--text-heading)',
                   }}
                 >
-                  {Math.round(figures.calc.annualHours).toLocaleString('en-US')}
+                  {hoursSpent(Math.round(figures.calc.annualHours))}
                   <span
                     style={{
                       font: 'var(--weight-regular) var(--text-lg)/1 var(--font-body)',
@@ -221,9 +222,7 @@ function PublicReportDisplay({ report }) {
                     color: 'var(--text-heading)',
                   }}
                 >
-                  {Math.round(figures.calc.hoursReturned).toLocaleString(
-                    'en-US',
-                  )}
+                  {hoursReturned(Math.round(figures.calc.hoursReturned))}
                   <span
                     style={{
                       font: 'var(--weight-regular) var(--text-lg)/1 var(--font-body)',
@@ -260,10 +259,7 @@ function PublicReportDisplay({ report }) {
                     color: 'var(--text-heading)',
                   }}
                 >
-                  $
-                  {Math.round(figures.calc.operationalDividend).toLocaleString(
-                    'en-US',
-                  )}
+                  {money(Math.round(figures.calc.operationalDividend), 'USD')}
                 </p>
                 <p
                   style={{
@@ -301,10 +297,7 @@ function PublicReportDisplay({ report }) {
                     color: 'var(--text-heading)',
                   }}
                 >
-                  $
-                  {Math.round(figures.calc.totalFinancialGain).toLocaleString(
-                    'en-US',
-                  )}
+                  {money(Math.round(figures.calc.totalFinancialGain), 'USD')}
                 </p>
               </div>
             </section>

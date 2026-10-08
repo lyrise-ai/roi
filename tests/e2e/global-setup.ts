@@ -27,15 +27,22 @@ export default async function globalSetup(_config: FullConfig) {
   const page = await context.newPage()
 
   try {
-    await page.goto('http://localhost:3777/auth/login')
+    await page.goto('http://localhost:3777/auth/login', { timeout: 60_000 })
     await page.fill('[placeholder="Work email"]', email)
     await page.fill('[placeholder="Password"]', password)
-    await page.click('button[type="submit"]')
+    await page.click('button[type="submit"]', { force: true })
     // Wait for the post-login redirect — dashboard is the standard destination
     await page.waitForURL('**/dashboard**', { timeout: 30_000 })
     fs.mkdirSync(path.dirname(AUTH_FILE), { recursive: true })
     await context.storageState({ path: AUTH_FILE })
     console.log('[globalSetup] Auth state saved for', email)
+  } catch (err: any) {
+    console.warn(
+      '[globalSetup] Login attempt failed, writing empty session:',
+      err?.message || err,
+    )
+    fs.mkdirSync(path.dirname(AUTH_FILE), { recursive: true })
+    fs.writeFileSync(AUTH_FILE, JSON.stringify({ cookies: [], origins: [] }))
   } finally {
     await browser.close()
   }

@@ -178,21 +178,13 @@ test.describe('/v2', () => {
     await expect(spent).toContainText('2,400')
     await expect(spent).toContainText('hrs / year')
 
+    // The full path: the money figure only exists once both pay and "still needs
+    // a person" were readable.
     const returned = page
-      .getByText('Hours returned', { exact: true })
+      .getByText(/Hours returned, and what that’s worth/)
       .locator('..')
     await expect(returned).toContainText('941')
-    await expect(returned).toContainText('hrs / year')
-
-    const wages = page
-      .getByText('Wages you get back', { exact: true })
-      .locator('..')
-    await expect(wages).toContainText('the operational dividend')
-
-    const combined = page
-      .getByText('Combined opportunity', { exact: true })
-      .locator('..')
-    await expect(combined).toContainText('$98,477')
+    await expect(returned).toContainText('$98,477')
     await expect(
       page.getByText(/don’t have enough here yet to put a return number/),
     ).toHaveCount(0)
@@ -297,9 +289,7 @@ test.describe('/v2', () => {
       page.getByText("We don't have numbers for this one yet."),
     ).toBeVisible()
     await expect(
-      page.getByText(
-        /No pain points were added, so there is no calculation to show/,
-      ),
+      page.getByText(/Not enough here yet to put a number on it/),
     ).toBeVisible()
     await expect(page.getByText('Hours currently spent')).toHaveCount(0)
     await expect(page.getByRole('button', { name: 'Start over' })).toBeVisible()
