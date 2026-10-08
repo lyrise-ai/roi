@@ -53,8 +53,20 @@ import {
   assembleCalculatorInput,
   bridgePainQuant,
 } from '@/src/lib/roi/v2/answerBridge'
-import { calculateMiniProfitMap } from '@/src/lib/roi/v2/miniCalculator'
+import {
+  chain,
+  hoursReturned,
+  hoursSpent,
+  money,
+} from '@/src/lib/roi/v2/format'
+import {
+  calculateMiniProfitMap,
+  MINI_SETTINGS,
+} from '@/src/lib/roi/v2/miniCalculator'
 import { buildObservationSentence } from '@/src/lib/roi/v2/observation'
+import { SAMPLE_ANSWERS } from '@/src/lib/roi/v2/sampleReport'
+
+const IS_DEV = process.env.NODE_ENV === 'development'
 
 const STEPS = ['landing', 'company', 'interview', 'reveal']
 
@@ -102,20 +114,16 @@ const FIGURE_UNIT = {
 }
 
 /* Piece 4 (LYR-188 / POC 10): the pop-up that shows how the money figure was
-   worked out. Each line is copied straight from calc.formulas — we never redo
+   worked out. Each line comes straight from format.chain() — we never redo
    the maths here — in the order the figure is actually built up. `annualHours`
    is left out on purpose: it belongs to the OTHER figure (hours spent), which
    carries no guesses, so it is not one of the assumptions behind this one. */
 const FORMULA_ROWS = [
-  { key: 'hoursReturned', label: 'Hours returned' },
-  { key: 'ratePerHour', label: 'Rate per hour' },
-  {
-    key: 'operationalDividend',
-    label: 'Wages you get back',
-    detail: 'the operational dividend',
-  },
-  { key: 'profitUplift', label: 'Profit uplift' },
-  { key: 'totalFinancialGain', label: 'Combined opportunity' },
+  { line: 1, label: 'Hours returned' },
+  { line: 2, label: 'Rate per hour' },
+  { line: 3, label: 'Operational dividend' },
+  { line: 4, label: 'Profit uplift' },
+  { line: 5, label: 'Total financial gain' },
 ]
 
 /* Each screen slides up 8px when it appears. It lives in this file, not in
@@ -314,7 +322,7 @@ function AnalystMark() {
 
 /* One line of text, one button, three small labels. No splash screen, no
    typewriter effect, no auto-advance. Holding back is the design (LYR-183). */
-function Landing({ onStart }) {
+function Landing({ onStart, onFastMock }) {
   const chips = ['~3 minutes', 'Free, no sales call', 'Your numbers stay yours']
   return (
     <section
@@ -347,13 +355,28 @@ function Landing({ onStart }) {
         answer: here&rsquo;s what this work costs you, and here&rsquo;s
         what&rsquo;s worth automating.
       </p>
-      <Button
-        size="lg"
-        onClick={onStart}
-        iconRight={<Icon name="arrow-right" size={18} />}
+      <div
+        style={{
+          display: 'flex',
+          flexWrap: 'wrap',
+          alignItems: 'center',
+          justifyContent: 'center',
+          gap: 'var(--space-3)',
+        }}
       >
-        Start with my company
-      </Button>
+        <Button
+          size="lg"
+          onClick={onStart}
+          iconRight={<Icon name="arrow-right" size={18} />}
+        >
+          Start with my company
+        </Button>
+        {IS_DEV && (
+          <Button size="lg" variant="secondary" onClick={onFastMock}>
+            Fast mock preview
+          </Button>
+        )}
+      </div>
       <div
         style={{
           display: 'flex',
@@ -1447,9 +1470,6 @@ function Interview({
 const OURS_NOT_YOURS =
   'You left the numbers to me, so these are my guesses standing in — marked as mine, and worth replacing with your own before this goes in front of anyone.'
 
-const comma = (n) => Math.round(n).toLocaleString('en-US')
-const money = (n) => `$${comma(n)}`
-
 /* Takes one pain point's five number answers, reads them with answerBridge,
    and runs the calculator on them.
 
@@ -1470,7 +1490,10 @@ function figuresFor(pain, estimates) {
   const assembled = assembleCalculatorInput(fields, pain.team || undefined)
 
   if (!assembled.incomplete) {
-    return { complete: true, calc: calculateMiniProfitMap(assembled) }
+    const calc = calculateMiniProfitMap(assembled)
+    // format.chain()'s six lines; FORMULA_ROWS picks which ones the pop-up shows.
+    const lines = chain(assembled, calc, MINI_SETTINGS).split('\n')
+    return { complete: true, calc, lines }
   }
   if (fields.people.value === null || fields.hoursPerWeek.value === null) {
     return { complete: false, calc: null }
@@ -1725,16 +1748,12 @@ function Reveal({ flow, demo, onRestart }) {
 
       {hoursAreOurs && <p style={LEAD}>{OURS_NOT_YOURS}</p>}
 
-      {flow.pains.length === 0 ? (
-        <p style={LEAD}>
-          No pain points were added, so there is no calculation to show.
-        </p>
-      ) : !figures.calc ? (
+      {!figures.calc && (
         <p style={LEAD}>
           Not enough here yet to put a number on it — go back and answer at
           least how many people do this and how many hours a week.
         </p>
-      ) : null}
+      )}
 
       {figures.calc && (
         <div
@@ -1754,7 +1773,7 @@ function Reveal({ flow, demo, onRestart }) {
               Hours currently spent{hasRange ? ' (range midpoint)' : ''}
             </p>
             <p style={FIGURE_VALUE}>
-              {comma(figures.calc.annualHours)}
+              {hoursSpent(figures.calc.annualHours)}
               <span style={FIGURE_UNIT}>hrs / year</span>
               {/* Only shown when there is a pop-up to open. The dot exists so
                   you can trace the number; a dot that opens nothing is just
@@ -1770,39 +1789,26 @@ function Reveal({ flow, demo, onRestart }) {
           </div>
 
           {figures.complete ? (
-            <>
-              <div>
-                <p style={FIGURE_LABEL}>Hours returned</p>
-                <p style={FIGURE_VALUE}>
-                  {comma(figures.calc.hoursReturned)}
-                  <span style={FIGURE_UNIT}>hrs / year</span>
-                </p>
-              </div>
-              <div>
-                <p style={FIGURE_LABEL}>Wages you get back</p>
-                <p style={FIGURE_VALUE}>
-                  {money(figures.calc.operationalDividend)}
-                  <span style={FIGURE_UNIT}>/ year</span>
-                </p>
-                <p style={{ ...LEAD, marginTop: 'var(--space-1)' }}>
-                  the operational dividend
-                </p>
-              </div>
-              <div>
-                <p style={FIGURE_LABEL}>Combined opportunity</p>
-                <p style={FIGURE_VALUE}>
-                  {money(figures.calc.totalFinancialGain)}
-                  <span style={FIGURE_UNIT}>/ year</span>
-                  {/* This one holds our guesses about how much can be
-                      automated, how many people will use it, and how much of the
-                      saving really lands. Clicking it opens the pop-up below. */}
-                  <ProvenanceMark
-                    kind="estimated"
-                    onClick={() => setFormulaOpen(true)}
-                  />
-                </p>
-              </div>
-            </>
+            <div>
+              <p style={FIGURE_LABEL}>
+                Hours returned, and what that’s worth
+                {hasRange ? ' (range midpoint)' : ''}
+              </p>
+              <p style={FIGURE_VALUE}>
+                {hoursReturned(figures.calc.hoursReturned)}
+                <span style={FIGURE_UNIT}>hrs / year</span>
+              </p>
+              <p style={{ ...FIGURE_VALUE, marginTop: 'var(--space-2)' }}>
+                {money(figures.calc.totalFinancialGain, MINI_SETTINGS.currency)}
+                {/* This one holds our guesses about how much can be
+                    automated, how many people will use it, and how much of the
+                    saving really lands. Clicking it opens the pop-up below. */}
+                <ProvenanceMark
+                  kind="estimated"
+                  onClick={() => setFormulaOpen(true)}
+                />
+              </p>
+            </div>
           ) : (
             <p style={LEAD}>
               We don’t have enough here yet to put a return number on this one —
@@ -1832,15 +1838,10 @@ function Reveal({ flow, demo, onRestart }) {
             }}
           >
             {FORMULA_ROWS.map((row) => (
-              <div key={row.key}>
+              <div key={row.line}>
                 <p style={{ ...FIGURE_LABEL, margin: '0 0 var(--space-1)' }}>
                   {row.label}
                 </p>
-                {row.detail ? (
-                  <p style={{ ...LEAD, margin: '0 0 var(--space-1)' }}>
-                    {row.detail}
-                  </p>
-                ) : null}
                 <p
                   style={{
                     font: 'var(--type-body)',
@@ -1848,7 +1849,7 @@ function Reveal({ flow, demo, onRestart }) {
                     margin: 0,
                   }}
                 >
-                  {figures.calc.formulas[row.key]}
+                  {figures.lines[row.line]}
                 </p>
               </div>
             ))}
@@ -2227,7 +2228,14 @@ export default function V2() {
         <style>{RISE_CSS}</style>
       </Head>
       <Shell step={flow.step}>
-        {flow.step === 'landing' && <Landing onStart={() => go(1)} />}
+        {flow.step === 'landing' && (
+          <Landing
+            onStart={() => go(1)}
+            onFastMock={() =>
+              setFlow({ ...emptyFlow(), ...SAMPLE_ANSWERS, step: 'reveal' })
+            }
+          />
+        )}
         {flow.step === 'company' && (
           <Company
             value={flow.company}
