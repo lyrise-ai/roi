@@ -106,6 +106,7 @@ export const SAMPLE_SAVED_REPORT: SavedReport = {
         operationalDividend: 46137,
         profitUplift: 59978,
         totalFinancialGain: 106115,
+        automatable: 0.65,
         formulas: {
           annualHours: '4 people × 15 hrs/wk × 50 wks = 3,000 hrs/yr',
           hoursReturned:

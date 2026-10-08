@@ -74,6 +74,7 @@ export interface MiniCalculatorOutput {
   profitUplift: number
   totalFinancialGain: number
   automatable: number // the fraction actually used, after rounding; chain() prints it
+  formulas?: Record<string, string>
 }
 
 // What format.chain() needs to print the six lines.
