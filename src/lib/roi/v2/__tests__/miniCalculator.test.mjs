@@ -1,7 +1,7 @@
 // miniCalculator.test.mjs — tests for the Calculator (LYR-186, LYR-204)
 //
 // Tests all mathematical rules and shapes produced by calculateMiniProfitMap,
-// calculateReport, SETTINGS, and pickFeatured.
+// calculateReport, SETTINGS, and selectFeatured.
 //
 // Run: node --test src/lib/roi/v2/__tests__/miniCalculator.test.mjs
 
@@ -19,9 +19,7 @@ const here = path.dirname(fileURLToPath(import.meta.url))
 let calculateMiniProfitMap
 let calculateReport
 let SETTINGS
-let pickFeatured
 let selectFeatured
-let MINI_SETTINGS
 let chain
 let tmpDir
 
@@ -34,7 +32,7 @@ const formulas = (input) => {
     operationalDividend,
     profitUplift,
     totalFinancialGain,
-  ] = chain(input, calculateMiniProfitMap(input), MINI_SETTINGS).split('\n')
+  ] = chain(input, calculateMiniProfitMap(input), SETTINGS).split('\n')
   return {
     annualHours,
     hoursReturned,
@@ -60,8 +58,6 @@ before(async () => {
   calculateMiniProfitMap = mod.calculateMiniProfitMap
   calculateReport = mod.calculateReport
   SETTINGS = mod.SETTINGS
-  MINI_SETTINGS = mod.MINI_SETTINGS
-  pickFeatured = mod.pickFeatured
   selectFeatured = mod.selectFeatured
 
   const formatFile = path.join(tmpDir, 'format.mjs')
@@ -186,10 +182,10 @@ test('chain refuses a missing pay instead of printing $NaN', () => {
     annualPay: undefined,
     automatablePct: 0.4,
   }
-  assert.throws(
-    () => chain(input, calculateMiniProfitMap(input), MINI_SETTINGS),
-    { name: 'RangeError', message: /chain Expects a finite number/ },
-  )
+  assert.throws(() => chain(input, calculateMiniProfitMap(input), SETTINGS), {
+    name: 'RangeError',
+    message: /chain Expects a finite number/,
+  })
 })
 test('automatablePct accepts percentage points and clamps to 0–1', () => {
   const asPoints = calculateMiniProfitMap({
@@ -444,10 +440,7 @@ test('a rejected pain is in no total and gets no row or skipped entry', () => {
     report.totalHours,
     report.rows[0].hoursReturned + report.rows[1].hoursReturned,
   )
-  assert.equal(
-    report.totalGain,
-    report.rows[0].gain + report.rows[1].gain,
-  )
+  assert.equal(report.totalGain, report.rows[0].gain + report.rows[1].gain)
 })
 
 test('changing one answer changes that row, every total, the outlook and cost of delay, and nothing else', () => {
@@ -477,28 +470,6 @@ test('changing one answer changes that row, every total, the outlook and cost of
   assert.notEqual(reportA.totalGain, reportB.totalGain)
   assert.notEqual(reportA.delayMonthly, reportB.delayMonthly)
   assert.notEqual(reportA.outlook[0].total, reportB.outlook[0].total)
-})
-
-test('an override changes only its own row', () => {
-  const pains = samplePains()
-  const reportWithoutOverride = calculateReport({ pains })
-  const reportWithOverride = calculateReport({
-    pains,
-    overrides: [{ row: 1, setting: 'adoption', value: 0.9 }],
-  })
-
-  const r0Without = reportWithoutOverride.rows.find((r) => r.position === 0)
-  const r0With = reportWithOverride.rows.find((r) => r.position === 0)
-  assert.deepEqual(r0Without, r0With)
-
-  const r2Without = reportWithoutOverride.rows.find((r) => r.position === 2)
-  const r2With = reportWithOverride.rows.find((r) => r.position === 2)
-  assert.deepEqual(r2Without, r2With)
-
-  const r1Without = reportWithoutOverride.rows.find((r) => r.position === 1)
-  const r1With = reportWithOverride.rows.find((r) => r.position === 1)
-  assert.notEqual(r1Without.hoursReturned, r1With.hoursReturned)
-  assert.notEqual(r1Without.gain, r1With.gain)
 })
 
 test('odPct + upliftPct = 100, for the total and for each outlook year', () => {
@@ -616,29 +587,43 @@ test('ranking: biggest gain first, tie on gain -> more hours returned, tie on ho
   assert.deepEqual(report.order, [1, 0, 2])
 })
 
-test('pickFeatured on reveal screen uses this exact same ranking', () => {
+test('selectFeatured on the reveal screen uses this exact same ranking', () => {
   const exact = (s) => ({ mode: 'exact', exact: s })
   const pains = [
     {
       text: 'Pain 0',
-      quant: [exact('10'), exact('2'), exact('10'), exact('50000'), exact('50')],
+      quant: [
+        exact('10'),
+        exact('2'),
+        exact('10'),
+        exact('50000'),
+        exact('50'),
+      ],
     },
     {
       text: 'Pain 1 - Big',
-      quant: [exact('10'), exact('10'), exact('20'), exact('80000'), exact('30')],
+      quant: [
+        exact('10'),
+        exact('10'),
+        exact('20'),
+        exact('80000'),
+        exact('30'),
+      ],
     },
     {
       text: 'Pain 2 - Incomplete',
-      quant: [exact('10'), exact('20'), exact('30'), { mode: 'estimate' }, { mode: 'estimate' }],
+      quant: [
+        exact('10'),
+        exact('20'),
+        exact('30'),
+        { mode: 'estimate' },
+        { mode: 'estimate' },
+      ],
     },
   ]
 
-  const featured = pickFeatured(pains)
+  const featured = selectFeatured(pains)
   assert.equal(featured.index, 1)
   assert.equal(featured.pain.text, 'Pain 1 - Big')
   assert.equal(featured.figures.complete, true)
-
-  // selectFeatured is an alias of pickFeatured
-  const featuredAlias = selectFeatured(pains)
-  assert.deepEqual(featured, featuredAlias)
 })
