@@ -24,7 +24,7 @@ export { Tooltip } from './feedback/Tooltip'
 export { Tabs } from './navigation/Tabs'
 
 // ROI-specific. These carry the product's core ideas, not just its look —
-// read the .prompt.md next to each before changing how one behaves.
+// read the comment at the top of each before changing how one behaves.
 export { ProvenanceMark } from './roi/ProvenanceMark'
 export { ScanFactRow } from './roi/ScanFactRow'
 export { SegmentedInput } from './roi/SegmentedInput'

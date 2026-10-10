@@ -1,8 +1,7 @@
 // ─────────────────────────────────────────────────────────────────────────────
 // debug — logging for the ROI pipeline.
-// Everything here is switched off unless ROI_DEBUG is set. It defaults to on
-// while developing and off in production, so we never fill production logs with
-// internal detail. Each tag, like `[ROI:research]` or `[ROI:modeler]`, is easy
+// On while developing, off in production so its logs stay clean. ROI_DEBUG=1
+// or 0 overrides that. Each tag, like `[ROI:research]` or `[ROI:modeler]`, is easy
 // to search for.
 // ─────────────────────────────────────────────────────────────────────────────
 

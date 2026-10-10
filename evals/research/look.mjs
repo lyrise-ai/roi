@@ -36,7 +36,7 @@ if (!domain) {
 }
 
 /* Bundled rather than imported, because the agent is TypeScript and reaches for
-   the `@/` alias. Same trick the other harnesses in this folder use. */
+   the `@/` alias. Same trick the unit tests use. */
 const cacheRoot = path.join(root, 'node_modules/.cache')
 fs.mkdirSync(cacheRoot, { recursive: true })
 const outfile = path.join(cacheRoot, 'research-look.mjs')

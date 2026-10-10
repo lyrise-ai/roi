@@ -301,12 +301,6 @@ export function rescueBudget(): {
   }
 }
 
-export function resetRescueBudget(): void {
-  firecrawlCalls = []
-  firecrawlDisabledUntil = 0
-  firecrawlDisabledReason = null
-}
-
 function pruneFirecrawlCalls(): void {
   const cutoff = Date.now() - FIRECRAWL_WINDOW_MS
   firecrawlCalls = firecrawlCalls.filter((at) => at > cutoff)

@@ -110,8 +110,8 @@ Dark Blue anchors; never use pure `#000`.
 The brand typeface is **Proxima Nova** in three weights only: Regular (400), Semibold (600), Extra Bold
 (800). The manual describes the intended tone as "clean, modern, stylish, distinctive and legible".
 
-> **Substitution flagged.** No Proxima Nova licence or font binaries were supplied. `tokens/fonts.css`
-> loads **Figtree** from Google Fonts as the nearest free geometric-humanist match (similar x-height,
+> **Substitution flagged.** No Proxima Nova licence or font binaries were supplied. `pages/_app.js`
+> loads **Figtree** through `next/font` (self-hosted) as the nearest free geometric-humanist match (similar x-height,
 > single-storey-adjacent `a`, comparable widths). **Please send the Proxima Nova web fonts and this file
 > becomes a two-line change.** The `--font-sans` stack already lists `"Proxima Nova"` as the second
 > family, so licensed installs pick it up automatically.
@@ -276,7 +276,7 @@ the logo. The mark may be used alone only where other elements already identify 
 | `components/feedback/`   | `Dialog`, `Toast`, `Tooltip`                                         |
 | `components/navigation/` | `Tabs`                                                               |
 
-Each has a sibling `.d.ts` (props contract) and `.prompt.md` (what & when, usage example, variants).
+In this repo they live in `src/components/ui/`; a one-line comment above each says when to use it.
 
 **Intentional additions.** No source defined a component inventory, so this is the standard primitive
 set. Two entries are brand-specific rather than standard: **`GlassPanel`**, which encodes the manual's

@@ -74,7 +74,7 @@ const JOB_BOARDS = [
   'breezy.hr',
 ]
 
-/* Never fetched, by any route, for any reason.
+/* Job boards and republishers.
 
    These republish other people's job listings, or sit behind a login. They are
    worth reading — hlbhamt.com's two auditor jobs are on GulfTalent and Indeed
@@ -200,7 +200,7 @@ export function whoseSite(
   url: string,
   domain: string,
   /* Other domains the company itself says are the same as this one — see
-     `canonicalDomainFromHtml`. We never work these out here: they are either
+     `declaredDomain`. We never work these out here: they are either
      handed in or we manage without them. */
   aliases: string[] = [],
 ): SiteOwner {

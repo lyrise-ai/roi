@@ -78,6 +78,7 @@ function Message({ message }) {
   )
 }
 
+// Shows messages, passes questions up. Never calls a model or does maths.
 export function ChatPanel({
   messages = [],
   suggestions = [],

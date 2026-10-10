@@ -1,5 +1,6 @@
 import React from 'react'
 
+// Default content box. Over photos or reflections, use GlassPanel.
 export function Card({
   tone = 'default',
   interactive,

@@ -57,6 +57,9 @@ Read `package.json` for versions. Three things it will not tell you:
 - TypeScript runs with its strict checks OFF. Types here are loose. Do not write
   code that assumes strict mode.
 - Supabase handles sign-in. **There is no NextAuth in this repo.**
+- V2 makes Supabase clients two ways only: `createRouteClient` (`src/lib/supabaseRouteClient.ts`)
+  as the signed-in user, `getSupabaseAdmin` (`src/lib/supabaseAdmin.ts`) as the server.
+  `src/lib/supabase-server.js` is V1's and goes with it.
 - We call Resend over plain HTTP. There is deliberately no SDK installed.
 
 ## The ROI pipeline (`src/lib/roi/`)

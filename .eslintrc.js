@@ -33,13 +33,6 @@ module.exports = {
   },
 
   overrides: [
-    // ESLint has no TypeScript parser set up here, so TypeScript declaration
-    // files trip the "undefined variable" rule on TypeScript-only names. The
-    // TypeScript compiler is what checks those files.
-    {
-      files: ['**/*.d.ts'],
-      rules: { 'no-undef': 'off' },
-    },
     // In a test, console output is how it tells you what it did.
     {
       files: ['tests/**', 'evals/**', '**/__tests__/**'],

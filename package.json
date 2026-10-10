@@ -12,10 +12,9 @@
     "test": "node --disable-warning=MODULE_TYPELESS_PACKAGE_JSON --test \"src/**/__tests__/*.test.mjs\"",
     "prettier": "prettier --write .",
     "eval:roi": "node evals/roi/run.mjs",
-    "eval:roi:scaffold": "node evals/roi/scaffoldCasesFromPdf.mjs",
     "test:e2e": "dotenvx run -- playwright test",
     "test:e2e:smoke": "dotenvx run -- playwright test --grep @smoke",
-    "prepare": "husky install",
+    "prepare": "husky",
     "research": "dotenvx run -- node evals/research/look.mjs"
   },
   "dependencies": {
@@ -40,11 +39,6 @@
     "react-toastify": "^10.0.6",
     "zod": "^4.3.6"
   },
-  "husky": {
-    "hooks": {
-      "pre-commit": "lint-staged"
-    }
-  },
   "lint-staged": {
     "*.{js,jsx,ts,tsx}": [
       "eslint --fix",
@@ -66,13 +60,9 @@
     "eslint-config-prettier": "^10.1.8",
     "eslint-plugin-jsx-a11y": "^6.10.2",
     "eslint-plugin-prettier": "^5.5.6",
-    "eslint-plugin-react": "^7.37.5",
-    "eslint-plugin-react-hooks": "^7.1.1",
-    "eslint-plugin-simple-import-sort": "^13.0.0",
     "husky": "^9.1.7",
     "knip": "^6.24.0",
     "lint-staged": "^15.5.2",
-    "pdfjs-dist": "^6.1.200",
     "postcss": "^8.4.25",
     "prettier": "^3.8.4",
     "tailwindcss": "^3.3.2",
