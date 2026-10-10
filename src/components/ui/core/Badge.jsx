@@ -9,6 +9,7 @@ const tones = {
   neutral: ['var(--neutral-100)', 'var(--neutral-600)'],
 }
 
+// Uppercase status pill. User-written labels use Tag.
 export function Badge({ tone = 'purple', children, style, ...rest }) {
   const [bg, fg] = tones[tone]
   return (
