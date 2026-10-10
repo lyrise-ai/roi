@@ -1,5 +1,6 @@
 import React from 'react'
 
+// Takes effect at once. In a form that gets submitted, use Checkbox.
 export function Switch({ label, checked, onChange, disabled, style, ...rest }) {
   return (
     <label

@@ -1,5 +1,6 @@
 import React from 'react'
 
+// Sentence-case chip for user labels and filters. Badge is for status.
 export function Tag({ removable, onRemove, children, style, ...rest }) {
   return (
     <span

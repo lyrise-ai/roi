@@ -3,7 +3,7 @@
 // (LYR-203)
 //
 // Lets screen work start before any generation exists: the report screen
-// (LYR-208) draws SAMPLE_REPORT on pages/ui-kit.jsx. Later, the Assembler's
+// (LYR-208) will draw SAMPLE_REPORT on pages/ui-kit.jsx. Later, the Assembler's
 // test (LYR-243) feeds SAMPLE_ANSWERS, SAMPLE_RESEARCH and SAMPLE_WORDS into
 // buildReport() and checks it gives back exactly SAMPLE_REPORT.
 //

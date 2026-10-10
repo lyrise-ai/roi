@@ -24,7 +24,7 @@
  * of those, so left real it would spend its whole 30-second budget failing,
  * once per test, over the network. What these tests own is how the panel
  * behaves given a stream of findings. What is IN that stream is the research
- * system's own tests and `npm run eval:research`.
+ * system's own tests and `npm run research -- <domain>`.
  */
 import { test, expect, type Page } from '@playwright/test'
 

@@ -1,7 +1,10 @@
 :root {
   /* One family, three weights, as specified in the Brand Manual (p.22):
      Regular / Semibold / Extra Bold. */
-  --font-sans: 'Figtree', 'Proxima Nova', 'Helvetica Neue', Arial, sans-serif;
+  /* --font-figtree is set by next/font in pages/_app.js. Figtree stands in
+     for licensed Proxima Nova. */
+  --font-sans:
+    var(--font-figtree), 'Proxima Nova', 'Helvetica Neue', Arial, sans-serif;
   --font-display: var(--font-sans);
   --font-body: var(--font-sans);
   --font-mono: ui-monospace, 'SFMono-Regular', Menlo, monospace;

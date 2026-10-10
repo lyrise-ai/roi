@@ -25,7 +25,8 @@ palette and its provenance, type scale, logo rules, the glass recipe, and the
 
 - One typeface: Figtree, via `--font-sans`. Three weights only — 400, 600, 800.
   Figtree is a documented substitution for licensed Proxima Nova; if the real
-  binaries ever arrive, swap `styles/tokens/fonts.css` and nothing else changes.
+  binaries ever arrive, swap the `next/font` loader in `pages/_app.js` and
+  nothing else changes.
 - Shadows are dark-blue tinted (`rgba(0,0,34,…)`), never neutral black.
 - The token type and radius ramps are deliberately _not_ wired into Tailwind's
   numeric scales — they are one step off Tailwind's defaults. See the comment at the

@@ -1,5 +1,5 @@
 // ─────────────────────────────────────────────────────────────────────────────
-// observation — Profit Map POC (LYR-188 / POC 10, piece 3)
+// observation — a sentence on /v2's reveal screen (LYR-188)
 //
 // The "I heard you" moment: one plain sentence above the two big figures that
 // says the user's own numbers back to them — "Four people spending twelve

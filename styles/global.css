@@ -1,6 +1,5 @@
 /* LyRise Design System — global entry point. Consumers link this one file.
 These sit after @tailwind base so the token layer wins over preflight. */
-@import url('tokens/fonts.css');
 @import url('tokens/colors.css');
 @import url('tokens/typography.css');
 @import url('tokens/spacing.css');

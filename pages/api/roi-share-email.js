@@ -46,7 +46,7 @@ const EMAIL_RE = /^[^\s@]+@[^\s@]+\.[^\s@]+$/
 // Use the domain this request actually came in on, rather than the one in the
 // settings. The request always knows the real domain — production, a preview
 // deploy, or localhost — while the setting is one fixed value per environment
-// and easy to leave out of date, for instance by copying it from .env.local.
+// and easy to leave out of date, for instance by copying it from a local env file.
 function buildBaseUrl(req) {
   const host = req.headers?.['x-forwarded-host'] || req.headers?.host
   if (host) {
