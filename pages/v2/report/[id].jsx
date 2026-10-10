@@ -1,98 +1,89 @@
-// ─────────────────────────────────────────────────────────────────────────────
-// pages/v2/report/[id].jsx — Opens a V2 Profit Map report by its exact link
-//
-// "A report can have no owner. owner_id stays empty until sign-in, and the link
-// still works. The link is the key: a random UUID."
-//
-// Opening by link goes through our server by exact id using the admin client,
-// which bypasses RLS (the link is the key).
-// ─────────────────────────────────────────────────────────────────────────────
+// /v2/report/<id> — what a forwarded report link opens (LYR-239). No account,
+// no chat. Figures come back with buildReport (LYR-243); until then this shows
+// only what was saved, never a stand-in number.
 
 import * as React from 'react'
 import Head from 'next/head'
 import Link from 'next/link'
+import PublicReportError from '@/src/components/v2/PublicReportError'
 import { loadReport } from '@/src/lib/roi/v2/savedReport'
-import { createClient as createBrowserClient } from '@/src/lib/supabase-browser'
+import { useAuthSession } from '@/src/context/AuthSessionContext'
 import { Button } from '@components/ui'
 
-export async function getServerSideProps({ params }) {
-  const { id } = params ?? {}
+const MESSAGES = {
+  'not-found':
+    'We could not find this report. The link may be mistyped, or the report may have been deleted.',
+  unreadable:
+    'We could not reach our report store just now. Please try again in a minute.',
+}
 
-  // Read by exact id via admin client (link is the key)
+export async function getServerSideProps({ params, res }) {
+  const id = params?.id ?? ''
   const result = await loadReport(id)
 
-  if (result.status === 'missing' || result.status === 'not-found') {
-    return { notFound: true }
-  }
+  if (result.status === 'ok') return { props: { report: result.report } }
 
-  if (result.status === 'unreadable') {
-    return {
-      props: {
-        error:
-          'We could not reach the report database. Please try again shortly.',
-      },
-    }
-  }
-
+  res.statusCode = result.status === 'unreadable' ? 503 : 404
   return {
     props: {
+      error: { status: result.status, message: MESSAGES[result.status] },
       reportId: id,
-      model: result.model,
     },
   }
 }
 
-export default function V2ReportPage({ reportId, model, error }) {
+export default function V2ReportPage({ report, error, reportId }) {
+  // Back from signing in: claim it, if this browser is the one that made it.
+  const { user } = useAuthSession()
   React.useEffect(() => {
-    if (!reportId) return
-    const supabase = createBrowserClient()
-    supabase.auth.getUser().then(({ data: { user } }) => {
-      if (user) {
-        fetch('/api/v2/claim', {
-          method: 'POST',
-          headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({ reportId }),
-        }).catch(() => {})
-      }
+    if (!report || !user) return
+    const key = `v2_claim_${report.id}`
+    let claimToken
+    try {
+      claimToken = localStorage.getItem(key)
+    } catch {
+      return
+    }
+    if (!claimToken) return
+    fetch('/api/v2/claim', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ reportId: report.id, claimToken }),
     })
-  }, [reportId])
+      .then((r) => {
+        if (r.ok) localStorage.removeItem(key)
+      })
+      .catch(() => {})
+  }, [report, user])
+
   if (error) {
     return (
-      <main
-        style={{
-          padding: 'var(--space-12) var(--space-6)',
-          maxWidth: '640px',
-          margin: '0 auto',
-        }}
-      >
-        <h1 style={{ font: 'var(--type-h2)', color: 'var(--text-heading)' }}>
-          Unable to load report
-        </h1>
-        <p
-          style={{
-            font: 'var(--type-body)',
-            color: 'var(--text-muted)',
-            margin: 'var(--space-4) 0',
-          }}
-        >
-          {error}
-        </p>
-        <Link href="/v2">
-          <Button variant="primary">Start a new Profit Map</Button>
-        </Link>
-      </main>
+      <>
+        <Head>
+          <meta name="robots" content="noindex" />
+        </Head>
+        <PublicReportError
+          status={error.status}
+          message={error.message}
+          reportId={reportId}
+        />
+      </>
     )
   }
+
+  const company = report.company?.name || 'Your company'
+  const pains = (report.pains ?? []).filter((p) => p?.text)
 
   return (
     <>
       <Head>
-        <title>Profit Map · {model?.thesis ? 'Report' : 'LyRise'}</title>
+        <title>{company} | LyRise Profit Map</title>
+        <meta name="robots" content="noindex" />
       </Head>
       <main
         style={{
           padding: 'var(--space-12) var(--space-6)',
-          maxWidth: '960px',
+          maxWidth: '760px',
           margin: '0 auto',
         }}
       >
@@ -106,7 +97,7 @@ export default function V2ReportPage({ reportId, model, error }) {
               marginBottom: 'var(--space-2)',
             }}
           >
-            V2 Profit Map Report
+            Profit Map
           </div>
           <h1
             style={{
@@ -115,14 +106,24 @@ export default function V2ReportPage({ reportId, model, error }) {
               margin: 0,
             }}
           >
-            {model?.thesis || 'Your Profit Map'}
+            {company}
           </h1>
+          {report.words?.observation && (
+            <p
+              style={{
+                font: 'var(--type-body)',
+                color: 'var(--text-body)',
+                marginTop: 'var(--space-4)',
+              }}
+            >
+              {report.words.observation}
+            </p>
+          )}
         </header>
 
-        {model?.snapshot && model.snapshot.length > 0 && (
+        {pains.length > 0 && (
           <section
             style={{
-              marginBottom: 'var(--space-8)',
               padding: 'var(--space-6)',
               background: 'var(--surface-card)',
               borderRadius: 'var(--radius-card)',
@@ -135,98 +136,28 @@ export default function V2ReportPage({ reportId, model, error }) {
                 margin: '0 0 var(--space-4)',
               }}
             >
-              Company snapshot
+              The work we looked at
             </h2>
-            <ul style={{ listStyle: 'none', padding: 0, margin: 0 }}>
-              {model.snapshot.map((s, idx) => (
+            <ul style={{ margin: 0, paddingLeft: 'var(--space-5)' }}>
+              {pains.map((p, i) => (
                 <li
-                  key={idx}
+                  key={i}
                   style={{
-                    padding: 'var(--space-2) 0',
-                    borderBottom:
-                      idx < model.snapshot.length - 1
-                        ? '1px solid var(--border-subtle)'
-                        : 'none',
                     font: 'var(--type-body)',
+                    padding: 'var(--space-1) 0',
                   }}
                 >
-                  <strong>{s.label}: </strong>
-                  {s.value}
+                  {p.text}
                 </li>
               ))}
             </ul>
           </section>
         )}
 
-        {model?.workflowRows && model.workflowRows.length > 0 && (
-          <section
-            style={{
-              marginBottom: 'var(--space-8)',
-              padding: 'var(--space-6)',
-              background: 'var(--surface-card)',
-              borderRadius: 'var(--radius-card)',
-              border: '1px solid var(--border-subtle)',
-            }}
-          >
-            <h2
-              style={{
-                font: 'var(--weight-bold) var(--text-base)',
-                margin: '0 0 var(--space-4)',
-              }}
-            >
-              Proposed workflows
-            </h2>
-            <div
-              style={{
-                display: 'flex',
-                flexDirection: 'column',
-                gap: 'var(--space-4)',
-              }}
-            >
-              {model.workflowRows.map((row) => (
-                <div
-                  key={row.id}
-                  style={{
-                    padding: 'var(--space-4)',
-                    borderRadius: 'var(--radius-md)',
-                    background: 'var(--neutral-50)',
-                  }}
-                >
-                  <div
-                    style={{
-                      font: 'var(--weight-bold) var(--text-base)',
-                      color: 'var(--text-heading)',
-                    }}
-                  >
-                    {row.workflow}
-                  </div>
-                  <div
-                    style={{
-                      font: 'var(--text-sm)',
-                      color: 'var(--text-muted)',
-                      margin: 'var(--space-1) 0',
-                    }}
-                  >
-                    {row.today}
-                  </div>
-                  <div
-                    style={{
-                      font: 'var(--weight-semibold) var(--text-sm)',
-                      color: 'var(--brand)',
-                    }}
-                  >
-                    Hours returned: {row.hours} · Gain: {row.gain}
-                  </div>
-                </div>
-              ))}
-            </div>
-          </section>
-        )}
-
         <footer style={{ marginTop: 'var(--space-12)', textAlign: 'center' }}>
-          <Link href="/v2">
-            <Button variant="secondary">Start over</Button>
-          </Link>
+          <Button as={Link} href="/v2" variant="secondary">
+            Make your own Profit Map
+          </Button>
         </footer>
       </main>
     </>

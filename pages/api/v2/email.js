@@ -37,6 +37,11 @@ export default async function handler(req, res) {
     report: clientReport,
   } = req.body ?? {}
 
+  if (reportId !== undefined && typeof reportId !== 'string') {
+    res.status(400).json({ ok: false, error: 'Report id must be a string.' })
+    return
+  }
+
   if (!to || typeof to !== 'string' || !EMAIL_RE.test(to.trim())) {
     res
       .status(400)
@@ -57,7 +62,7 @@ export default async function handler(req, res) {
   let report = clientReport
   if (report && report.id) {
     saveReportInMemory(report)
-  } else if (reportId) {
+  } else if (typeof reportId === 'string' && reportId) {
     report = getReportFromMemory(reportId)
   }
 

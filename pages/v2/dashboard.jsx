@@ -186,8 +186,7 @@ export default function V2Dashboard({ user, reports = [] }) {
             <div style={{ display: 'grid', gap: 'var(--space-4)' }}>
               {reports.map((report) => {
                 const companyName = report.company?.name || 'Company'
-                const thesis =
-                  report.words?.thesis || 'Automated workflow analysis'
+                const thesis = report.words?.thesis || report.words?.observation
                 const date = new Date(report.created_at).toLocaleDateString(
                   'en-US',
                   {

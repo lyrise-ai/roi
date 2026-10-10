@@ -2,11 +2,10 @@
 // Tests for src/lib/roi/v2/savedReport.ts
 //
 // Verifies:
-//   - Save then load gives back the report with { status: 'ok', model }
-//   - Missing id returns { status: 'missing' }
-//   - Non-existent id returns { status: 'not-found' }
-//   - Read failure returns { status: 'unreadable' }
-//   - Failed save returns false, never throws
+//   - Save then load gives back the saved inputs, never the claim token
+//   - A known id can't overwrite a report
+//   - Claiming needs the token and an unowned row
+//   - Missing, unknown and unreadable ids each get their own status
 // ─────────────────────────────────────────────────────────────────────────────
 
 import assert from 'node:assert/strict'
@@ -39,59 +38,58 @@ before(async () => {
   tmpDir = fs.mkdtempSync(path.join(cacheRoot, 'saved-report-test-'))
 
   const stub = path.join(tmpDir, 'supabase-stub.mjs')
+  // A tiny fake of the supabase-js query chain: filters collect, then the
+  // last call runs against globalThis.__db.rows.
   fs.writeFileSync(
     stub,
     `export function createClient() {
-       return {
-         from(table) {
-           if (table !== 'v2_reports') throw new Error('unexpected table: ' + table)
-           return {
-             select() {
-               return {
-                 eq(_col, id) {
-                   return {
-                     async maybeSingle() {
-                       if (globalThis.__db.failReads) {
-                         return { data: null, error: { message: 'connection refused' } }
-                       }
-                       const row = globalThis.__db.rows.get(id)
-                       return { data: row ?? null, error: null }
-                     },
-                   }
-                 },
-               }
-             },
-             async upsert(row) {
-               if (globalThis.__db.failWrites) {
-                 return { error: { message: 'disk full or db down' } }
-               }
-               globalThis.__db.rows.set(row.id, JSON.parse(JSON.stringify(row)))
-               return { error: null }
-             },
-             update(updates) {
-               return {
-                 async eq(_col, id) {
-                   if (globalThis.__db.failWrites) {
-                     return { error: { message: 'write failed' } }
-                   }
-                   const existing = globalThis.__db.rows.get(id)
-                   if (!existing) return { error: null }
-                   const updated = { ...existing, ...updates }
-                   globalThis.__db.rows.set(id, updated)
-                   return { error: null }
-                 },
-               }
-             },
+       const db = () => globalThis.__db
+       const pick = (row, cols) =>
+         Object.fromEntries(cols.split(',').map((c) => [c.trim(), row[c.trim()]]))
+       function query() {
+         const q = { filters: [], op: 'select', cols: '*' }
+         const matches = (row) => q.filters.every(([c, v]) => (row[c] ?? null) === v)
+         const run = () => {
+           if (q.op === 'insert') {
+             if (db().failWrites) return { data: null, error: { message: 'db down' } }
+             if (db().rows.has(q.row.id)) return { data: null, error: { message: 'duplicate key' } }
+             const row = { ...JSON.parse(JSON.stringify(q.row)), claim_token: '11111111-1111-4111-8111-111111111111' }
+             db().rows.set(row.id, row)
+             return { data: pick(row, q.cols), error: null }
            }
-         },
+           if (q.op === 'update') {
+             if (db().failWrites) return { data: null, error: { message: 'db down' } }
+             const hit = [...db().rows.values()].filter(matches)
+             hit.forEach((row) => Object.assign(row, q.updates))
+             return { data: hit.map((r) => pick(r, q.cols)), error: null }
+           }
+           if (db().failReads) return { data: null, error: { message: 'connection refused' } }
+           const row = [...db().rows.values()].find(matches)
+           return { data: row ? pick(row, q.cols) : null, error: null }
+         }
+         const chain = {
+           select(cols) { q.cols = cols; return chain },
+           insert(row) { q.op = 'insert'; q.row = row; return chain },
+           update(updates) { q.op = 'update'; q.updates = updates; return chain },
+           eq(c, v) { q.filters.push([c, v]); return chain },
+           is(c, v) { q.filters.push([c, v]); return chain },
+           async single() { return run() },
+           async maybeSingle() { return run() },
+           then(resolve) { resolve(run()) },
+         }
+         return chain
        }
+       return { from(table) {
+         if (table !== 'v2_reports') throw new Error('unexpected table: ' + table)
+         return query()
+       } }
      }\n`,
   )
 
   const entry = path.join(tmpDir, 'entry.ts')
   fs.writeFileSync(
     entry,
-    `export { saveReport, loadReport, claimReport, buildReport } from ${JSON.stringify(
+    `export { saveReport, loadReport, claimReport } from ${JSON.stringify(
       path.join(here, '../savedReport.ts'),
     )}\n`,
   )
@@ -126,86 +124,74 @@ beforeEach(() => {
   db.failWrites = false
 })
 
-test('saveReport then loadReport returns the same report', async () => {
-  const row = {
-    id: 'a1b2c3d4-e5f6-7890-abcd-ef1234567890',
-    company: { name: 'Acme Test Firm', website: 'acmetest.com' },
-    pains: [{ text: 'Manual billing' }],
-    research: { findings: [] },
-    words: { thesis: 'Start with automated reconciliation.' },
-    settings: { currency: 'USD' },
-  }
-
-  const saved = await saveReport(row)
-  assert.equal(saved, true, 'saveReport should return true')
-
-  const loaded = await loadReport(row.id)
-  assert.equal(loaded.status, 'ok')
-  assert.ok(loaded.model)
-  assert.equal(loaded.model.thesis, 'Start with automated reconciliation.')
+const ID = '6f1c2b8e-3d4a-4e5f-9a7b-1c2d3e4f5a6b'
+const TOKEN = '11111111-1111-4111-8111-111111111111'
+const row = (over = {}) => ({
+  id: ID,
+  company: { name: 'Acme Legal', website: 'acmelegal.com' },
+  pains: [{ text: 'Reconciling trust accounts' }],
+  research: {},
+  words: { observation: 'Four people, 3,000 hours a year.' },
+  settings: { currency: 'USD' },
+  ...over,
 })
 
-test('loadReport returns { status: "missing" } when id is empty or omitted', async () => {
-  assert.deepEqual(await loadReport(), { status: 'missing' })
-  assert.deepEqual(await loadReport(''), { status: 'missing' })
-  assert.deepEqual(await loadReport('   '), { status: 'missing' })
-  assert.deepEqual(await loadReport(null), { status: 'missing' })
+test('save then load gives back the saved inputs, not the claim token', async () => {
+  assert.equal(await saveReport(row()), TOKEN)
+  const loaded = await loadReport(ID)
+  assert.deepEqual(loaded, {
+    status: 'ok',
+    report: {
+      id: ID,
+      company: row().company,
+      pains: row().pains,
+      words: row().words,
+    },
+  })
 })
 
-test('loadReport returns { status: "not-found" } when row does not exist', async () => {
-  const loaded = await loadReport('00000000-0000-0000-0000-000000000000')
-  assert.deepEqual(loaded, { status: 'not-found' })
+test('a known id cannot overwrite a saved report', async () => {
+  await saveReport(row())
+  assert.equal(
+    await saveReport(row({ words: { observation: 'hijacked' } })),
+    null,
+  )
+  const loaded = await loadReport(ID)
+  assert.equal(
+    loaded.report.words.observation,
+    'Four people, 3,000 hours a year.',
+  )
 })
 
-test('loadReport returns { status: "unreadable" } when database query fails', async () => {
-  db.failReads = true
-  const loaded = await loadReport('any-valid-uuid')
-  assert.deepEqual(loaded, { status: 'unreadable' })
-})
-
-test('saveReport returns false and never throws when database query fails', async () => {
+test('save refuses a bad id or wrongly shaped fields, and never throws', async () => {
+  assert.equal(await saveReport(null), null)
+  assert.equal(await saveReport(row({ id: 'rep_acme_123' })), null)
+  assert.equal(await saveReport(row({ pains: 'not a list' })), null)
   db.failWrites = true
-  const result = await saveReport({
-    id: 'broken-save-uuid',
-    company: {},
-    pains: [],
-    research: {},
-    words: {},
-    settings: {},
-  })
-  assert.equal(result, false, 'saveReport must return false on db failure')
+  assert.equal(await saveReport(row()), null)
 })
 
-test('saveReport returns false and never throws when invalid row is provided', async () => {
-  assert.equal(await saveReport(null), false)
-  assert.equal(await saveReport({}), false)
-  assert.equal(await saveReport({ id: '' }), false)
+test('claiming needs the token and an unowned report', async () => {
+  await saveReport(row())
+  assert.equal(
+    await claimReport(ID, 'user-a', '22222222-2222-4222-8222-222222222222'),
+    false,
+  )
+  assert.equal(await claimReport(ID, 'user-a', TOKEN), true)
+  assert.equal(db.rows.get(ID).owner_id, 'user-a')
+  assert.equal(await claimReport(ID, 'user-b', TOKEN), false)
+  assert.equal(db.rows.get(ID).owner_id, 'user-a')
 })
 
-test('claimReport fills owner_id on anonymous report without changing id', async () => {
-  const reportId = '11111111-2222-3333-4444-555555555555'
-  const userId = 'user-auth-uuid-9999'
-
-  await saveReport({
-    id: reportId,
-    owner_id: null,
-    company: { name: 'Anonymous Law' },
-    pains: [],
-    research: {},
-    words: { thesis: 'Initial thesis.' },
-    settings: {},
-  })
-
-  const claimed = await claimReport(reportId, userId)
-  assert.equal(claimed, true, 'claimReport should succeed')
-
-  const storedRow = db.rows.get(reportId)
-  assert.equal(storedRow.id, reportId, 'id must not change')
-  assert.equal(storedRow.owner_id, userId, 'owner_id must be updated to user')
+test('claiming an id that does not exist is false', async () => {
+  assert.equal(await claimReport(ID, 'user-a', TOKEN), false)
 })
 
-test('claimReport returns false when inputs are missing', async () => {
-  assert.equal(await claimReport('', 'user-123'), false)
-  assert.equal(await claimReport('rep-123', ''), false)
-  assert.equal(await claimReport(null, null), false)
+test('missing, unknown and unreadable ids each get their own status', async () => {
+  assert.deepEqual(await loadReport(), { status: 'missing' })
+  assert.deepEqual(await loadReport('  '), { status: 'missing' })
+  assert.deepEqual(await loadReport('not-a-uuid'), { status: 'not-found' })
+  assert.deepEqual(await loadReport(ID), { status: 'not-found' })
+  db.failReads = true
+  assert.deepEqual(await loadReport(ID), { status: 'unreadable' })
 })

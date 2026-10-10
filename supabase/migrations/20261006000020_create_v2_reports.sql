@@ -13,6 +13,9 @@
 create table if not exists public.v2_reports (
   id uuid primary key,
   owner_id uuid references auth.users (id) on delete set null,
+  -- Handed only to the browser that saved the report. Claiming needs it, so a
+  -- forwarded link can't take ownership.
+  claim_token uuid not null default gen_random_uuid(),
   company jsonb not null,
   pains jsonb not null,
   research jsonb not null,
@@ -32,6 +35,9 @@ create index if not exists v2_reports_owner_id_idx
 
 -- Enable RLS
 alter table public.v2_reports enable row level security;
+
+-- Only the server writes, with the admin key.
+revoke insert, update, delete on public.v2_reports from anon, authenticated;
 
 -- One RLS policy: a signed-in user reads rows where owner_id is theirs
 drop policy if exists "Users can read own v2 reports" on public.v2_reports;

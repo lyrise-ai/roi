@@ -1,12 +1,7 @@
-// ─────────────────────────────────────────────────────────────────────────────
-// POST /api/v2/save — Persists a V2 Profit Map report
-//
-// Saves or updates a row in public.v2_reports via saveReport() (admin client).
-// "A report can have no owner. owner_id stays empty until sign-in, and the link
-// still works. The link is the key: a random UUID."
-// ─────────────────────────────────────────────────────────────────────────────
+// POST /api/v2/save — saves a new V2 report once, at the reveal.
+// Returns the claim token: only this browser gets it, and claiming needs it.
 
-import { createClient } from '@/src/lib/supabase-server'
+import { createRouteClient } from '@/src/lib/supabaseRouteClient'
 import { saveReport } from '@/src/lib/roi/v2/savedReport'
 
 export default async function handler(req, res) {
@@ -16,38 +11,21 @@ export default async function handler(req, res) {
     return
   }
 
-  const {
-    id,
-    company = {},
-    pains = [],
-    research = {},
-    words = {},
-    settings = {},
-  } = req.body ?? {}
+  const { id, company, pains, research, words, settings } = req.body ?? {}
 
-  if (!id || typeof id !== 'string' || !id.trim()) {
-    res
-      .status(400)
-      .json({ ok: false, error: 'A valid report UUID is required.' })
-    return
-  }
-
-  // Check if caller has an active user session
+  // Signed in already? Then the report is theirs from the start.
   let ownerId = null
   try {
-    const supabase = createClient(req, res)
     const {
       data: { user },
-    } = await supabase.auth.getUser()
-    if (user && user.id) {
-      ownerId = user.id
-    }
+    } = await createRouteClient(req, res).auth.getUser()
+    ownerId = user?.id ?? null
   } catch {
-    // Guest user without session
+    // A guest. The report stays unowned until they sign in.
   }
 
-  const success = await saveReport({
-    id: id.trim(),
+  const claimToken = await saveReport({
+    id,
     owner_id: ownerId,
     company,
     pains,
@@ -56,14 +34,10 @@ export default async function handler(req, res) {
     settings,
   })
 
-  if (!success) {
-    res.status(500).json({ ok: false, error: 'Failed to persist report.' })
+  if (!claimToken) {
+    res.status(400).json({ ok: false, error: 'Could not save this report.' })
     return
   }
 
-  res.status(200).json({
-    ok: true,
-    reportId: id.trim(),
-    ownerId,
-  })
+  res.status(200).json({ ok: true, reportId: id, ownerId, claimToken })
 }

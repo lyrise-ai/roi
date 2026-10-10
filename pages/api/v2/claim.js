@@ -1,11 +1,7 @@
-// ─────────────────────────────────────────────────────────────────────────────
-// POST /api/v2/claim — Claims an anonymous V2 report for a signed-in user
-//
-// Fills owner_id on the report row they just made after the reveal.
-// The journey id and public share link remain completely unchanged.
-// ─────────────────────────────────────────────────────────────────────────────
+// POST /api/v2/claim — gives an unowned report to the signed-in user, if they
+// hold the claim token /api/v2/save handed to the browser that made it.
 
-import { createClient } from '@/src/lib/supabase-server'
+import { createRouteClient } from '@/src/lib/supabaseRouteClient'
 import { claimReport } from '@/src/lib/roi/v2/savedReport'
 
 export default async function handler(req, res) {
@@ -15,35 +11,20 @@ export default async function handler(req, res) {
     return
   }
 
-  const { reportId } = req.body ?? {}
-  if (!reportId || typeof reportId !== 'string' || !reportId.trim()) {
-    res.status(400).json({ ok: false, error: 'reportId is required.' })
-    return
-  }
+  const { reportId, claimToken } = req.body ?? {}
 
-  // Check authenticated session
-  const supabase = createClient(req, res)
   const {
     data: { user },
-    error: authError,
-  } = await supabase.auth.getUser()
-
-  if (authError || !user) {
-    res
-      .status(401)
-      .json({ ok: false, error: 'Must be signed in to claim report.' })
+  } = await createRouteClient(req, res).auth.getUser()
+  if (!user) {
+    res.status(401).json({ ok: false, error: 'Sign in to save this report.' })
     return
   }
 
-  const success = await claimReport(reportId.trim(), user.id)
-  if (!success) {
-    res.status(500).json({ ok: false, error: 'Failed to claim report.' })
+  if (!(await claimReport(reportId, user.id, claimToken))) {
+    res.status(409).json({ ok: false, error: 'This report cannot be claimed.' })
     return
   }
 
-  res.status(200).json({
-    ok: true,
-    reportId: reportId.trim(),
-    ownerId: user.id,
-  })
+  res.status(200).json({ ok: true, reportId, ownerId: user.id })
 }

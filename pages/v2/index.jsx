@@ -55,7 +55,7 @@ import {
   bridgePainQuant,
 } from '@/src/lib/roi/v2/answerBridge'
 import { cleanDomain } from '@/src/lib/roi/v2/domain'
-import { createClient as createBrowserClient } from '@/src/lib/supabase-browser'
+import { useAuthSession } from '@/src/context/AuthSessionContext'
 import {
   chain,
   hoursReturned,
@@ -268,20 +268,7 @@ function GoogleIcon() {
 
 function Shell({ step, children }) {
   const index = STEPS.indexOf(step)
-  const [user, setUser] = React.useState(null)
-
-  React.useEffect(() => {
-    const supabase = createBrowserClient()
-    supabase.auth.getUser().then(({ data: { user: currentUser } }) => {
-      setUser(currentUser || null)
-    })
-    const {
-      data: { subscription },
-    } = supabase.auth.onAuthStateChange((_event, session) => {
-      setUser(session?.user ?? null)
-    })
-    return () => subscription.unsubscribe()
-  }, [])
+  const { user } = useAuthSession()
 
   return (
     <main
@@ -1628,11 +1615,12 @@ function ClaimSection({ reportId, currentUser, claimed, onClaimSuccess }) {
     try {
       const returnUrl = `/v2/report/${reportId}`
       document.cookie = `auth_next=${encodeURIComponent(returnUrl)}; path=/; max-age=300; SameSite=Lax`
-      const supabase = createBrowserClient()
+      const { createClient } = await import('@/src/lib/supabase-browser')
+      const supabase = createClient()
       await supabase.auth.signInWithOAuth({
         provider: 'google',
         options: {
-          redirectTo: `${window.location.origin}/auth/callback?next=${encodeURIComponent(returnUrl)}`,
+          redirectTo: `${window.location.origin}/auth/callback`,
         },
       })
     } catch (err) {
@@ -1651,11 +1639,12 @@ function ClaimSection({ reportId, currentUser, claimed, onClaimSuccess }) {
     try {
       const returnUrl = `/v2/report/${reportId}`
       document.cookie = `auth_next=${encodeURIComponent(returnUrl)}; path=/; max-age=300; SameSite=Lax`
-      const supabase = createBrowserClient()
+      const { createClient } = await import('@/src/lib/supabase-browser')
+      const supabase = createClient()
       const { error } = await supabase.auth.signInWithOtp({
         email: trimmed,
         options: {
-          emailRedirectTo: `${window.location.origin}/auth/callback?next=${encodeURIComponent(returnUrl)}`,
+          emailRedirectTo: `${window.location.origin}/auth/callback`,
         },
       })
       if (error) throw error
@@ -2143,12 +2132,15 @@ function Reveal({ flow, demo, onRestart }) {
     })
   })
 
-  const [currentUser, setCurrentUser] = React.useState(null)
+  const { user: currentUser } = useAuthSession()
   const [claimed, setClaimed] = React.useState(false)
 
-  // Background save the report in public.v2_reports
+  /* Saved once, at the reveal. The claim token comes back only to this
+     browser; the report page sends it after sign-in to take ownership. */
+  const saved = React.useRef(false)
   React.useEffect(() => {
-    if (!reportId) return
+    if (saved.current) return
+    saved.current = true
     fetch('/api/v2/save', {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
@@ -2161,11 +2153,22 @@ function Reveal({ flow, demo, onRestart }) {
         pains: flow.pains || [],
         research: {},
         words: { observation },
-        settings: MINI_SETTINGS,
+        settings: SETTINGS,
       }),
-    }).catch((err) => {
-      console.warn('[v2] report background save failed:', err)
     })
+      .then((res) => res.json())
+      .then((data) => {
+        if (!data.ok) return
+        if (data.ownerId) setClaimed(true)
+        try {
+          localStorage.setItem(`v2_claim_${reportId}`, data.claimToken)
+        } catch {
+          // Private mode: they can still sign in, the report just stays unowned.
+        }
+      })
+      .catch((err) => {
+        console.warn('[v2] report save failed:', err)
+      })
   }, [
     reportId,
     companyName,
@@ -2174,27 +2177,6 @@ function Reveal({ flow, demo, onRestart }) {
     flow.pains,
     observation,
   ])
-
-  // Check auth and auto-claim if already signed in
-  React.useEffect(() => {
-    if (!reportId) return
-    const supabase = createBrowserClient()
-    supabase.auth.getUser().then(({ data: { user } }) => {
-      if (user) {
-        setCurrentUser(user)
-        fetch('/api/v2/claim', {
-          method: 'POST',
-          headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({ reportId }),
-        })
-          .then((res) => res.json())
-          .then((data) => {
-            if (data.ok) setClaimed(true)
-          })
-          .catch(() => {})
-      }
-    })
-  }, [reportId])
 
   const reportPayload = React.useMemo(
     () => ({

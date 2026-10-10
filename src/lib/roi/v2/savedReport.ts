@@ -10,8 +10,6 @@
 
 import { getSupabaseAdmin } from '../../supabaseAdmin'
 import type { MiniCalculatorOutput } from './miniCalculator'
-import type { ReportModel } from './reportModel'
-import { SAMPLE_REPORT } from './sampleReport'
 
 export interface SavedReportCompany {
   name: string
@@ -54,173 +52,142 @@ export interface V2ReportRow {
   id: string
   owner_id?: string | null
   company: Record<string, unknown>
-  pains: Record<string, unknown>[] | Record<string, unknown>
+  pains: Record<string, unknown>[]
   research: Record<string, unknown>
   words: Record<string, unknown>
   settings: Record<string, unknown>
-  created_at?: string
-  updated_at?: string
 }
 
+/* What a shared link may show. No numbers until buildReport (LYR-243) rebuilds
+   them from the saved inputs; never claim_token or owner_id. */
+export type LoadedReport = Pick<
+  V2ReportRow,
+  'id' | 'company' | 'pains' | 'words'
+>
+
 export type LoadReportResult =
-  | { status: 'ok'; model: ReportModel }
+  | { status: 'ok'; report: LoadedReport }
   | { status: 'missing' }
   | { status: 'not-found' }
   | { status: 'unreadable' }
 
-/**
- * Reconstructs a ReportModel from saved row data.
- * When buildReport (LYR-243) is in place, this calls it with the row's saved settings.
- */
-export function buildReport(row: {
-  company?: Record<string, unknown>
-  pains?: Record<string, unknown>[] | Record<string, unknown>
-  research?: Record<string, unknown>
-  words?: Record<string, unknown>
-  settings?: Record<string, unknown>
-}): ReportModel {
-  if (!row) return SAMPLE_REPORT
-  const companyName = (row.company as { name?: string })?.name
-  const thesis = (row.words as { thesis?: string })?.thesis
-  if (companyName || thesis) {
-    return {
-      ...SAMPLE_REPORT,
-      ...(thesis ? { thesis } : {}),
-    }
-  }
-  return SAMPLE_REPORT
-}
+const UUID = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i
+
+export const isReportId = (id: unknown): id is string =>
+  typeof id === 'string' && UUID.test(id)
+
+const isObject = (v: unknown) =>
+  typeof v === 'object' && v !== null && !Array.isArray(v)
 
 /**
- * Writes one row to v2_reports.
+ * Inserts one new row into v2_reports and returns its claim token, or null.
  *
- * Why the admin client is used here:
- * No accounts yet at creation time. The random UUID journey id is the only key,
- * and server-controlled writes bypass RLS.
+ * Insert, never upsert: a known id can't be used to overwrite someone's report.
+ * Admin client because nobody is signed in yet; the browser keys have no
+ * write rights on this table.
  *
- * Never throws — returns true on success, false on failure.
+ * Never throws.
  */
-export async function saveReport(row: V2ReportRow): Promise<boolean> {
-  if (!row || !row.id || typeof row.id !== 'string' || !row.id.trim()) {
-    return false
+export async function saveReport(row: V2ReportRow): Promise<string | null> {
+  if (
+    !row ||
+    !isReportId(row.id) ||
+    !isObject(row.company) ||
+    !Array.isArray(row.pains) ||
+    !isObject(row.research) ||
+    !isObject(row.words) ||
+    !isObject(row.settings)
+  ) {
+    return null
   }
 
   try {
-    const admin = getSupabaseAdmin()
-    const { error } = await admin.from('v2_reports').upsert({
-      id: row.id.trim(),
-      ...(row.owner_id !== undefined ? { owner_id: row.owner_id } : {}),
-      company: row.company ?? {},
-      pains: row.pains ?? [],
-      research: row.research ?? {},
-      words: row.words ?? {},
-      settings: row.settings ?? {},
-      updated_at: new Date().toISOString(),
-    })
+    const { data, error } = await getSupabaseAdmin()
+      .from('v2_reports')
+      .insert({
+        id: row.id,
+        owner_id: row.owner_id ?? null,
+        company: row.company,
+        pains: row.pains,
+        research: row.research,
+        words: row.words,
+        settings: row.settings,
+      })
+      .select('claim_token')
+      .single()
 
     if (error) {
-      console.error(
-        `[v2_reports] save failed for ${row.id}: ${error.message ?? 'unknown database error'}`,
-      )
-      return false
+      console.error(`[v2_reports] save failed for ${row.id}: ${error.message}`)
+      return null
     }
-
-    return true
+    return data.claim_token
   } catch (err) {
-    console.error(`[v2_reports] save failed for ${row?.id}:`, err)
-    return false
+    console.error(`[v2_reports] save failed for ${row.id}:`, err)
+    return null
   }
 }
 
 /**
- * Claims a report for an authenticated user on /v2 post-reveal.
- * Fills owner_id on the report row; the report id and link remain unchanged.
+ * Gives an unowned report to a signed-in user, if they hold its claim token.
+ * Only the browser that saved the report has the token, so a forwarded link
+ * can't claim. True only when a row actually changed.
  *
- * Why the admin client is used here:
- * Admin key is used for writes because claiming attaches ownership to an anonymously
- * created report that had no owner attached initially.
+ * Never throws.
  */
 export async function claimReport(
   id: string,
   userId: string,
+  claimToken: string,
 ): Promise<boolean> {
-  if (
-    !id ||
-    typeof id !== 'string' ||
-    !id.trim() ||
-    !userId ||
-    typeof userId !== 'string' ||
-    !userId.trim()
-  ) {
-    return false
-  }
-
-  const cleanId = id.trim()
-  const cleanUserId = userId.trim()
+  if (!isReportId(id) || !isReportId(claimToken) || !userId) return false
 
   try {
-    const admin = getSupabaseAdmin()
-    const { error } = await admin
+    const { data, error } = await getSupabaseAdmin()
       .from('v2_reports')
-      .update({
-        owner_id: cleanUserId,
-        updated_at: new Date().toISOString(),
-      })
-      .eq('id', cleanId)
+      .update({ owner_id: userId })
+      .eq('id', id)
+      .eq('claim_token', claimToken)
+      .is('owner_id', null)
+      .select('id')
 
     if (error) {
-      console.error(
-        `[v2_reports] claim failed for ${cleanId} by ${cleanUserId}: ${error.message ?? 'unknown database error'}`,
-      )
+      console.error(`[v2_reports] claim failed for ${id}: ${error.message}`)
       return false
     }
-
-    return true
+    return data.length === 1
   } catch (err) {
-    console.error(`[v2_reports] claim failed for ${cleanId}:`, err)
+    console.error(`[v2_reports] claim failed for ${id}:`, err)
     return false
   }
 }
 
 /**
- * Reads a report by exact journey id from v2_reports and rebuilds it using buildReport().
+ * Reads a report by exact id. The id is the key, so this reads with the admin
+ * client by exact id only.
  *
- * Why the admin client is used here:
- * No accounts yet. The random UUID is the unguessable link key, so server reads
- * bypass RLS by exact id.
+ * Never throws.
  */
 export async function loadReport(
   id?: string | null,
 ): Promise<LoadReportResult> {
-  if (!id || typeof id !== 'string' || !id.trim()) {
-    return { status: 'missing' }
-  }
-
-  const cleanId = id.trim()
+  if (!id || typeof id !== 'string' || !id.trim()) return { status: 'missing' }
+  if (!isReportId(id.trim())) return { status: 'not-found' }
 
   try {
-    const admin = getSupabaseAdmin()
-    const { data, error } = await admin
+    const { data, error } = await getSupabaseAdmin()
       .from('v2_reports')
-      .select('id, company, pains, research, words, settings')
-      .eq('id', cleanId)
+      .select('id, company, pains, words')
+      .eq('id', id.trim())
       .maybeSingle()
 
     if (error) {
-      console.error(
-        `[v2_reports] read failed for ${cleanId}: ${error.message ?? 'unknown database error'}`,
-      )
+      console.error(`[v2_reports] read failed for ${id}: ${error.message}`)
       return { status: 'unreadable' }
     }
-
-    if (!data) {
-      return { status: 'not-found' }
-    }
-
-    const model = buildReport(data)
-    return { status: 'ok', model }
+    if (!data) return { status: 'not-found' }
+    return { status: 'ok', report: data }
   } catch (err) {
-    console.error(`[v2_reports] read failed for ${cleanId}:`, err)
+    console.error(`[v2_reports] read failed for ${id}:`, err)
     return { status: 'unreadable' }
   }
 }
