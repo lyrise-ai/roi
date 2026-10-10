@@ -19,7 +19,7 @@
 import { outboundEmailBlockedReason } from '../../outboundEmail'
 import type { SavedReport } from './savedReport'
 import { hoursReturned as hrs, hoursSpent as spent, money } from './format'
-import { MINI_SETTINGS } from './miniCalculator'
+import { SETTINGS } from './miniCalculator'
 
 export const EMAIL_RE = /^[^\s@]+@[^\s@]+\.[^\s@]+$/
 const DEFAULT_FROM = 'LyRise AI <reports@roi.lyrise.ai>'
@@ -86,7 +86,7 @@ export function resetSentRegistryForTests(): void {
   sentEmailKeys.clear()
 }
 
-const dollars = (n: number) => money(n, MINI_SETTINGS.currency)
+const dollars = (n: number) => money(n, SETTINGS.currency)
 
 // A figure we can't print is left out, never shown as 0.
 const known = (n: number | null | undefined) => (Number.isFinite(n) ? n : null)

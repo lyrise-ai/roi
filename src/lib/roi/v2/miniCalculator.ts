@@ -39,8 +39,6 @@ export const SETTINGS: CalculatorSettings = {
   currency: 'USD',
 }
 
-export const MINI_SETTINGS = SETTINGS
-
 export interface MiniCalculatorInput {
   people: number
   hoursPerWeek: number
@@ -158,23 +156,29 @@ export interface ReportNumbers {
   delayMonthly: number
 }
 
-export interface Override {
-  row: number
-  setting: keyof CalculatorSettings | string
-  value: number
-  reason?: string
-}
-
 export interface CalculateReportInput {
   pains: BridgedPainFields[]
   rejected?: number[]
   settings?: CalculatorSettings
-  overrides?: Override[]
+}
+
+/* The one ranking: biggest gain first, then more hours returned, then the
+   order they were asked in. A NaN gain sorts last. */
+type Ranked = { gain: number; hoursReturned: number; position: number }
+function byRank(a: Ranked, b: Ranked): number {
+  const aNan = !Number.isFinite(a.gain)
+  const bNan = !Number.isFinite(b.gain)
+  if (aNan !== bNan) return aNan ? 1 : -1
+  if (!aNan && b.gain !== a.gain) return b.gain - a.gain
+  if (!aNan && b.hoursReturned !== a.hoursReturned) {
+    return b.hoursReturned - a.hoursReturned
+  }
+  return a.position - b.position
 }
 
 export function calculateReport(input: CalculateReportInput): ReportNumbers {
-  const { pains = [], rejected = [], overrides = [] } = input
-  const baseSettings = input.settings ?? SETTINGS
+  const { pains = [], rejected = [] } = input
+  const settings = input.settings ?? SETTINGS
 
   const rows: ReportRowNumbers[] = []
   const skipped: SkippedPain[] = []
@@ -207,13 +211,6 @@ export function calculateReport(input: CalculateReportInput): ReportNumbers {
       continue
     }
 
-    let rowSettings = { ...baseSettings }
-    for (const ov of overrides) {
-      if (ov.row === i) {
-        rowSettings = { ...rowSettings, [ov.setting]: ov.value }
-      }
-    }
-
     const calc = calculateMiniProfitMap(
       {
         people: pain.people.value as number,
@@ -221,7 +218,7 @@ export function calculateReport(input: CalculateReportInput): ReportNumbers {
         annualPay: pain.annualPay.value as number,
         automatablePct: pain.automatablePct.value as number,
       },
-      rowSettings,
+      settings,
     )
 
     const remaining = calc.annualHours - calc.hoursReturned
@@ -243,20 +240,7 @@ export function calculateReport(input: CalculateReportInput): ReportNumbers {
     })
   }
 
-  // Order: biggest gain first, tie on gain -> more hours returned first, tie on hours -> position order. NaN sorts last.
-  rows.sort((a, b) => {
-    const aIsNan = !Number.isFinite(a.gain)
-    const bIsNan = !Number.isFinite(b.gain)
-    if (aIsNan && !bIsNan) return 1
-    if (!aIsNan && bIsNan) return -1
-    if (aIsNan && bIsNan) return a.position - b.position
-
-    if (b.gain !== a.gain) return b.gain - a.gain
-    if (b.hoursReturned !== a.hoursReturned) {
-      return b.hoursReturned - a.hoursReturned
-    }
-    return a.position - b.position
-  })
+  rows.sort(byRank)
 
   const order = rows.map((r) => r.position)
 
@@ -383,11 +367,19 @@ export function figuresFor(
   return { complete: false, calc: { annualHours: calc.annualHours } }
 }
 
-export function pickFeatured(
+export function selectFeatured(
   pains: PainItem[] = [],
   estimates: (string | undefined)[] = [],
   settings: CalculatorSettings = SETTINGS,
 ): FeaturedResult | undefined {
+  const ranked = (x) => {
+    const calc = x.figures.calc as MiniCalculatorOutput
+    return {
+      gain: calc.totalFinancialGain,
+      hoursReturned: calc.hoursReturned,
+      position: x.index,
+    }
+  }
   return pains
     .map((pain, index) => ({
       pain,
@@ -395,25 +387,12 @@ export function pickFeatured(
       figures: figuresFor(pain, estimates, settings),
     }))
     .sort((a, b) => {
+      // A pain with every answer beats one still missing an answer.
       if (a.figures.complete !== b.figures.complete) {
         return a.figures.complete ? -1 : 1
       }
-      if (a.figures.complete && b.figures.complete) {
-        const aCalc = a.figures.calc as MiniCalculatorOutput
-        const bCalc = b.figures.calc as MiniCalculatorOutput
-        const aIsNan = !Number.isFinite(aCalc.totalFinancialGain)
-        const bIsNan = !Number.isFinite(bCalc.totalFinancialGain)
-        if (aIsNan && !bIsNan) return 1
-        if (!aIsNan && bIsNan) return -1
-        if (aIsNan && bIsNan) return a.index - b.index
-
-        const gain = bCalc.totalFinancialGain - aCalc.totalFinancialGain
-        if (gain !== 0) return gain
-        const hours = bCalc.hoursReturned - aCalc.hoursReturned
-        if (hours !== 0) return hours
-      }
-      return a.index - b.index
+      return a.figures.complete
+        ? byRank(ranked(a), ranked(b))
+        : a.index - b.index
     })[0]
 }
-
-export const selectFeatured = pickFeatured
