@@ -3,7 +3,7 @@ name: profit-map-v2
 description: >-
   How Profit Map V2 (/v2) is put together: the interview, research, the
   calculator chain, saved reports, sharing and claiming. Use when working on
-  anything under pages/v2, pages/api/v2, src/lib/roi/v2 or src/lib/roi/research.
+  anything under pages/v2, pages/api/v2, src/v2/report or src/v2/research.
   CLAUDE.md has the repo-wide rules (V1/V2 split, migrations, logging); this
   covers what it doesn't.
 ---
@@ -15,9 +15,9 @@ description: >-
 1. `/v2` (`pages/v2/index.jsx`): landing → company → interview → reveal. All
    answers live in the page's `flow` object in the browser.
 2. Submitting the company opens `GET /api/v2/research?domain=` as a stream
-   (`useScan`). The research agent (`src/lib/roi/research/agent.ts`) sends
+   (`useScan`). The research agent (`src/v2/research/agent.ts`) sends
    `finding`, `step`, `gaps`, `done`. The domain is cleaned by
-   `cleanDomain` in `src/lib/roi/v2/domain.ts`, the one copy, used by the
+   `cleanDomain` in `src/v2/report/domain.ts`, the one copy, used by the
    browser and the server.
 3. Reveal: `answerBridge.ts` turns typed answers into numbers,
    `miniCalculator.ts` works out every figure (`selectFeatured`,
@@ -25,7 +25,7 @@ description: >-
    becomes text. No AI on this screen.
 4. The reveal saves once: `POST /api/v2/save` → one row in `v2_reports`.
 
-## Saved reports (`src/lib/roi/v2/savedReport.ts`)
+## Saved reports (`src/v2/report/savedReport.ts`)
 
 - `v2_reports`: `id` (UUID, the link), `owner_id` (null until sign-in),
   `claim_token`, and the inputs as jsonb: `company`, `pains`, `research`,
@@ -41,7 +41,7 @@ description: >-
 ## Sharing and claiming
 
 - `/v2/report/<id>` opens for anyone with the link. No account, no chat.
-  Each failure gets its own message (`src/components/v2/PublicReportError.jsx`).
+  Each failure gets its own message (`src/v2/components/PublicReportError.jsx`).
 - Sign-in comes after the reveal. Save hands back a `claim_token` that only
   the saving browser keeps (`localStorage` key `v2_claim_<id>`). After sign-in
   the report page posts it to `POST /api/v2/claim`, which only fills an empty

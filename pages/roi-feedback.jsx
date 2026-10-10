@@ -4,7 +4,7 @@ import { useRouter } from 'next/router'
 import { toast, ToastContainer } from 'react-toastify'
 import clsx from 'clsx'
 import 'react-toastify/dist/ReactToastify.css'
-import MainHeader from '../src/layout/MainHeader'
+import MainHeader from '@/src/v1/layout/MainHeader'
 import { getPostHog } from '@/src/lib/posthog-browser'
 
 const questions = [

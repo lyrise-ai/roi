@@ -1,13 +1,7 @@
 /* POC of the redesigned Profit Map (LYR-178, scaffold: LYR-182).
 
-   This is a separate page on purpose. Nothing under /v2 touches the live app:
-   no login, no alpha limit, no `reports`/`state_data` tables, and no imports
-   from the production ROI code (`src/lib/roi/pipeline`, `src/lib/roi/agent.ts`
-   and friends). `src/lib/roi/v2/` is this POC's own corner of that folder —
-   its own calculator (LYR-186) and its own answer reader (LYR-188), sharing no
-   code with the pipeline — so that folder is fine to use. Delete this whole
-   directory and the live app must behave exactly the same. That is also how we
-   throw it away later.
+   Nothing under /v2 touches the live app: no `reports`/`state_data` tables and
+   no imports from V1 (`src/v1/`). Its logic lives in `src/v2/`.
 
    It calls the server once: `/api/v2/research` (LYR-199), which fills the scan
    panel. The call starts when the company form is submitted and we never wait
@@ -39,7 +33,7 @@ import Head from 'next/head'
 import Link from 'next/link'
 import { useRouter } from 'next/router'
 import Image from 'next/image'
-import Logo from '@/src/assets/logo.svg'
+import Logo from '@/src/ui/logo.svg'
 import {
   Button,
   Dialog,
@@ -49,22 +43,17 @@ import {
   ScanFactRow,
   SegmentedInput,
   SuggestionBlock,
-} from '@components/ui'
+} from '@/src/ui'
 import {
   assembleCalculatorInput,
   bridgePainQuant,
-} from '@/src/lib/roi/v2/answerBridge'
-import { cleanDomain } from '@/src/lib/roi/v2/domain'
-import { useAuthSession } from '@/src/context/AuthSessionContext'
-import {
-  chain,
-  hoursReturned,
-  hoursSpent,
-  money,
-} from '@/src/lib/roi/v2/format'
-import { SETTINGS, selectFeatured } from '@/src/lib/roi/v2/miniCalculator'
-import { buildObservationSentence } from '@/src/lib/roi/v2/observation'
-import { SAMPLE_ANSWERS } from '@/src/lib/roi/v2/sampleReport'
+} from '@/src/v2/report/answerBridge'
+import { cleanDomain } from '@/src/v2/report/domain'
+import { useAuthSession } from '@/src/lib/AuthSessionContext'
+import { chain, hoursReturned, hoursSpent, money } from '@/src/v2/report/format'
+import { SETTINGS, selectFeatured } from '@/src/v2/report/miniCalculator'
+import { buildObservationSentence } from '@/src/v2/report/observation'
+import { SAMPLE_ANSWERS } from '@/src/v2/report/sampleReport'
 
 const IS_DEV = process.env.NODE_ENV === 'development'
 
@@ -575,7 +564,7 @@ function Company({ value, onChange, onBack, onSubmit }) {
           agent should read them instead: "Dr Job Pro, Cairo" carries the
           country and therefore the report's currency and working-weeks
           constant, which we currently assume are US dollars and 50. See the
-          TODO(agent) block in src/lib/roi/v2/answerBridge.ts for the rule. */}
+          TODO(agent) block in src/v2/report/answerBridge.ts for the rule. */}
       <form onSubmit={submit}>
         <div
           style={{

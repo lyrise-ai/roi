@@ -276,7 +276,7 @@ the logo. The mark may be used alone only where other elements already identify 
 | `components/feedback/`   | `Dialog`, `Toast`, `Tooltip`                                         |
 | `components/navigation/` | `Tabs`                                                               |
 
-In this repo they live in `src/components/ui/`; a one-line comment above each says when to use it.
+In this repo they live in `src/ui/`; a one-line comment above each says when to use it.
 
 **Intentional additions.** No source defined a component inventory, so this is the standard primitive
 set. Two entries are brand-specific rather than standard: **`GlassPanel`**, which encodes the manual's

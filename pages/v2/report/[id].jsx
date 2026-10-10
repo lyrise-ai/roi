@@ -5,10 +5,10 @@
 import * as React from 'react'
 import Head from 'next/head'
 import Link from 'next/link'
-import PublicReportError from '@/src/components/v2/PublicReportError'
-import { loadReport } from '@/src/lib/roi/v2/savedReport'
-import { useAuthSession } from '@/src/context/AuthSessionContext'
-import { Button } from '@components/ui'
+import PublicReportError from '@/src/v2/components/PublicReportError'
+import { loadReport } from '@/src/v2/report/savedReport'
+import { useAuthSession } from '@/src/lib/AuthSessionContext'
+import { Button } from '@/src/ui'
 
 const MESSAGES = {
   'not-found':

@@ -1,5 +1,5 @@
 // PATCH /api/reports/[id]/validation — draft autosave for the validation
-// wizard (src/components/ROIGenerator/Validation). Refresh-resilience only;
+// wizard (src/v1/components/ROIGenerator/Validation). Refresh-resilience only;
 // the authoritative write happens once, at /api/reports/[id]/validate-finalize.
 
 import { createClient, createAdminClient } from '@/src/lib/supabase-server'

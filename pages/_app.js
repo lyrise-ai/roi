@@ -4,7 +4,7 @@ import { useRouter } from 'next/router'
 import { Analytics } from '@vercel/analytics/next'
 import { Figtree } from 'next/font/google'
 import '../styles/global.css'
-import { AuthSessionContext } from '../src/context/AuthSessionContext'
+import { AuthSessionContext } from '@/src/lib/AuthSessionContext'
 
 const BASE_URL = process.env.NEXT_PUBLIC_BASE_URL ?? 'https://roi.lyrise.ai'
 

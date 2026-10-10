@@ -2,8 +2,8 @@ import { useEffect, useState } from 'react'
 import Head from 'next/head'
 import { createClient } from '../../src/lib/supabase-server'
 import { getRoleForUser } from '../../src/lib/authHelpers'
-import { fmtDateTime } from '../../src/lib/formatDate'
-import LoadingButton from '../../src/components/shared/Button/LoadingButton'
+import { fmtDateTime } from '@/src/v1/lib/formatDate'
+import LoadingButton from '@/src/ui/LoadingButton'
 
 export async function getServerSideProps({ req, res }) {
   const supabase = createClient(req, res)

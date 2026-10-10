@@ -73,52 +73,41 @@ npm start              # serve a build
 npm run lint           # ESLint — clean; keep it that way
 npm run lint:fix       # auto-fix what's mechanically fixable
 npm run prettier       # format everything
-npm run deadcode       # knip — unused files/exports/deps
 
 npm test               # unit tests (node --test, src/**/__tests__/*.test.mjs)
-npm run test:e2e       # full Playwright suite (starts its own server on :3777)
-npm run test:e2e:smoke # @smoke subset, ~1 min
+npm run test:e2e       # Playwright: smoke + the V2 flow (starts its own server on :3777)
 
 npm run eval:roi       # ROI report quality eval harness (evals/roi/README.md)
 npm run research -- <domain>  # run the V2 research agent on one company;
                        # costs real API spend
 ```
 
-**Before you push:** `npm run lint && npm test`. CI runs both plus the full
-Playwright suite; the pre-commit hook runs ESLint and Prettier over staged files
+**Before you push:** `npm run lint && npm test`. CI runs both plus Playwright; the pre-commit hook runs ESLint and Prettier over staged files
 only, so it won't catch a break somewhere you didn't touch.
 
 ---
 
 ## Layout
 
-Two versions of the app live side by side. V1 is in production and frozen; V2
-is where new work goes, and replaces V1 whole when it is ready. `CLAUDE.md`
-explains the rules.
+Two versions live side by side. V1 is in production and frozen; V2 replaces it
+whole when ready (`CLAUDE.md` explains). Deleting V1 = deleting `src/v1/` and
+V1's pages.
 
 ```text
-pages/                    routes (Pages Router)
-pages/v2/                 V2: the interview
-pages/api/v2/             V2: its server side
-src/lib/roi/research/     V2: the research agent and its tools
-src/lib/roi/v2/           V2: everything else
-pages/api/roi-agent.js    V1: the main endpoint — generation + chat editing, SSE
-src/lib/roi/              V1: the ROI pipeline
-  agent.ts                orchestrator: one agent, tools mutate ReportState
-  tools/                  web search (Tavily→Brave), page fetch
-  prompts/                LLM prompts
-  pipeline/               normalize → roiCalculator → assembleReport → renderTemplate
-  services/               PDF (Puppeteer), email (Resend), usage/cost tracking
-  bulk/                   CSV batch generation
-src/components/ROIGenerator/   report UI, validation wizard, bulk upload
-src/lib/                  supabase clients, auth helpers, shared utilities
-supabase/migrations/      database schema
-evals/roi/                gold-set eval harness for report quality
-tests/e2e/                Playwright
+pages/                routes (Pages Router); pages/v2 and pages/api/v2 are V2
+src/v1/               everything only V1 uses
+src/v2/research/      V2's research agent and its tools
+src/v2/report/        V2's calculator, formatter, saved reports, email
+src/v2/components/    V2-only screens
+src/ui/               the design system (buttons, inputs, report pieces)
+src/lib/              shared by both: Supabase, PostHog, email, PDF, AI model, search
+styles/tokens/        design tokens
+supabase/migrations/  database schema
+evals/                report eval (V1) and research spot-check (V2)
+tests/e2e/            Playwright
 ```
 
-Path aliases: `@components`, `@hooks`, `@` (repo root). Declared **twice** in
-`next.config.js` — once for webpack, once for turbopack. Add new ones to both.
+One import alias: `@/` is the repo root (`@/src/v2/report/format`).
 
 ---
 

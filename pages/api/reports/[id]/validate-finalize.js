@@ -12,15 +12,15 @@ import { createClient, createAdminClient } from '@/src/lib/supabase-server'
 import {
   buildStateFromReportRow,
   splitStoredState,
-} from '@/src/lib/roi/reportState'
-import { recomputeReportState } from '@/src/lib/roi/agent'
+} from '@/src/v1/roi/reportState'
+import { recomputeReportState } from '@/src/v1/roi/agent'
 import {
   patchWorkflow,
   removeWorkflowByName,
-} from '@/src/lib/roi/pipeline/workflowMutations'
-import { loadTemplate } from '@/src/lib/roi/pipeline/renderTemplate'
-import { VALIDATION_QUALIFY_MONTHLY_THRESHOLD } from '@/src/lib/roi/constants'
-import { buildBaselineSnapshot } from '@/src/lib/roi/pipeline/validationBaseline'
+} from '@/src/v1/roi/pipeline/workflowMutations'
+import { loadTemplate } from '@/src/v1/roi/pipeline/renderTemplate'
+import { VALIDATION_QUALIFY_MONTHLY_THRESHOLD } from '@/src/v1/roi/constants'
+import { buildBaselineSnapshot } from '@/src/v1/roi/pipeline/validationBaseline'
 import { EVENTS } from '@/src/lib/analytics'
 import { captureServer, flushPostHog } from '@/src/lib/posthog-server'
 

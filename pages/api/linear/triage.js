@@ -12,7 +12,7 @@
 // signed-in check used in pages/api/analytics/*, because a browser cannot keep
 // a secret.
 
-import { createLinearIssue } from '@/src/lib/linear'
+import { createLinearIssue } from '@/src/v1/lib/linear'
 
 function timingSafeEqual(a, b) {
   if (typeof a !== 'string' || typeof b !== 'string' || a.length !== b.length) {

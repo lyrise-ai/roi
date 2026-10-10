@@ -11,12 +11,12 @@ import {
   EMAIL_RE,
   sendReportEmail,
   isEmailAlreadySent,
-} from '@/src/lib/roi/v2/email'
+} from '@/src/v2/report/email'
 import {
   getReportFromMemory,
   saveReportInMemory,
   SAMPLE_SAVED_REPORT,
-} from '@/src/lib/roi/v2/savedReport'
+} from '@/src/v2/report/savedReport'
 
 export const config = {
   maxDuration: 60,

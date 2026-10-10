@@ -1,7 +1,7 @@
 > **Note, 25 Aug 2026.** The notes below were written against the old research
 > system, which ran a fixed set of steps and probed five fixed careers-page
 > addresses. That code is gone — there is now one agent with tools
-> (`src/lib/roi/research/agent.ts`). What each firm actually has, checked by
+> (`src/v2/research/agent.ts`). What each firm actually has, checked by
 > hand, is still true and still the reason this file exists. Where a note talks
 > about "what S2 probes", read it as a record of why we rebuilt it.
 

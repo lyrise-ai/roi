@@ -2,7 +2,7 @@
 // Returns the claim token: only this browser gets it, and claiming needs it.
 
 import { createRouteClient } from '@/src/lib/supabaseRouteClient'
-import { saveReport } from '@/src/lib/roi/v2/savedReport'
+import { saveReport } from '@/src/v2/report/savedReport'
 
 export default async function handler(req, res) {
   if (req.method !== 'POST') {

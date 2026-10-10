@@ -42,12 +42,12 @@ fs.mkdirSync(cacheRoot, { recursive: true })
 const outfile = path.join(cacheRoot, 'research-look.mjs')
 
 await esbuild.build({
-  entryPoints: [path.join(root, 'src/lib/roi/research/agent.ts')],
+  entryPoints: [path.join(root, 'src/v2/research/agent.ts')],
   bundle: true,
   packages: 'external',
   platform: 'node',
   format: 'esm',
-  alias: { '@/src/lib/roi/llm': path.join(root, 'src/lib/roi/llm.ts') },
+  alias: { '@/src/lib/llm': path.join(root, 'src/lib/llm.ts') },
   outfile,
   logLevel: 'silent',
 })

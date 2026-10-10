@@ -16,31 +16,31 @@
 // ─────────────────────────────────────────────────────────────────────────────
 
 import crypto from 'node:crypto'
-import { normalizeInput } from '@/src/lib/roi/pipeline/normalize'
-import { loadTemplate } from '@/src/lib/roi/pipeline/renderTemplate'
-import { runReportAgent } from '@/src/lib/roi/agent'
-import { buildDevMockReportState } from '@/src/lib/roi/devMockReport'
-import { generatePdf } from '@/src/lib/roi/services/pdf'
+import { normalizeInput } from '@/src/v1/roi/pipeline/normalize'
+import { loadTemplate } from '@/src/v1/roi/pipeline/renderTemplate'
+import { runReportAgent } from '@/src/v1/roi/agent'
+import { buildDevMockReportState } from '@/src/v1/roi/devMockReport'
+import { generatePdf } from '@/src/lib/pdf'
 import {
   sendReportEmail,
   DEFAULT_REPORT_BCC,
-} from '@/src/lib/roi/services/email'
+} from '@/src/v1/roi/services/email'
 import {
   isOpenAIQuotaError,
   alertOpenAIQuotaError,
-} from '@/src/lib/roi/services/openaiQuotaAlert'
+} from '@/src/v1/roi/services/openaiQuotaAlert'
 import { createClient, createAdminClient } from '../../src/lib/supabase-server'
 import {
   buildStateFromReportRow,
   splitStoredState,
-} from '@/src/lib/roi/reportState'
-import { persistReportEvidence } from '@/src/lib/roi/reportEvidence'
-import { buildBaselineSnapshot } from '@/src/lib/roi/pipeline/validationBaseline'
-import { persistUsage } from '@/src/lib/roi/services/usageStore'
-import { assessReportSpecificity } from '@/src/lib/roi/specificity'
-import { isEmployeeUser } from '@/src/lib/isEmployee'
-import { REPORT_CHAT_MESSAGE_LIMIT } from '@/src/lib/roi/constants'
-import { hasReportAccess, getGrantForUser } from '@/src/lib/roi/reportGrants'
+} from '@/src/v1/roi/reportState'
+import { persistReportEvidence } from '@/src/v1/roi/reportEvidence'
+import { buildBaselineSnapshot } from '@/src/v1/roi/pipeline/validationBaseline'
+import { persistUsage } from '@/src/v1/roi/services/usageStore'
+import { assessReportSpecificity } from '@/src/v1/roi/specificity'
+import { isEmployeeUser } from '@/src/v1/lib/isEmployee'
+import { REPORT_CHAT_MESSAGE_LIMIT } from '@/src/v1/roi/constants'
+import { hasReportAccess, getGrantForUser } from '@/src/v1/roi/reportGrants'
 import { EVENTS } from '@/src/lib/analytics'
 import {
   captureServer,

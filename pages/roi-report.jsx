@@ -4,20 +4,20 @@ import dynamic from 'next/dynamic'
 import { motion, AnimatePresence } from 'framer-motion'
 import { FaCheckCircle } from 'react-icons/fa'
 import clsx from 'clsx'
-import MainHeader from '../src/layout/MainHeader'
-import { drainSSE } from '../src/lib/drainSSE'
-import { PIPELINE_LOG_TOOL_NAMES } from '../src/lib/roi/constants'
+import MainHeader from '@/src/v1/layout/MainHeader'
+import { drainSSE } from '@/src/v1/lib/drainSSE'
+import { PIPELINE_LOG_TOOL_NAMES } from '@/src/v1/roi/constants'
 import { useRouter } from 'next/router'
 
 // Only one of these screens is ever on show at a time (see viewState below), so
 // we load them on demand. A visitor only downloads the one they actually
 // reach.
 const ReportLoadingScreen = dynamic(
-  () => import('../src/components/ROIGenerator/ReportLoadingScreen'),
+  () => import('@/src/v1/components/ROIGenerator/ReportLoadingScreen'),
   { ssr: false },
 )
 const DemoReportViewer = dynamic(
-  () => import('../src/components/ROIGenerator/DemoReportViewer'),
+  () => import('@/src/v1/components/ROIGenerator/DemoReportViewer'),
   { ssr: false },
 )
 
@@ -1132,7 +1132,7 @@ export default function ROIReport({ isEmployee, isAlpha }) {
                 const existingData = await existing.json()
                 if (existingData?.report?.rendered_html) {
                   const { buildStateFromReportRow } =
-                    await import('../src/lib/roi/reportState')
+                    await import('@/src/v1/roi/reportState')
                   const builtState = buildStateFromReportRow(
                     existingData.report,
                   )

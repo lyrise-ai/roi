@@ -3,7 +3,7 @@ import Head from 'next/head'
 import { FaExternalLinkAlt, FaChevronDown, FaChevronUp } from 'react-icons/fa'
 import { createRouteClient } from '../../src/lib/supabaseRouteClient'
 import { createAdminClient } from '../../src/lib/supabase-server'
-import { fmtDateTimeUTC } from '../../src/lib/formatDate'
+import { fmtDateTimeUTC } from '@/src/v1/lib/formatDate'
 
 // -- Staff-only check, done on the server ------------------------------------
 // Anyone who is not staff never receives this page at all; they are sent to the

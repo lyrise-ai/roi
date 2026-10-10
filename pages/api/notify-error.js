@@ -1,4 +1,4 @@
-import { notifyDevTeam } from '@/src/lib/notifyError'
+import { notifyDevTeam } from '@/src/v1/lib/notifyError'
 import { createClient } from '../../src/lib/supabase-server'
 
 // This endpoint deliberately needs no sign-in, because share-link visitors hit

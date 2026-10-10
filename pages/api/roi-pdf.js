@@ -14,12 +14,12 @@
 import {
   loadTemplate,
   renderTemplate,
-} from '@/src/lib/roi/pipeline/renderTemplate'
-import { generatePdf } from '@/src/lib/roi/services/pdf'
+} from '@/src/v1/roi/pipeline/renderTemplate'
+import { generatePdf } from '@/src/lib/pdf'
 import { createClient, createAdminClient } from '../../src/lib/supabase-server'
-import { buildStateFromReportRow } from '@/src/lib/roi/reportState'
-import { isEmployeeUser } from '@/src/lib/isEmployee'
-import { hasReportAccess, getGrantForUser } from '@/src/lib/roi/reportGrants'
+import { buildStateFromReportRow } from '@/src/v1/roi/reportState'
+import { isEmployeeUser } from '@/src/v1/lib/isEmployee'
+import { hasReportAccess, getGrantForUser } from '@/src/v1/roi/reportGrants'
 
 export const config = {
   maxDuration: 120,

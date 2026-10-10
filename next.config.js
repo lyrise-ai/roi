@@ -32,8 +32,6 @@ const nextConfig = {
   },
   turbopack: {
     resolveAlias: {
-      '@components': path.resolve(__dirname, 'src/components'),
-      '@hooks': path.resolve(__dirname, 'src/hooks'),
       '@': path.resolve(__dirname),
     },
   },
@@ -54,8 +52,6 @@ const nextConfig = {
     })
     config.resolve.alias = {
       ...config.resolve.alias,
-      '@components': path.resolve(__dirname, 'src/components'),
-      '@hooks': path.resolve(__dirname, 'src/hooks'),
       '@': path.resolve(__dirname),
       // The animation library looks for this package when it loads, purely to
       // work with a styling library we do not use. Telling the bundler it

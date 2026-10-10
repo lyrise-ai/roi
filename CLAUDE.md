@@ -22,24 +22,26 @@ anything, and before you "tidy up" anything that looks duplicated.
 **Version 1 is production. It is finished. Do not touch it.**
 
 ```
-pages/api/roi-agent.js      builds and chat-edits the report
-src/lib/roi/agent.ts        the report agent, with its own research tools
-src/lib/roi/pipeline/       the calculation and rendering
-src/components/ROIGenerator/
+src/v1/                     everything only V1 uses (pipeline, agent, UI)
+pages/                      V1's pages and routes: everything not under v2/
 ```
 
 **Version 2 is where all new work goes. It is being built alongside.**
 
 ```
-pages/v2/                   the interview
-pages/api/v2/               its server side
-src/lib/roi/research/       one agent with tools
-src/lib/roi/v2/
+pages/v2/, pages/api/v2/    the interview and its server side
+src/v2/research/            one agent with tools
+src/v2/report/              calculator, formatter, saved reports, email
+src/v2/components/          V2-only screens
 ```
 
+Shared by both: `src/lib/` (Supabase, PostHog, email, PDF, AI model, search)
+and `src/ui/` (the design system). Deleting V1 = deleting `src/v1/` and V1's
+pages.
+
 So yes, there really are two agents that research a company, and they follow
-different rules. `src/lib/roi/research/agent.ts` is grounded, logged, and says
-why a fetch failed. `src/lib/roi/agent.ts` has none of that. **This is on
+different rules. `src/v2/research/agent.ts` is grounded, logged, and says
+why a fetch failed. `src/v1/roi/agent.ts` has none of that. **This is on
 purpose.** V1 works and is in front of customers; the cost of changing it is a
 broken report for a real prospect, and the benefit is tidiness. That is a bad
 trade.
@@ -62,7 +64,7 @@ Read `package.json` for versions. Three things it will not tell you:
   `src/lib/supabase-server.js` is V1's and goes with it.
 - We call Resend over plain HTTP. There is deliberately no SDK installed.
 
-## The ROI pipeline (`src/lib/roi/`)
+## The ROI pipeline (`src/v1/roi/`)
 
 The part of the app that changes most. `pages/api/roi-agent.js` does both
 building a report **and** editing it through chat, over one long-lived
@@ -71,7 +73,7 @@ connection, with a 5-minute limit.
 There is a scoring harness under `evals/roi/` (see `evals/roi/README.md`). Run it
 after changing a prompt or any scoring logic.
 
-**`src/lib/roi/research/` is one agent with tools**, not a fixed run of steps.
+**`src/v2/research/` is one agent with tools**, not a fixed run of steps.
 `agent.ts` holds the loop and the instructions; `tools.ts` is what it can do.
 Two rules there that are not negotiable:
 
@@ -84,7 +86,7 @@ Two rules there that are not negotiable:
   It then reaches the person through `gaps`. "We could not reach your site" and
   "you have no public jobs" must never look the same.
 - **`log.ts` is the only file in there allowed to touch `console`.** Everything
-  else goes through the logger it exports, which is why `.eslintrc.js` can turn
+  else goes through the logger it exports, which is why `eslint.config.mjs` can turn
   `no-console` off for that one file. Widen that override and the rule is gone.
   A failed fetch is logged at **warn**, never error: here a missing page is the
   ordinary result of looking, and error level is for a real fault. Three events
@@ -105,24 +107,20 @@ above any code you are about to change.
 
 ## Conventions
 
-- **Path aliases** (`next.config.js` / `tsconfig.json`): `@components` →
-  `src/components`, `@hooks` → `src/hooks`, and `@`/`@/` for the project root
-  (used throughout the ROI pipeline). Prefer these over long relative paths.
-  There is no `@assets` or `@services` alias. Aliases are declared **twice** in
-  `next.config.js` — once for webpack, once for turbopack (`npm run dev` uses
-  turbopack, `npm run build` uses webpack). Add new aliases to both.
+- **One import alias:** `@/` is the repo root (`@/src/v2/report/format`). It is
+  declared in `tsconfig.json` and twice in `next.config.js` (webpack and
+  turbopack).
 - **Formatting** is whatever Prettier does, enforced by the pre-commit hook. Run
   `npm run prettier` if you are unsure.
 - A **Husky pre-commit hook** runs `lint-staged`: `eslint --fix` then Prettier on
-  staged JS/TS, Prettier on staged JSON/CSS/MD. Don't bypass it. The hook exports
-  `ESLINT_USE_FLAT_CONFIG=false` because this repo still uses `.eslintrc.js`.
-- CI (`.github/workflows/e2e.yml`) runs two jobs: `checks` — lint plus unit
-  tests, about a minute — and the browser tests. **Lint is completely clean: no
-  errors and no warnings, and the build compiles with none either.** Both used to
-  be a backlog of around 260 items until LYR-181. Keep them at zero. If a rule
-  complains about correct code, switch that rule off in `.eslintrc.js` with a
-  comment saying why — never silence it file by file. A formatting mistake is an
-  error too, and fails CI.
+  staged JS/TS, Prettier on staged JSON/CSS/MD. Don't bypass it.
+- CI (`.github/workflows/e2e.yml`) runs lint plus unit tests, and the browser
+  tests. **Lint stays at zero errors and zero warnings.** If a rule complains
+  about correct code, switch it off in `eslint.config.mjs`, never file by file.
+- **Tests only where a mistake costs money or safety:** the V2 number chain
+  (calculator, formatter, answer reader), saved-report access rules, the
+  research grounding rule, and the email guard. Everything else is checked by
+  hand. Don't add a test elsewhere without a reason like those.
 - **Design system:** every value lives as a CSS variable in
   `styles/tokens/*.css`. `tailwind.config.js` only gives those variables Tailwind
   names; it never repeats a value. Use the named utilities — `bg-surface-card`,
@@ -170,7 +168,7 @@ above any code you are about to change.
   **must** call `flushPostHog()` before the handler returns, or Vercel freezes
   the server with the event still sitting in a buffer.
   It all does nothing without the PostHog token, which is how CI stays out of the
-  real project; `src/lib/__tests__/posthog-server.test.mjs` locks that in.
+  real project.
   Dashboard setup, and why the browser half cannot be tested automatically, are
   in `docs/observability-setup.md`.
 - Components check `process.env.NEXT_PUBLIC_ENV` — `production`, `ci`, or unset
@@ -188,19 +186,10 @@ above any code you are about to change.
 
 ```bash
 npm run build          # Lint errors are IGNORED during build; `npm run lint` is the gate
-npm run test:e2e:smoke # @smoke subset (~1 min) vs. the full suite
-npm run eval:roi       # ROI report eval harness
+npm run eval:roi       # V1 report eval harness
 npm run research -- <domain>  # Run the research agent on one company and
                        # print what it found — costs real API spend
-npm run deadcode       # knip; clean today, keep it that way
 ```
-
-`knip.json` lists `src/lib/roi/research/**` and `src/lib/roi/v2/*` as **entry
-points**. Not because nothing imports them — but because the tests and
-`evals/research/look.mjs` reach them by bundling at run time, which no tool can
-see. `types.typecheck.ts` is nobody's import at all: it exists only to be
-compiled. Remove those two lines and knip calls the research code dead. knip
-refuses unknown settings, so this note cannot live inside the config file.
 
 ## Environment variables
 
