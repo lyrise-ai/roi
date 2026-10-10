@@ -26,7 +26,7 @@ import {
   Tag,
   Toast,
   Tooltip,
-} from '@components/ui'
+} from '@/src/ui'
 
 export function getStaticProps() {
   return { notFound: process.env.NEXT_PUBLIC_ENV === 'production', props: {} }

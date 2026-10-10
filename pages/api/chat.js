@@ -1,8 +1,8 @@
 import { generateText } from 'ai'
 import { createAdminClient, createClient } from '../../src/lib/supabase-server'
-import { getFastModel } from '@/src/lib/roi/llm'
-import { isEmployeeUser } from '@/src/lib/isEmployee'
-import { REPORT_CHAT_MESSAGE_LIMIT } from '@/src/lib/roi/constants'
+import { getFastModel } from '@/src/lib/llm'
+import { isEmployeeUser } from '@/src/v1/lib/isEmployee'
+import { REPORT_CHAT_MESSAGE_LIMIT } from '@/src/v1/roi/constants'
 
 const CHAT_LIMIT = REPORT_CHAT_MESSAGE_LIMIT
 const MAX_MESSAGE_LENGTH = 1000

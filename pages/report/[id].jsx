@@ -1,12 +1,12 @@
 import { useEffect } from 'react'
 import Head from 'next/head'
 import { createAdminClient } from '../../src/lib/supabase-server'
-import ReportViewerWithBatch from '../../src/components/ROIGenerator/BulkUpload/ReportViewerWithBatch'
-import { buildStateFromReportRow } from '@/src/lib/roi/reportState'
-import { resolveReportViewerAccess } from '@/src/lib/roi/reportViewerAccess'
+import ReportViewerWithBatch from '@/src/v1/components/ROIGenerator/BulkUpload/ReportViewerWithBatch'
+import { buildStateFromReportRow } from '@/src/v1/roi/reportState'
+import { resolveReportViewerAccess } from '@/src/v1/roi/reportViewerAccess'
 import { motion } from 'framer-motion'
-import { trackReportAccess } from '@/src/lib/roi/services/reportAccess'
-import ErrorBoundary from '../../src/components/shared/ErrorBoundary'
+import { trackReportAccess } from '@/src/v1/roi/services/reportAccess'
+import ErrorBoundary from '@/src/v1/components/shared/ErrorBoundary'
 
 export async function getServerSideProps({
   req,

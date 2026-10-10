@@ -3,7 +3,7 @@ import { useRouter } from 'next/router'
 import Head from 'next/head'
 import { createRouteClient } from '../../src/lib/supabaseRouteClient'
 import { createClient as createBrowserClient } from '../../src/lib/supabase-browser'
-import LoadingButton from '../../src/components/shared/Button/LoadingButton'
+import LoadingButton from '@/src/ui/LoadingButton'
 
 export async function getServerSideProps({ req, res, query }) {
   const supabase = createRouteClient(req, res)

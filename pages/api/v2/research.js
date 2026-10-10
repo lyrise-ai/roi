@@ -23,8 +23,8 @@
 
    The headers and how we send copy pages/api/roi-agent.js, which has been
    carrying real generations for months. */
-import { research } from '@/src/lib/roi/research/agent'
-import { cleanDomain } from '@/src/lib/roi/research/search'
+import { research } from '@/src/v2/research/agent'
+import { cleanDomain } from '@/src/v2/research/search'
 
 export const config = {
   maxDuration: 300,

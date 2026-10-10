@@ -1,8 +1,8 @@
 import Head from 'next/head'
-import { buildStateFromReportRow } from '@/src/lib/roi/reportState'
-import { resolveReportViewerAccess } from '@/src/lib/roi/reportViewerAccess'
-import ValidationWizard from '../../../src/components/ROIGenerator/Validation/ValidationWizard'
-import ErrorBoundary from '../../../src/components/shared/ErrorBoundary'
+import { buildStateFromReportRow } from '@/src/v1/roi/reportState'
+import { resolveReportViewerAccess } from '@/src/v1/roi/reportViewerAccess'
+import ValidationWizard from '@/src/v1/components/ROIGenerator/Validation/ValidationWizard'
+import ErrorBoundary from '@/src/v1/components/shared/ErrorBoundary'
 
 export async function getServerSideProps({
   req,

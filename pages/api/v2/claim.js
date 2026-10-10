@@ -2,7 +2,7 @@
 // hold the claim token /api/v2/save handed to the browser that made it.
 
 import { createRouteClient } from '@/src/lib/supabaseRouteClient'
-import { claimReport } from '@/src/lib/roi/v2/savedReport'
+import { claimReport } from '@/src/v2/report/savedReport'
 
 export default async function handler(req, res) {
   if (req.method !== 'POST') {

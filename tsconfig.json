@@ -16,9 +16,7 @@
     "plugins": [{ "name": "next" }],
     "baseUrl": ".",
     "paths": {
-      "@/*": ["./*"],
-      "@components/*": ["src/components/*"],
-      "@hooks/*": ["src/hooks/*"]
+      "@/*": ["./*"]
     },
     "target": "ES2017"
   },

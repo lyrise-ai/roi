@@ -13,8 +13,8 @@
 import Head from 'next/head'
 import Image from 'next/image'
 import Link from 'next/link'
-import Logo from '@/src/assets/logo.svg'
-import { Button } from '@components/ui'
+import Logo from '@/src/ui/logo.svg'
+import { Button } from '@/src/ui'
 
 const SUPPORT_EMAIL = 'support@lyrise.ai'
 

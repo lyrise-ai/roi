@@ -12,7 +12,6 @@
     "prettier": "prettier --write .",
     "eval:roi": "node evals/roi/run.mjs",
     "test:e2e": "dotenvx run -- playwright test",
-    "test:e2e:smoke": "dotenvx run -- playwright test --grep @smoke",
     "prepare": "husky",
     "research": "dotenvx run -- node evals/research/look.mjs"
   },

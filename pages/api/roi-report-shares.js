@@ -12,11 +12,11 @@
 // ─────────────────────────────────────────────────────────────────────────────
 
 import { createClient, createAdminClient } from '../../src/lib/supabase-server'
-import { isEmployeeUser } from '@/src/lib/isEmployee'
+import { isEmployeeUser } from '@/src/v1/lib/isEmployee'
 import {
   listColleagueInvites,
   revokeColleagueInvite,
-} from '@/src/lib/roi/reportGrants'
+} from '@/src/v1/roi/reportGrants'
 
 export default async function handler(req, res) {
   if (!['GET', 'DELETE'].includes(req.method)) {

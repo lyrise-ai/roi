@@ -7,16 +7,16 @@
 //
 // No sign-in needed: this is a marketing demo people see before signing up.
 
-import { roiCalculator } from '@/src/lib/roi/pipeline/roiCalculator'
-import { assembleReport } from '@/src/lib/roi/pipeline/assembleReport'
+import { roiCalculator } from '@/src/v1/roi/pipeline/roiCalculator'
+import { assembleReport } from '@/src/v1/roi/pipeline/assembleReport'
 import {
   loadTemplate,
   renderTemplate,
-} from '@/src/lib/roi/pipeline/renderTemplate'
+} from '@/src/v1/roi/pipeline/renderTemplate'
 import {
   MERIDIAN_BASE_STATE,
   MERIDIAN_ALT_STATE,
-} from '@/src/lib/roi/demoReportData'
+} from '@/src/v1/roi/demoReportData'
 
 // Kept in memory. The templates always produce the same output, so we build
 // them once per server start.

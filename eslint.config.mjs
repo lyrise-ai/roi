@@ -53,7 +53,7 @@ const config = [
       'tests/**',
       'evals/**',
       '**/__tests__/**',
-      'src/lib/roi/research/log.ts',
+      'src/v2/research/log.ts',
     ],
     rules: { 'no-console': 'off' },
   },

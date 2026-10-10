@@ -10,10 +10,10 @@ import Head from 'next/head'
 import Link from 'next/link'
 import Image from 'next/image'
 import { useRouter } from 'next/router'
-import Logo from '@/src/assets/logo.svg'
+import Logo from '@/src/ui/logo.svg'
 import { createRouteClient } from '@/src/lib/supabaseRouteClient'
 import { createClient as createBrowserClient } from '@/src/lib/supabase-browser'
-import { Button, Card, Icon } from '@components/ui'
+import { Button, Card, Icon } from '@/src/ui'
 
 export async function getServerSideProps({ req, res }) {
   const supabase = createRouteClient(req, res)

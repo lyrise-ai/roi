@@ -1,4 +1,4 @@
-import PublicReportError from '@/src/components/v2/PublicReportError'
+import PublicReportError from '@/src/v2/components/PublicReportError'
 
 export async function getServerSideProps() {
   return {

@@ -10,13 +10,13 @@ import {
   createClient as createServerClient,
   createAdminClient,
 } from '../src/lib/supabase-server'
-import MainHeader from '../src/layout/MainHeader/index'
+import MainHeader from '@/src/v1/layout/MainHeader/index'
 import { getRoleForUser } from '../src/lib/authHelpers'
-import ErrorBoundary from '../src/components/shared/ErrorBoundary'
-import { fmtDate, fmtDateTime, timeAgo } from '../src/lib/formatDate'
+import ErrorBoundary from '@/src/v1/components/shared/ErrorBoundary'
+import { fmtDate, fmtDateTime, timeAgo } from '@/src/v1/lib/formatDate'
 
 const AlphaDashboardPanel = dynamic(
-  () => import('../src/components/AlphaDashboardPanel'),
+  () => import('@/src/v1/components/AlphaDashboardPanel'),
   { ssr: false },
 )
 
