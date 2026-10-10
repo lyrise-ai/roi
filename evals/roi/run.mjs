@@ -1,12 +1,7 @@
 import fs from 'fs'
 import path from 'path'
 
-import {
-  loadCase,
-  loadJson,
-  loadStandalonePdfCase,
-  scoreReport,
-} from './scoreReport.mjs'
+import { loadCase, loadJson, scoreReport } from './scoreReport.mjs'
 
 const evalRoot = path.resolve(process.cwd(), 'evals/roi')
 const casesRoot = path.join(evalRoot, 'cases')
@@ -46,53 +41,11 @@ function getCaseDirectories(root, caseId) {
   return entries.filter((entry) => entry === caseId)
 }
 
-function getStandalonePdfCases(root, caseId) {
-  const reservedFileNames = new Set([
-    'source.pdf',
-    'reference.pdf',
-    'actual.pdf',
-  ])
-  const results = []
-
-  function walk(currentDir) {
-    const entries = fs.readdirSync(currentDir, { withFileTypes: true })
-
-    entries.forEach((entry) => {
-      const entryPath = path.join(currentDir, entry.name)
-
-      if (entry.isDirectory()) {
-        walk(entryPath)
-        return
-      }
-
-      if (
-        !entry.isFile() ||
-        path.extname(entry.name).toLowerCase() !== '.pdf'
-      ) {
-        return
-      }
-
-      if (reservedFileNames.has(entry.name.toLowerCase())) {
-        return
-      }
-
-      const id = path.basename(entry.name, '.pdf').toLowerCase()
-      if (!caseId || id === caseId) {
-        results.push({ id, pdfPath: entryPath })
-      }
-    })
-  }
-
-  walk(root)
-  return results.sort((a, b) => a.id.localeCompare(b.id))
-}
-
 async function main() {
   const { caseId } = parseArgs(process.argv.slice(2))
   const rubric = loadJson(rubricPath)
   const caseDirs = getCaseDirectories(casesRoot, caseId)
-  const standalonePdfCases = getStandalonePdfCases(casesRoot, caseId)
-  const totalCases = caseDirs.length + standalonePdfCases.length
+  const totalCases = caseDirs.length
 
   if (totalCases === 0) {
     console.error('No ROI eval cases found for the selected filter.')
@@ -104,7 +57,7 @@ async function main() {
 
   for (const dirName of caseDirs) {
     const caseDir = path.join(casesRoot, dirName)
-    const { testCase, reference, actual } = await loadCase(caseDir)
+    const { testCase, reference, actual } = loadCase(caseDir)
     const referenceScore = scoreReport({ text: reference, rubric, testCase })
 
     console.log(`\n[${testCase.id}] ${testCase.title}`)
@@ -122,17 +75,6 @@ async function main() {
       )
       printBreakdown(actualScore)
     }
-  }
-
-  for (const pdfCase of standalonePdfCases) {
-    const { testCase, reference } = await loadStandalonePdfCase(pdfCase.pdfPath)
-    const referenceScore = scoreReport({ text: reference, rubric, testCase })
-
-    console.log(`\n[${testCase.id}] ${testCase.title}`)
-    console.log(
-      `  ${formatScore('reference', referenceScore)} | source: standalone pdf`,
-    )
-    printBreakdown(referenceScore)
   }
 }
 

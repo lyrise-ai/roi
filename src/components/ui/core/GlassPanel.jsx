@@ -1,5 +1,6 @@
 import React from 'react'
 
+// For photos, gradients or reflections. On flat white the glass disappears.
 export function GlassPanel({
   tone = 'light',
   padding = 'var(--space-6)',

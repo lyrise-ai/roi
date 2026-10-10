@@ -12,7 +12,24 @@ const uploadSourcemaps = Boolean(process.env.POSTHOG_API_KEY)
 
 const nextConfig = {
   reactStrictMode: false,
+  poweredByHeader: false,
   productionBrowserSourceMaps: uploadSourcemaps,
+  async headers() {
+    return [
+      {
+        source: '/:path*',
+        headers: [
+          // Only we, and PostHog's heatmap view, may show these pages in a frame.
+          {
+            key: 'Content-Security-Policy',
+            value: "frame-ancestors 'self' https://*.posthog.com",
+          },
+          { key: 'X-Content-Type-Options', value: 'nosniff' },
+          { key: 'Referrer-Policy', value: 'strict-origin-when-cross-origin' },
+        ],
+      },
+    ]
+  },
   turbopack: {
     resolveAlias: {
       '@components': path.resolve(__dirname, 'src/components'),

@@ -2,6 +2,7 @@ import React from 'react'
 
 const sizes = { sm: 32, md: 40, lg: 48 }
 
+// Always pass `label`: it is the only text a screen reader gets.
 export function IconButton({
   variant = 'ghost',
   size = 'md',

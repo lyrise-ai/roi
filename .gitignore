@@ -29,7 +29,6 @@ coverage/
 .env.*
 !.env.example
 !.env
-!env.local.example
 
 # Logs and runtime data
 logs/
@@ -39,7 +38,6 @@ yarn-debug.log*
 yarn-error.log*
 pnpm-debug.log*
 lerna-debug.log*
-eslint_error.log
 
 # Vercel and deployment metadata
 .vercel/
@@ -69,8 +67,3 @@ temp/
 # Local workflow scratch files (but keep GitHub Actions)
 workflows/
 !.github/workflows/
-
-# AI tool instructions inside .github (keep workflows/actions untouched)
-.github/code-review-graph.instruction.md
-.vercel
-/MARO

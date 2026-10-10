@@ -80,6 +80,7 @@ const hovers = {
    A disabled navigation is not a navigation, so `disabled` drops the link
    mode entirely: <button> is the only element `disabled` actually works on,
    and a disabled <a> still follows its href however it is painted. */
+// Pill CTA. With href or as={Link} it renders an <a>, so new-tab works.
 export function Button({
   variant = 'primary',
   size = 'md',

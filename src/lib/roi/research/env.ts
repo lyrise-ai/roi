@@ -1,9 +1,9 @@
 // ─────────────────────────────────────────────────────────────────────────────
 // research/env — the one place the research system reads API keys from.
 //
-// Every key is optional on purpose. A step with no key records a miss and hands
-// over to the next step, so the whole system runs, and can be tested, with
-// nothing set up at all. That is what keeps CI and a fresh checkout working,
+// Every key is optional on purpose. A tool with no key says so and the agent
+// works without it, so the whole system runs, and can be tested, with nothing
+// set up at all. That is what keeps CI and a fresh checkout working,
 // and it is why adding a key later is a settings change, not a code change.
 //
 // See .env.example for what each key buys, and what still works without it.
@@ -28,8 +28,4 @@ export type ProviderKey =
 export function providerKey(name: ProviderKey): string | null {
   const value = process.env[name]
   return typeof value === 'string' && value.trim() !== '' ? value.trim() : null
-}
-
-export function hasProviderKey(name: ProviderKey): boolean {
-  return providerKey(name) !== null
 }

@@ -12,9 +12,6 @@ export default async function handler(req, res) {
   }
 
   try {
-    // Firestore validation removed.
-    // Proceeding directly to N8N submission.
-
     const n8nUrl = process.env.N8N_FEEDBACK_WEBHOOK_URL
 
     if (!n8nUrl) {

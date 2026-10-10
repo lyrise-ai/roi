@@ -1,64 +1,51 @@
 // ─────────────────────────────────────────────────────────────────────────────
-// miniCalculator — Profit Map POC (LYR-186 / POC 8)
+// miniCalculator — The Calculator (LYR-186, LYR-204)
 //
-// Kept separate from src/lib/roi/pipeline/roiCalculator.ts on purpose. That one
-// works in volume × minutes per item across many workflows, and is wired into
-// the whole live report pipeline. This one is a throwaway POC with a much
-// simpler shape: people × hours a week.
+// All the maths in the report, and nothing else.
+// Numbers go in and numbers come out. It never produces text.
+// Turning a number into "$46,137" belongs to the Formatter (LYR-242).
+// Putting figures into the report belongs to the Assembler (LYR-243).
+// It uses no AI.
 //
-// It shares no types and no code with the live calculator. It does reuse a few
-// of the live system's tuning numbers — each constant below says where it came
-// from — so the POC's figures land in roughly the same range a real report
-// would give.
-//
-// Nothing here reads a file or calls a server. Safe to run in the browser or in
-// Node. It prints nothing either: format.chain() turns the figures into text.
+// Pure: no database, no network, no clock, nothing random.
+// Maths in JavaScript never throws: a bad value just becomes NaN and flows
+// through every figure built from it.
 // ─────────────────────────────────────────────────────────────────────────────
 
-import type { ChainSettings } from './format'
+import {
+  assembleCalculatorInput,
+  bridgePainQuant,
+  type BridgedPainFields,
+  type SegmentedAnswer,
+} from './answerBridge'
 
-// Taken from the live system — src/lib/roi/agent.ts:762 and :1493. How much of
-// a team we assume actually uses the new system. This is the default we apply
-// before the model has worked out its own number for a given workflow.
-const ADOPTION = 0.7
+export interface CalculatorSettings {
+  workingWeeks: number // leave and holidays (50)
+  fteHoursPerWeek: number // a full week, to turn yearly pay into hourly (40)
+  overhead: number // salary plus what an employer pays on top (1.3)
+  adoption: number // teams don't use a new system for every case in year one (0.7)
+  realization: number // freed hours don't turn into value one for one (0.8)
+  profitMultiplier: number // uplift = dividend × 1.3, an extra on top (1.3)
+  currency: string // one currency per report ('USD')
+}
 
-// Taken from the live system. How much of the saving really lands in practice.
-// src/lib/roi/prompts/roiModeler.ts:109 tells the model to pick something
-// between 0.70 and 0.85; 0.8 is the middle, and the same default
-// src/lib/roi/devMockReport.ts:151 uses.
-const REALIZATION = 0.8
+export const SETTINGS: CalculatorSettings = {
+  workingWeeks: 50,
+  fteHoursPerWeek: 40,
+  overhead: 1.3,
+  adoption: 0.7,
+  realization: 0.8,
+  profitMultiplier: 1.3,
+  currency: 'USD',
+}
 
-// Working weeks in a year. Taken from the live system —
-// src/lib/roi/prompts/roiModeler.ts:107 says "50 for US/EU/UK", and 48 for the
-// Gulf and Egypt.
-// TODO: switch to 48 if this POC is being shown to a Gulf or Egypt prospect.
-const WORKING_WEEKS = 50
-
-// Taken from the live system — src/lib/roi/prompts/roiModeler.ts:85. Salary is
-// not what an employee actually costs. This multiplier adds benefits, payroll
-// tax and overhead on top of raw pay before we treat it as an hourly cost.
-const OVERHEAD_MULTIPLIER = 1.3
-
-// POC-only number, not from the live system. See LYR-186.
-//
-// Careful: here it is an EXTRA multiplier — uplift = dividend × 1.3. The live
-// system's profitMultiplier means something different: it is a TOTAL of 1.8 to
-// 4.0 (roiModeler.ts:110), applied as dividend × (m − 1)
-// (roiCalculator.ts:363). Written as an extra, the live range works out to
-// roughly 0.8 to 3.0 — and 1.3 sits inside that. So do not "fix" this by
-// copying 1.8–4.0 across.
-const PROFIT_MULTIPLIER = 1.3
-
-// A full working week. We divide a yearly salary by this to get an hourly
-// cost. Do not confuse it with the user's hoursPerWeek answer, which is how
-// much of their week this one task eats.
-const FTE_HOURS_PER_WEEK = 40
+export const MINI_SETTINGS = SETTINGS
 
 export interface MiniCalculatorInput {
   people: number
   hoursPerWeek: number
   // Pass the plain yearly salary. We add benefits and overhead ourselves,
-  // below, using OVERHEAD_MULTIPLIER.
+  // below, using overhead multiplier.
   annualPay: number
   // Either 0 to 1, or 0 to 100. Anything above 1 is read as a percentage. We
   // then force it into the 0 to 1 range and round it to a whole percent.
@@ -76,60 +63,40 @@ export interface MiniCalculatorOutput {
   automatable: number // the fraction actually used, after rounding; chain() prints it
 }
 
-// What format.chain() needs to print the six lines.
-export const MINI_SETTINGS: ChainSettings = {
-  workingWeeks: WORKING_WEEKS,
-  fteHoursPerWeek: FTE_HOURS_PER_WEEK,
-  overhead: OVERHEAD_MULTIPLIER,
-  adoption: ADOPTION,
-  realization: REALIZATION,
-  profitMultiplier: PROFIT_MULTIPLIER,
-  currency: 'USD',
-}
-
 const round = (n: number) => Math.round(n)
-
-// Every input here was typed by a user, and any of them can still be missing
-// while they are answering (the preview draws before the last question is
-// done). So anything missing or unreadable becomes 0. A line showing $0 reads
-// as "not answered yet"; a line showing $NaN reads as a broken app in front of
-// a prospect.
-const num = (n: number) => (Number.isFinite(n) ? Number(n) : 0)
 
 // The fifth answer arrives as either 0.4 or 40, depending on how the person
 // wrote it, so we read anything above 1 as a percentage. We round to a whole
 // percent because that is how it is shown on screen, and the formula we print
 // has to be the one we actually used.
 const toFraction = (n: number) => {
-  const raw = num(n)
-  const fraction = raw > 1 ? raw / 100 : raw
+  const fraction = n > 1 ? n / 100 : n
   return Math.min(1, Math.max(0, Math.round(fraction * 100) / 100))
 }
 
 export function calculateMiniProfitMap(
   input: MiniCalculatorInput,
+  settings: CalculatorSettings = SETTINGS,
 ): MiniCalculatorOutput {
-  const people = num(input.people)
-  const hoursPerWeek = num(input.hoursPerWeek)
-  const annualPay = num(input.annualPay)
+  const { people, hoursPerWeek, annualPay } = input
   const automatable = toFraction(input.automatablePct)
 
   // We round at every step, not only at the end. These same numbers are
   // printed in the formula lines (format.chain()), so a prospect checking the maths by
   // hand has to reach the number we printed. Being consistent on screen beats
   // being exact to more decimal places — see the LYR-186 review.
-  const annualHours = round(people * hoursPerWeek * WORKING_WEEKS)
+  const annualHours = round(people * hoursPerWeek * settings.workingWeeks)
   const hoursReturned = round(
-    annualHours * automatable * ADOPTION * REALIZATION,
+    annualHours * automatable * settings.adoption * settings.realization,
   )
   const ratePerHour =
     round(
-      (annualPay / (WORKING_WEEKS * FTE_HOURS_PER_WEEK)) *
-        OVERHEAD_MULTIPLIER *
+      (annualPay / (settings.workingWeeks * settings.fteHoursPerWeek)) *
+        settings.overhead *
         100,
     ) / 100
   const operationalDividend = round(hoursReturned * ratePerHour)
-  const profitUplift = round(operationalDividend * PROFIT_MULTIPLIER)
+  const profitUplift = round(operationalDividend * settings.profitMultiplier)
   const totalFinancialGain = operationalDividend + profitUplift
 
   return {
@@ -142,3 +109,311 @@ export function calculateMiniProfitMap(
     automatable,
   }
 }
+
+export type MissingQuestion =
+  | 'people'
+  | 'hoursPerWeek'
+  | 'annualPay'
+  | 'automatablePct'
+
+export interface SkippedPain {
+  pain: number
+  question: MissingQuestion
+}
+
+export interface ReportRowNumbers {
+  position: number
+  annualHours: number
+  hoursReturned: number
+  ratePerHour: number
+  operationalDividend: number
+  profitUplift: number
+  totalFinancialGain: number
+  automatable: number
+  remaining: number
+  remainPct: number
+  gain: number
+}
+
+export interface OutlookYearNumbers {
+  total: number
+  od: number
+  uplift: number
+  heightPct: number
+  odPct: number
+  upliftPct: number
+}
+
+export interface ReportNumbers {
+  rows: ReportRowNumbers[]
+  order: number[]
+  skipped: SkippedPain[]
+  totalHours: number
+  totalOd: number
+  totalUplift: number
+  totalGain: number
+  odPct: number
+  upliftPct: number
+  outlook: OutlookYearNumbers[]
+  delayMonthly: number
+}
+
+export interface Override {
+  row: number
+  setting: keyof CalculatorSettings | string
+  value: number
+  reason?: string
+}
+
+export interface CalculateReportInput {
+  pains: BridgedPainFields[]
+  rejected?: number[]
+  settings?: CalculatorSettings
+  overrides?: Override[]
+}
+
+export function calculateReport(input: CalculateReportInput): ReportNumbers {
+  const { pains = [], rejected = [], overrides = [] } = input
+  const baseSettings = input.settings ?? SETTINGS
+
+  const rows: ReportRowNumbers[] = []
+  const skipped: SkippedPain[] = []
+
+  const REQUIRED_KEYS: MissingQuestion[] = [
+    'people',
+    'hoursPerWeek',
+    'annualPay',
+    'automatablePct',
+  ]
+
+  for (let i = 0; i < pains.length; i++) {
+    if (rejected.includes(i)) {
+      continue
+    }
+    const pain = pains[i]
+    if (!pain) continue
+
+    const missingKeys: MissingQuestion[] = []
+    for (const key of REQUIRED_KEYS) {
+      if (pain[key] == null || pain[key].value === null) {
+        missingKeys.push(key)
+      }
+    }
+
+    if (missingKeys.length > 0) {
+      for (const q of missingKeys) {
+        skipped.push({ pain: i, question: q })
+      }
+      continue
+    }
+
+    let rowSettings = { ...baseSettings }
+    for (const ov of overrides) {
+      if (ov.row === i) {
+        rowSettings = { ...rowSettings, [ov.setting]: ov.value }
+      }
+    }
+
+    const calc = calculateMiniProfitMap(
+      {
+        people: pain.people.value as number,
+        hoursPerWeek: pain.hoursPerWeek.value as number,
+        annualPay: pain.annualPay.value as number,
+        automatablePct: pain.automatablePct.value as number,
+      },
+      rowSettings,
+    )
+
+    const remaining = calc.annualHours - calc.hoursReturned
+    const remainPct = round((remaining / calc.annualHours) * 100)
+    const gain = calc.totalFinancialGain
+
+    rows.push({
+      position: i,
+      annualHours: calc.annualHours,
+      hoursReturned: calc.hoursReturned,
+      ratePerHour: calc.ratePerHour,
+      operationalDividend: calc.operationalDividend,
+      profitUplift: calc.profitUplift,
+      totalFinancialGain: calc.totalFinancialGain,
+      automatable: calc.automatable,
+      remaining,
+      remainPct,
+      gain,
+    })
+  }
+
+  // Order: biggest gain first, tie on gain -> more hours returned first, tie on hours -> position order. NaN sorts last.
+  rows.sort((a, b) => {
+    const aIsNan = !Number.isFinite(a.gain)
+    const bIsNan = !Number.isFinite(b.gain)
+    if (aIsNan && !bIsNan) return 1
+    if (!aIsNan && bIsNan) return -1
+    if (aIsNan && bIsNan) return a.position - b.position
+
+    if (b.gain !== a.gain) return b.gain - a.gain
+    if (b.hoursReturned !== a.hoursReturned) {
+      return b.hoursReturned - a.hoursReturned
+    }
+    return a.position - b.position
+  })
+
+  const order = rows.map((r) => r.position)
+
+  const totalHours = rows.reduce((acc, r) => acc + r.hoursReturned, 0)
+  const totalOd = rows.reduce((acc, r) => acc + r.operationalDividend, 0)
+  const totalUplift = rows.reduce((acc, r) => acc + r.profitUplift, 0)
+  const totalGain = rows.reduce((acc, r) => acc + r.totalFinancialGain, 0)
+
+  let odPct: number
+  let upliftPct: number
+  if (!Number.isFinite(totalGain) || totalGain === 0) {
+    if (!Number.isFinite(totalGain)) {
+      odPct = NaN
+      upliftPct = NaN
+    } else {
+      odPct = 0
+      upliftPct = 100
+    }
+  } else {
+    odPct = round((totalOd / totalGain) * 100)
+    upliftPct = 100 - odPct
+  }
+
+  const y3Total = totalGain * 3
+  const outlook: OutlookYearNumbers[] = [1, 2, 3].map((m) => {
+    const yTotal = totalGain * m
+    const yOd = totalOd * m
+    const yUplift = totalUplift * m
+    let yHeightPct: number
+    let yOdPct: number
+    let yUpliftPct: number
+
+    if (!Number.isFinite(y3Total) || y3Total === 0) {
+      if (!Number.isFinite(y3Total)) {
+        yHeightPct = NaN
+        yOdPct = NaN
+        yUpliftPct = NaN
+      } else {
+        yHeightPct = 0
+        yOdPct = 0
+        yUpliftPct = 100
+      }
+    } else {
+      yHeightPct = round((yTotal / y3Total) * 100)
+      if (yTotal === 0) {
+        yOdPct = 0
+        yUpliftPct = 100
+      } else {
+        yOdPct = round((yOd / yTotal) * 100)
+        yUpliftPct = 100 - yOdPct
+      }
+    }
+
+    return {
+      total: yTotal,
+      od: yOd,
+      uplift: yUplift,
+      heightPct: yHeightPct,
+      odPct: yOdPct,
+      upliftPct: yUpliftPct,
+    }
+  })
+
+  const delayMonthly = round(totalOd / 12)
+
+  return {
+    rows,
+    order,
+    skipped,
+    totalHours,
+    totalOd,
+    totalUplift,
+    totalGain,
+    odPct,
+    upliftPct,
+    outlook,
+    delayMonthly,
+  }
+}
+
+export interface PainItem {
+  text?: string
+  team?: string
+  worst?: string
+  quant?: SegmentedAnswer[]
+}
+
+export interface FeaturedResult {
+  pain: PainItem
+  index: number
+  figures: {
+    complete: boolean
+    calc: MiniCalculatorOutput | { annualHours: number } | null
+  }
+}
+
+export function figuresFor(
+  pain: PainItem | undefined,
+  estimates: (string | undefined)[] = [],
+  settings: CalculatorSettings = SETTINGS,
+) {
+  if (!pain) return { complete: false, calc: null }
+  const fields = bridgePainQuant(pain.quant, estimates)
+  const assembled = assembleCalculatorInput(fields, pain.team || undefined)
+
+  if (!('incomplete' in assembled)) {
+    return {
+      complete: true,
+      calc: calculateMiniProfitMap(assembled, settings),
+    }
+  }
+  if (fields.people.value === null || fields.hoursPerWeek.value === null) {
+    return { complete: false, calc: null }
+  }
+  const calc = calculateMiniProfitMap(
+    {
+      people: fields.people.value,
+      hoursPerWeek: fields.hoursPerWeek.value,
+      annualPay: 0,
+      automatablePct: 0,
+    },
+    settings,
+  )
+  return { complete: false, calc: { annualHours: calc.annualHours } }
+}
+
+export function pickFeatured(
+  pains: PainItem[] = [],
+  estimates: (string | undefined)[] = [],
+  settings: CalculatorSettings = SETTINGS,
+): FeaturedResult | undefined {
+  return pains
+    .map((pain, index) => ({
+      pain,
+      index,
+      figures: figuresFor(pain, estimates, settings),
+    }))
+    .sort((a, b) => {
+      if (a.figures.complete !== b.figures.complete) {
+        return a.figures.complete ? -1 : 1
+      }
+      if (a.figures.complete && b.figures.complete) {
+        const aCalc = a.figures.calc as MiniCalculatorOutput
+        const bCalc = b.figures.calc as MiniCalculatorOutput
+        const aIsNan = !Number.isFinite(aCalc.totalFinancialGain)
+        const bIsNan = !Number.isFinite(bCalc.totalFinancialGain)
+        if (aIsNan && !bIsNan) return 1
+        if (!aIsNan && bIsNan) return -1
+        if (aIsNan && bIsNan) return a.index - b.index
+
+        const gain = bCalc.totalFinancialGain - aCalc.totalFinancialGain
+        if (gain !== 0) return gain
+        const hours = bCalc.hoursReturned - aCalc.hoursReturned
+        if (hours !== 0) return hours
+      }
+      return a.index - b.index
+    })[0]
+}
+
+export const selectFeatured = pickFeatured

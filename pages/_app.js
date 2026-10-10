@@ -2,10 +2,14 @@ import * as React from 'react'
 import Head from 'next/head'
 import { useRouter } from 'next/router'
 import { Analytics } from '@vercel/analytics/next'
+import { Figtree } from 'next/font/google'
 import '../styles/global.css'
 import { AuthSessionContext } from '../src/context/AuthSessionContext'
 
 const BASE_URL = process.env.NEXT_PUBLIC_BASE_URL ?? 'https://roi.lyrise.ai'
+
+// Self-hosted and preloaded. A CSS @import from Google blocked first paint.
+const figtree = Figtree({ subsets: ['latin'], style: ['normal', 'italic'] })
 
 function NavigationProgress() {
   const router = useRouter()
@@ -166,6 +170,11 @@ export default function MyApp(props) {
         <meta property="og:image" content={`${BASE_URL}/og-image.png`} />
         <meta property="og:type" content="website" />
       </Head>
+      <style jsx global>{`
+        :root {
+          --font-figtree: ${figtree.style.fontFamily};
+        }
+      `}</style>
       <NavigationProgress />
       <AuthSessionContext.Provider value={authSessionValue}>
         <Component {...pageProps} />

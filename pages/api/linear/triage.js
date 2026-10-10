@@ -5,9 +5,8 @@
 // in this repo. This route is for feedback only.
 //
 // NOTE: nothing in the app calls this route at the moment. We keep it because
-// the feedback prompt that used it is expected to come back. It now sits behind
-// the same shared secret as the PostHog webhook: it creates issues in our real
-// Linear workspace, and it used to be reachable by anyone who knew the URL.
+// the feedback prompt that used it is expected to come back. It sits behind a
+// shared secret header: it creates issues in our real Linear workspace, and it used to be reachable by anyone who knew the URL.
 //
 // If the feedback prompt comes back as browser code, swap this check for the
 // signed-in check used in pages/api/analytics/*, because a browser cannot keep

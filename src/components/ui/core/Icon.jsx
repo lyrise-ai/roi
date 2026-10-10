@@ -1,21 +1,58 @@
 import React from 'react'
-import * as Lu from 'react-icons/lu'
+import {
+  LuAlertCircle,
+  LuArrowRight,
+  LuArrowUp,
+  LuBarChart3,
+  LuCheck,
+  LuChevronDown,
+  LuClock,
+  LuInfo,
+  LuLoader,
+  LuLock,
+  LuMoreHorizontal,
+  LuPencil,
+  LuPlay,
+  LuPlus,
+  LuSearch,
+  LuTarget,
+  LuTrash2,
+  LuWand2,
+  LuWorkflow,
+  LuX,
+} from 'react-icons/lu'
 
-/* The brand supplies no icon set — the design system substitutes Lucide (see
-   readme.md ICONOGRAPHY). Upstream hydrated <i data-lucide> nodes from a CDN
-   `window.lucide`; there is no such global here, so we resolve against
-   react-icons/lu, which is the same Lucide set and already a dependency.
-   Kebab names stay the public API: 'arrow-right' -> LuArrowRight.
+/* Lucide icons, by kebab name: <Icon name="arrow-right" />.
+
+   Need a new one? Import it and add it to ICONS. Only listed icons ship to
+   the browser; `import * as Lu` cost /v2 424 KB.
 
    react-icons 4.10 predates Lucide's big rename, so use the OLD names:
    `alert-circle` not `circle-alert`, `more-horizontal` not `ellipsis`,
    `bar-chart-3` not `chart-no-axes-column`. An unknown name renders nothing
-   and warns in dev — check the console before hunting a layout bug.
-
-   ponytail: namespace import pulls the whole Lucide set into the bundle;
-   swap to explicit named imports per icon if bundle size starts to matter. */
-const exportName = (name) =>
-  'Lu' + String(name).replace(/(^|-)([a-z0-9])/g, (_, __, c) => c.toUpperCase())
+   and warns in dev. */
+const ICONS = {
+  'alert-circle': LuAlertCircle,
+  'arrow-right': LuArrowRight,
+  'arrow-up': LuArrowUp,
+  'bar-chart-3': LuBarChart3,
+  check: LuCheck,
+  'chevron-down': LuChevronDown,
+  clock: LuClock,
+  info: LuInfo,
+  loader: LuLoader,
+  lock: LuLock,
+  'more-horizontal': LuMoreHorizontal,
+  pencil: LuPencil,
+  play: LuPlay,
+  plus: LuPlus,
+  search: LuSearch,
+  target: LuTarget,
+  'trash-2': LuTrash2,
+  'wand-2': LuWand2,
+  workflow: LuWorkflow,
+  x: LuX,
+}
 
 export function Icon({
   name,
@@ -25,11 +62,11 @@ export function Icon({
   style,
   ...rest
 }) {
-  const Glyph = Lu[exportName(name)]
+  const Glyph = ICONS[name]
   if (!Glyph) {
     if (process.env.NODE_ENV !== 'production') {
       // eslint-disable-next-line no-console
-      console.warn(`<Icon name="${name}"> is not in this Lucide build.`)
+      console.warn(`<Icon name="${name}"> is not in ICONS (Icon.jsx).`)
     }
     return null
   }

@@ -33,14 +33,10 @@ export function getResearchModel() {
   return getOpenAIProvider()('gpt-5.6-terra')
 }
 
-/* Used by: the research analyst, which thinks once per company about everything
-   the scouts found and answers in a fixed shape. It is the same tier as the
-   research agent above today. They are separate functions because they answer
-   different questions, not because they currently differ.
-   This one runs once per scout that added sources, not once per job posting, so
-   speed matters less here than it does for reading adverts. It needs the very
-   large context window, because a firm with thirty postings must never be cut
-   short. */
+/* Used by: the V2 research agent (src/lib/roi/research/agent.ts), and next the
+   V2 report writer. Same model as getResearchModel today; separate so V2 can
+   change model without touching V1. It needs the very large context window,
+   because a firm with thirty postings must never be cut short. */
 export function getAnalystModel() {
   return getOpenAIProvider()('gpt-5.6-terra')
 }

@@ -1,7 +1,7 @@
 // The check in front of every email this app sends. It exists because the
 // browser test suite drives the real access and sharing flows against the real
 // database, and both `npm run dev` and a local production build read
-// .env.local, which holds a working email key. Alerts about made-up test
+// .env, which holds a working email key. Alerts about made-up test
 // companies were reaching real inboxes.
 //
 // What matters here is lopsided: the check must block every environment that is
@@ -54,7 +54,7 @@ test('a dev server never sends', () => {
 })
 
 // The case that actually leaked: a production build running locally and reading
-// .env.local, which is how the test server runs in CI mode on your machine.
+// .env, which is how the test server runs in CI mode on your machine.
 test('a local production build flagged as development never sends', () => {
   withEnv({ NODE_ENV: 'production', NEXT_PUBLIC_ENV: 'development' }, () =>
     assert.equal(outboundEmailBlockedReason(), 'NEXT_PUBLIC_ENV=development'),
