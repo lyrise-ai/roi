@@ -12,7 +12,7 @@ that reasons over what the scouts found. **There is deliberately no before/after
 number** — the old metric was produced by the very list that card deleted, and
 the new output is non-reproducible by design. Comparing them would be theatre.
 
-So the check is a human one: run `npm run eval:research`, then read the findings
+So the check is a human one: run `npm run research -- <domain>` per firm, then read the findings
 and judge each against three questions.
 
 1. **Is it true?**
@@ -26,7 +26,7 @@ public sources, before the analyst ran. Where it disagrees with the analyst,
 **this file is not automatically right** — it is a prior, and a finding that
 contradicts it is worth opening the cited URL for.
 
-Baseline run: `results.json`, 2026-08-20 (pre-analyst — the tiers below come
+Baseline run: `evals/research/results.json` at commit 609af8a (deleted since), 2026-08-20 (pre-analyst — the tiers below come
 from the deterministic `confidenceTier`, which the analyst may now override).
 
 ---

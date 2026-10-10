@@ -21,10 +21,8 @@
    speaks GET. The alternative is writing our own stream parser for a request
    with one parameter in it.
 
-   The mechanics — the headers, how we send, and treating the client hanging up
-   as the stop signal — copy pages/api/roi-agent.js, which has been carrying
-   real generations for months. Nothing here invents its own way of
-   cancelling. */
+   The headers and how we send copy pages/api/roi-agent.js, which has been
+   carrying real generations for months. */
 import { research } from '@/src/lib/roi/research/agent'
 import { cleanDomain } from '@/src/lib/roi/research/search'
 
@@ -61,10 +59,8 @@ export default async function handler(req, res) {
   res.setHeader('Connection', 'keep-alive')
   res.setHeader('X-Accel-Buffering', 'no')
 
-  /* The client hanging up is how we know to stop. A prospect who closes the tab
-     or goes back to the company screen should not leave an agent fetching pages
-     and running up a bill for a panel nobody is looking at. The run has its own
-     cap of 20 turns, so this limits the spend rather than the run itself. */
+  /* The client hanging up only stops us WRITING. The agent itself runs on to
+     its 20-turn cap: research() takes no abort signal yet. */
   let gone = false
   res.on('close', () => {
     if (!res.writableEnded) gone = true
