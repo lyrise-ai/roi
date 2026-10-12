@@ -31,3 +31,4 @@ export { SegmentedInput } from '@/src/ui/roi/SegmentedInput'
 export { SuggestionBlock } from '@/src/ui/roi/SuggestionBlock'
 
 export { ChatPanel } from '@/src/ui/report/ChatPanel'
+export { Report } from '@/src/ui/report/Report'

@@ -32,6 +32,15 @@
   color: var(--text-accent);
 }
 
+.nav a[aria-current='location'] {
+  background: var(--purple-50);
+  color: var(--text-accent);
+}
+
+.mobileNav {
+  display: none;
+}
+
 .sections {
   display: flex;
   flex-direction: column;
@@ -138,7 +147,7 @@
 
 .workflowSummary {
   display: grid;
-  grid-template-columns: minmax(0, 1fr) auto var(--space-6);
+  grid-template-columns: minmax(0, 1fr) auto auto;
   align-items: center;
   gap: var(--space-4);
   min-height: var(--space-16);
@@ -155,8 +164,13 @@
   outline-offset: -3px;
 }
 
+.workflowSummary:hover {
+  background: var(--surface-subtle);
+}
+
 .workflowName,
 .workflowMetrics {
+  min-width: 0;
   display: flex;
   align-items: flex-start;
   gap: var(--space-3);
@@ -181,11 +195,43 @@
   justify-content: flex-end;
 }
 
+.workflowAction {
+  display: inline-flex;
+  align-items: center;
+  justify-content: flex-end;
+  gap: var(--space-1);
+  color: var(--text-accent);
+  font: var(--type-eyebrow);
+  white-space: nowrap;
+}
+
+.workflowActionLabel > span:last-child {
+  display: none;
+}
+
+.workflow[open] .workflowActionLabel > span:first-child {
+  display: none;
+}
+
+.workflow[open] .workflowActionLabel > span:last-child {
+  display: inline;
+}
+
 .metric {
   display: flex;
   flex-direction: column;
   align-items: flex-start;
   gap: var(--space-1);
+}
+
+.metricCompact {
+  min-width: max-content;
+}
+
+.metricCompact .eyebrow {
+  letter-spacing: var(--tracking-normal);
+  text-transform: none;
+  white-space: nowrap;
 }
 
 .metricValue {
@@ -629,13 +675,65 @@
 
 @media (max-width: 720px) {
   .nav {
-    padding-right: var(--space-3);
-    padding-left: var(--space-3);
+    display: none;
+  }
+
+  .mobileNav {
+    position: sticky;
+    top: 0;
+    z-index: 2;
+    display: grid;
+    grid-template-columns: minmax(0, 1fr) var(--space-5);
+    align-items: center;
+    gap: var(--space-1) var(--space-3);
+    padding: var(--space-3) var(--space-4);
+    border-bottom: 1px solid var(--border-subtle);
+    background: var(--surface-card);
+    box-shadow: var(--shadow-sm);
+  }
+
+  .mobileNavLabel {
+    grid-column: 1 / -1;
+    color: var(--text-muted);
+    font: var(--type-eyebrow);
+  }
+
+  .mobileNav select {
+    grid-column: 1 / -1;
+    grid-row: 2;
+    width: 100%;
+    min-width: 0;
+    min-height: var(--space-10);
+    padding: var(--space-2) var(--space-10) var(--space-2) var(--space-3);
+    appearance: none;
+    border: 1px solid var(--border-subtle);
+    border-radius: var(--radius-field);
+    background: var(--surface-page);
+    color: var(--text-heading);
+    font: var(--type-label);
+    cursor: pointer;
+  }
+
+  .mobileNav select:focus-visible {
+    border-color: var(--text-accent);
+  }
+
+  .mobileNavChevron {
+    grid-column: 2;
+    grid-row: 2;
+    justify-self: center;
+    color: var(--text-accent);
+    pointer-events: none;
   }
 
   .sections {
-    gap: var(--space-8);
+    gap: var(--space-6);
     padding: var(--space-6) var(--space-4);
+  }
+
+  .section {
+    gap: var(--space-4);
+    scroll-margin-top: calc(var(--space-16) + var(--space-4));
   }
 
   .sectionTitle {
@@ -648,20 +746,65 @@
   }
 
   .workflowSummary {
-    grid-template-columns: minmax(0, 1fr) var(--space-6);
+    grid-template-columns: minmax(0, 1fr) auto;
+    grid-template-areas:
+      'name action'
+      'metrics metrics';
     gap: var(--space-3);
     padding: var(--space-4);
   }
 
-  .workflowMetrics {
-    grid-column: 1;
-    grid-row: 2;
-    justify-content: flex-start;
+  .workflowName {
+    grid-area: name;
   }
 
-  .workflowChevron {
-    grid-column: 2;
-    grid-row: 1;
+  .workflowMetrics {
+    grid-area: metrics;
+    justify-content: stretch;
+    gap: var(--space-3);
+  }
+
+  .workflowMetrics .metric {
+    flex: 1 1 0;
+    min-width: 0;
+    padding: var(--space-2) var(--space-3);
+    border-radius: var(--radius-md);
+    background: var(--surface-subtle);
+  }
+
+  .workflowMetrics .eyebrow {
+    font-size: var(--text-xs);
+    letter-spacing: var(--tracking-normal);
+    text-transform: none;
+    white-space: nowrap;
+  }
+
+  .workflowMetrics .metricCompact {
+    min-width: 0;
+  }
+
+  .workflowAction {
+    grid-area: action;
+    align-self: start;
+    justify-content: center;
+    min-height: var(--space-8);
+    padding: 0 var(--space-2);
+    border-radius: var(--radius-pill);
+    background: var(--purple-50);
+    font-size: var(--text-2xs);
+  }
+
+  .workflowActionLabel {
+    display: inline;
+  }
+
+  .workflowActionLabel > span {
+    display: none;
+  }
+
+  .workflow:not([open]) .workflowActionLabel > span:first-child,
+  .workflow[open] .workflowActionLabel > span:last-child {
+    display: inline;
   }
 
   .metricValue {
@@ -701,10 +844,41 @@
     flex-direction: column;
     align-items: stretch;
   }
+
+  .splitLabels {
+    flex-direction: column;
+  }
+}
+
+@media (min-width: 721px) and (max-width: 960px) {
+  .workflowSummary {
+    grid-template-columns: minmax(0, 1fr) auto;
+    grid-template-areas:
+      'name action'
+      'metrics metrics';
+    gap: var(--space-3);
+  }
+
+  .workflowName {
+    grid-area: name;
+  }
+
+  .workflowMetrics {
+    grid-area: metrics;
+    justify-content: flex-start;
+  }
+
+  .workflowAction {
+    grid-area: action;
+  }
 }
 
 @media print {
   .nav {
+    display: none;
+  }
+
+  .mobileNav {
     display: none;
   }
 
@@ -735,6 +909,10 @@
   }
 
   .workflowChevron {
+    display: none;
+  }
+
+  .workflowAction {
     display: none;
   }
 

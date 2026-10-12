@@ -30,13 +30,14 @@ function failureNotice(message) {
   )
 }
 
-function ReportSection({ section, children }) {
+function ReportSection({ section, children, ...rest }) {
   if (!section || !children) return null
   return (
     <section
       id={section.ref}
       className={styles.section}
       aria-labelledby={`${section.ref}-title`}
+      {...rest}
     >
       <header className={styles.sectionHeader}>
         <h2 id={`${section.ref}-title`} className={styles.sectionTitle}>
@@ -51,10 +52,10 @@ function ReportSection({ section, children }) {
   )
 }
 
-function Metric({ label, value, mark }) {
+function Metric({ label, value, mark, compact = false }) {
   if (!hasContent(value)) return null
   return (
-    <div className={styles.metric}>
+    <div className={`${styles.metric} ${compact ? styles.metricCompact : ''}`}>
       <span className={styles.eyebrow}>{label}</span>
       <strong className={styles.metricValue}>
         {value}
@@ -73,14 +74,30 @@ function WorkflowRow({ row }) {
           <span>{row.agent}</span>
         </div>
         <div className={styles.workflowMetrics}>
-          <Metric label="Hours back" value={row.hours} mark={row.mark} />
-          <Metric label="Annual gain" value={row.gain} mark={row.mark} />
+          <Metric
+            label="Hours back"
+            value={row.hours}
+            mark={row.mark}
+            compact
+          />
+          <Metric
+            label="Annual gain"
+            value={row.gain}
+            mark={row.mark}
+            compact
+          />
         </div>
-        <Icon
-          name="chevron-down"
-          size={20}
-          className={styles.workflowChevron}
-        />
+        <span className={styles.workflowAction}>
+          <span className={styles.workflowActionLabel}>
+            <span>View details</span>
+            <span>Hide details</span>
+          </span>
+          <Icon
+            name="chevron-down"
+            size={20}
+            className={styles.workflowChevron}
+          />
+        </span>
       </summary>
       <div className={styles.workflowDetails}>
         <div className={styles.todayAfter}>
@@ -399,6 +416,72 @@ function NextSteps({ model }) {
 }
 
 export function Report({ model, className, ...rest }) {
+  const reportRef = React.useRef(null)
+  const sectionRefs = React.useMemo(
+    () => (Array.isArray(model?.sections) ? model.sections : []),
+    [model?.sections],
+  )
+  const navItems = React.useMemo(
+    () => (Array.isArray(model?.nav) ? model.nav : []),
+    [model?.nav],
+  )
+  const [activeSection, setActiveSection] = React.useState('')
+
+  React.useEffect(() => {
+    const report = reportRef.current
+    if (!report) return undefined
+
+    const updateActiveSection = () => {
+      const sections = Array.from(
+        report.querySelectorAll('[data-report-section]'),
+      )
+      if (!sections.length) return
+      const readingLine = 152
+      const current =
+        sections
+          .filter((section) => {
+            const bounds = section.getBoundingClientRect()
+            return bounds.top <= readingLine && bounds.bottom > readingLine
+          })
+          .at(-1) ||
+        sections.find((section) => section.getBoundingClientRect().top > 0) ||
+        sections[sections.length - 1]
+      setActiveSection(current.id)
+    }
+
+    let frame = 0
+    const onScroll = () => {
+      if (frame) return
+      frame = window.requestAnimationFrame(() => {
+        frame = 0
+        updateActiveSection()
+      })
+    }
+
+    updateActiveSection()
+    window.addEventListener('scroll', onScroll, { passive: true })
+    window.addEventListener('resize', onScroll)
+    return () => {
+      window.removeEventListener('scroll', onScroll)
+      window.removeEventListener('resize', onScroll)
+      if (frame) window.cancelAnimationFrame(frame)
+    }
+  }, [sectionRefs])
+
+  const goToSection = (event) => {
+    const section = reportRef.current?.querySelector(
+      `[data-report-section][id="${event.target.value}"]`,
+    )
+    if (!section) return
+    setActiveSection(section.id)
+    section.scrollIntoView({
+      behavior: window.matchMedia('(prefers-reduced-motion: reduce)').matches
+        ? 'instant'
+        : 'smooth',
+      block: 'start',
+    })
+  }
+
   if (!model) return null
 
   const sections = Array.isArray(model.sections) ? model.sections : []
@@ -454,23 +537,59 @@ export function Report({ model, className, ...rest }) {
 
   return (
     <article
+      ref={reportRef}
       className={[styles.report, className].filter(Boolean).join(' ')}
       {...rest}
     >
-      {model.nav?.some((item) => visibleRefs.has(item.ref)) && (
+      {navItems.some((item) => visibleRefs.has(item.ref)) && (
         <nav className={styles.nav} aria-label="Report sections">
-          {model.nav
+          {navItems
             .filter((item) => visibleRefs.has(item.ref))
             .map((item) => (
-              <a href={`#${item.ref}`} key={item.ref}>
+              <a
+                href={`#${item.ref}`}
+                key={item.ref}
+                aria-current={
+                  activeSection === item.ref ? 'location' : undefined
+                }
+              >
                 {item.label}
               </a>
             ))}
         </nav>
       )}
+      {navItems.some((item) => visibleRefs.has(item.ref)) && (
+        <div className={styles.mobileNav}>
+          <label
+            className={styles.mobileNavLabel}
+            htmlFor="report-section-picker"
+          >
+            Jump to section
+          </label>
+          <select
+            id="report-section-picker"
+            aria-label="Jump to report section"
+            value={activeSection}
+            onChange={goToSection}
+          >
+            {navItems
+              .filter((item) => visibleRefs.has(item.ref))
+              .map((item) => (
+                <option value={item.ref} key={item.ref}>
+                  {item.label}
+                </option>
+              ))}
+          </select>
+          <Icon
+            name="chevron-down"
+            size={18}
+            className={styles.mobileNavChevron}
+          />
+        </div>
+      )}
 
       <div className={styles.sections}>
-        <ReportSection section={sectionFor('start')}>
+        <ReportSection section={sectionFor('start')} data-report-section>
           {visibleRefs.has('start') && (
             <Card tone="accent" className={styles.thesis}>
               <p>{model.thesis}</p>
@@ -478,7 +597,7 @@ export function Report({ model, className, ...rest }) {
           )}
         </ReportSection>
 
-        <ReportSection section={sectionFor('company')}>
+        <ReportSection section={sectionFor('company')} data-report-section>
           {visibleRefs.has('company') && (
             <div className={styles.snapshot}>
               {model.snapshot.map((item) => (
@@ -503,11 +622,11 @@ export function Report({ model, className, ...rest }) {
           )}
         </ReportSection>
 
-        <ReportSection section={sectionFor('workflows')}>
+        <ReportSection section={sectionFor('workflows')} data-report-section>
           {visibleRefs.has('workflows') && <WorkflowSection model={model} />}
         </ReportSection>
 
-        <ReportSection section={sectionFor('map')}>
+        <ReportSection section={sectionFor('map')} data-report-section>
           {visibleRefs.has('map') && (
             <div className={styles.stack}>
               {hasContent(model.mapTitle) && (
@@ -518,15 +637,15 @@ export function Report({ model, className, ...rest }) {
           )}
         </ReportSection>
 
-        <ReportSection section={sectionFor('uplift')}>
+        <ReportSection section={sectionFor('uplift')} data-report-section>
           {visibleRefs.has('uplift') && <ProfitUplift model={model} />}
         </ReportSection>
 
-        <ReportSection section={sectionFor('outlook')}>
+        <ReportSection section={sectionFor('outlook')} data-report-section>
           {visibleRefs.has('outlook') && <Outlook model={model} />}
         </ReportSection>
 
-        <ReportSection section={sectionFor('delay')}>
+        <ReportSection section={sectionFor('delay')} data-report-section>
           {visibleRefs.has('delay') &&
             (hasContent(model.totalsFailed) ? (
               failureNotice(model.totalsFailed)
@@ -542,11 +661,11 @@ export function Report({ model, className, ...rest }) {
             ))}
         </ReportSection>
 
-        <ReportSection section={sectionFor('roadmap')}>
+        <ReportSection section={sectionFor('roadmap')} data-report-section>
           {visibleRefs.has('roadmap') && <Roadmap phases={model.roadmap} />}
         </ReportSection>
 
-        <ReportSection section={sectionFor('next')}>
+        <ReportSection section={sectionFor('next')} data-report-section>
           {visibleRefs.has('next') && <NextSteps model={model} />}
         </ReportSection>
       </div>
