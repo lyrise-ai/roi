@@ -160,7 +160,9 @@ test.describe('/v2', () => {
     await page.getByRole('button', { name: 'That’s all for now' }).click()
 
     await expect(page.getByText('Step 4 of 4')).toBeVisible()
-    await expect(page.getByText('Harbourfield Legal')).toBeVisible()
+    await expect(
+      page.getByRole('heading', { name: 'Harbourfield Legal' }),
+    ).toBeVisible()
 
     // The "I heard you" moment: their own numbers said back as a sentence,
     // before any figure. Built in plain code from the answers above — 4 people x
@@ -206,13 +208,19 @@ test.describe('/v2', () => {
     await page.getByRole('button', { name: 'That’s all for now' }).click()
 
     await expect(page.getByText('Step 4 of 4')).toBeVisible()
+    await expect(
+      page.getByText(/Hours returned, and what that’s worth/),
+    ).toBeVisible()
 
     // Nothing is open until someone asks for it.
     await expect(page.getByRole('dialog')).toHaveCount(0)
 
     // Only the money figure is marked. Hours spent carries no guess beyond what
     // was typed, so it gets no dot and no pop-up.
-    const mark = page.getByRole('button', { name: /includes assumptions/ })
+    const mark = page
+      .getByText(/Hours returned, and what that’s worth/)
+      .locator('..')
+      .getByRole('button', { name: /includes assumptions/ })
     await expect(mark).toHaveCount(1)
     await mark.click()
 
