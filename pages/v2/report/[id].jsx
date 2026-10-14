@@ -1,14 +1,13 @@
-// /v2/report/<id> — what a forwarded report link opens (LYR-239). No account,
-// no chat. Figures come back with buildReport (LYR-243); until then this shows
-// only what was saved, never a stand-in number.
+// /v2/report/<id> — a public report link. Rebuild figures from the saved
+// answers so the page never relies on a browser-supplied total.
 
 import * as React from 'react'
 import Head from 'next/head'
-import Link from 'next/link'
 import PublicReportError from '@/src/v2/components/PublicReportError'
 import { loadReport } from '@/src/v2/report/savedReport'
+import { buildReport } from '@/src/v2/report/buildReport'
 import { useAuthSession } from '@/src/lib/AuthSessionContext'
-import { Button } from '@/src/ui'
+import { Report } from '@/src/ui'
 
 const MESSAGES = {
   'not-found':
@@ -21,7 +20,14 @@ export async function getServerSideProps({ params, res }) {
   const id = params?.id ?? ''
   const result = await loadReport(id)
 
-  if (result.status === 'ok') return { props: { report: result.report } }
+  if (result.status === 'ok') {
+    return {
+      props: {
+        reportId: result.report.id,
+        model: buildReport(result.report),
+      },
+    }
+  }
 
   res.statusCode = result.status === 'unreadable' ? 503 : 404
   return {
@@ -32,12 +38,12 @@ export async function getServerSideProps({ params, res }) {
   }
 }
 
-export default function V2ReportPage({ report, error, reportId }) {
+export default function V2ReportPage({ model, error, reportId }) {
   // Back from signing in: claim it, if this browser is the one that made it.
   const { user } = useAuthSession()
   React.useEffect(() => {
-    if (!report || !user) return
-    const key = `v2_claim_${report.id}`
+    if (!reportId || error || !user) return
+    const key = `v2_claim_${reportId}`
     let claimToken
     try {
       claimToken = localStorage.getItem(key)
@@ -48,13 +54,13 @@ export default function V2ReportPage({ report, error, reportId }) {
     fetch('/api/v2/claim', {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ reportId: report.id, claimToken }),
+      body: JSON.stringify({ reportId, claimToken }),
     })
       .then((r) => {
         if (r.ok) localStorage.removeItem(key)
       })
       .catch(() => {})
-  }, [report, user])
+  }, [error, reportId, user])
 
   if (error) {
     return (
@@ -71,95 +77,17 @@ export default function V2ReportPage({ report, error, reportId }) {
     )
   }
 
-  const company = report.company?.name || 'Your company'
-  const pains = (report.pains ?? []).filter((p) => p?.text)
-
   return (
     <>
       <Head>
-        <title>{company} | LyRise Profit Map</title>
+        <title>
+          {model.snapshot.find((row) => row.label === 'Company')?.value ||
+            'Profit Map'}{' '}
+          | LyRise Profit Map
+        </title>
         <meta name="robots" content="noindex" />
       </Head>
-      <main
-        style={{
-          padding: 'var(--space-12) var(--space-6)',
-          maxWidth: '760px',
-          margin: '0 auto',
-        }}
-      >
-        <header style={{ marginBottom: 'var(--space-8)' }}>
-          <div
-            style={{
-              font: 'var(--weight-semibold) var(--text-xs)',
-              color: 'var(--brand)',
-              textTransform: 'uppercase',
-              letterSpacing: 'var(--tracking-wider)',
-              marginBottom: 'var(--space-2)',
-            }}
-          >
-            Profit Map
-          </div>
-          <h1
-            style={{
-              font: 'var(--weight-extrabold) var(--text-3xl)',
-              color: 'var(--text-heading)',
-              margin: 0,
-            }}
-          >
-            {company}
-          </h1>
-          {report.words?.observation && (
-            <p
-              style={{
-                font: 'var(--type-body)',
-                color: 'var(--text-body)',
-                marginTop: 'var(--space-4)',
-              }}
-            >
-              {report.words.observation}
-            </p>
-          )}
-        </header>
-
-        {pains.length > 0 && (
-          <section
-            style={{
-              padding: 'var(--space-6)',
-              background: 'var(--surface-card)',
-              borderRadius: 'var(--radius-card)',
-              border: '1px solid var(--border-subtle)',
-            }}
-          >
-            <h2
-              style={{
-                font: 'var(--weight-bold) var(--text-base)',
-                margin: '0 0 var(--space-4)',
-              }}
-            >
-              The work we looked at
-            </h2>
-            <ul style={{ margin: 0, paddingLeft: 'var(--space-5)' }}>
-              {pains.map((p, i) => (
-                <li
-                  key={i}
-                  style={{
-                    font: 'var(--type-body)',
-                    padding: 'var(--space-1) 0',
-                  }}
-                >
-                  {p.text}
-                </li>
-              ))}
-            </ul>
-          </section>
-        )}
-
-        <footer style={{ marginTop: 'var(--space-12)', textAlign: 'center' }}>
-          <Button as={Link} href="/v2" variant="secondary">
-            Make your own Profit Map
-          </Button>
-        </footer>
-      </main>
+      <Report model={model} />
     </>
   )
 }

@@ -145,7 +145,7 @@ test('save then load gives back the saved inputs, not the claim token', async ()
       id: ID,
       company: row().company,
       pains: row().pains,
-      words: row().words,
+      research: row().research,
     },
   })
 })
@@ -157,10 +157,7 @@ test('a known id cannot overwrite a saved report', async () => {
     null,
   )
   const loaded = await loadReport(ID)
-  assert.equal(
-    loaded.report.words.observation,
-    'Four people, 3,000 hours a year.',
-  )
+  assert.deepEqual(loaded.report.research, {})
 })
 
 test('save refuses a bad id or wrongly shaped fields, and never throws', async () => {

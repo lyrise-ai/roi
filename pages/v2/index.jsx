@@ -57,7 +57,20 @@ import { SAMPLE_ANSWERS } from '@/src/v2/report/sampleReport'
 
 const IS_DEV = process.env.NODE_ENV === 'development'
 
-const STEPS = ['landing', 'company', 'interview', 'reveal']
+const STEPS = ['landing', 'company', 'interview', 'building']
+
+const createReportId = () => {
+  try {
+    if (typeof crypto !== 'undefined' && crypto.randomUUID) {
+      return crypto.randomUUID()
+    }
+  } catch {}
+  return 'xxxxxxxx-xxxx-4xxx-yxxx-xxxxxxxxxxxx'.replace(/[xy]/g, (c) => {
+    const r = (Math.random() * 16) | 0
+    const v = c === 'x' ? r : (r & 0x3) | 0x8
+    return v.toString(16)
+  })
+}
 
 /* The two heading sizes this design needs fall between the sizes the design
    system names: --type-h1 (48px) is too big on a phone, --type-h2 too big for
@@ -135,8 +148,19 @@ const RISE_CSS = `
     0%, 100% { opacity: 0.35; }
     50% { opacity: 1; }
   }
+  .v2-spinner {
+    width: var(--space-8);
+    height: var(--space-8);
+    border: 2px solid var(--border-subtle);
+    border-top-color: var(--lyrise-purple);
+    border-radius: var(--radius-pill);
+    animation: v2-spin 0.9s linear infinite;
+  }
+  @keyframes v2-spin {
+    to { transform: rotate(360deg); }
+  }
   @media (prefers-reduced-motion: reduce) {
-    .v2-rise, .v2-pulse { animation: none; }
+    .v2-rise, .v2-pulse, .v2-spinner { animation: none; }
   }
 
   @media (max-width: 640px) {
@@ -365,6 +389,57 @@ function Shell({ step, children }) {
       </header>
       {children}
     </main>
+  )
+}
+
+function ReportBuilding({ failed, onRetry }) {
+  return (
+    <section
+      className="v2-rise"
+      aria-live="polite"
+      aria-busy={!failed}
+      style={{
+        flex: 1,
+        width: '100%',
+        maxWidth: 'var(--container-narrow)',
+        margin: '0 auto',
+        padding:
+          'clamp(var(--space-12), 18vh, var(--space-24)) clamp(var(--space-4), 5vw, var(--space-6)) var(--space-20)',
+        display: 'flex',
+        flexDirection: 'column',
+        alignItems: 'center',
+        textAlign: 'center',
+      }}
+    >
+      {!failed && (
+        <span
+          className="v2-spinner"
+          role="status"
+          aria-label="Building report"
+        />
+      )}
+      <h2 style={{ ...QUESTION, margin: 'var(--space-6) 0 0' }}>
+        {failed
+          ? "We couldn't build your report"
+          : "We're building your Profit Map"}
+      </h2>
+      <p
+        style={{
+          ...LEAD,
+          maxWidth: '48ch',
+          margin: 'var(--space-3) 0 0',
+        }}
+      >
+        {failed
+          ? 'Your answers are still here. Try again to save your report.'
+          : "We're turning your answers into a report. This can take a moment."}
+      </p>
+      {failed && (
+        <Button style={{ marginTop: 'var(--space-6)' }} onClick={onRetry}>
+          Try again
+        </Button>
+      )}
+    </section>
   )
 }
 
@@ -2735,20 +2810,83 @@ function useScan(website) {
 
 export default function V2() {
   const [flow, setFlow] = React.useState(emptyFlow)
+  const router = useRouter()
+  const [reportBuildState, setReportBuildState] = React.useState('idle')
+  const [pendingReport, setPendingReport] = React.useState(null)
+  const reportSaveComplete = React.useRef(false)
+  const reportRequestInFlight = React.useRef(false)
   /* `/v2?scan=none` switches off the canned guesses and estimates. It needs its
      own way in, because a domain we do not recognise now falls back to the
      demo company instead. */
   const demo =
-    useRouter().query.scan === 'none'
-      ? undefined
-      : demoFor(flow.company.website)
+    router.query.scan === 'none' ? undefined : demoFor(flow.company.website)
 
   const scan = useScan(flow.scanFor)
+
+  const submitReport = async (report) => {
+    if (!report || reportRequestInFlight.current) return
+    reportRequestInFlight.current = true
+    setReportBuildState('building')
+
+    try {
+      if (!reportSaveComplete.current) {
+        const res = await fetch('/api/v2/report', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({
+            id: report.id,
+            company: report.company,
+            pains: report.pains,
+            estimates: report.estimates,
+          }),
+        })
+        const data = await res.json().catch(() => null)
+        if (!res.ok || !data?.ok || data.reportId !== report.id) {
+          throw new Error(data?.error || 'Could not save this report.')
+        }
+
+        reportSaveComplete.current = true
+        if (data.claimToken && !data.ownerId) {
+          try {
+            localStorage.setItem(`v2_claim_${report.id}`, data.claimToken)
+          } catch {
+            // The report still opens; only claiming it after sign-in is affected.
+          }
+        }
+      }
+
+      const navigated = await router.push(`/v2/report/${report.id}`)
+      if (!navigated) throw new Error('Could not open the saved report.')
+    } catch (err) {
+      console.warn('[v2] report build failed:', err)
+      setReportBuildState('failed')
+    } finally {
+      reportRequestInFlight.current = false
+    }
+  }
+
+  const startReportBuild = (company, pains) => {
+    const report = {
+      id: createReportId(),
+      company: {
+        name: company.name || (demo && demo.name) || 'Your company',
+        website: company.website || (demo && demo.domain) || '',
+      },
+      pains,
+      estimates: QUANT.map((_, index) => quantFor(demo, index).estimate),
+    }
+    reportSaveComplete.current = false
+    setPendingReport(report)
+    setFlow((current) => ({ ...current, step: 'building' }))
+    submitReport(report)
+  }
 
   const go = (delta) =>
     setFlow((f) => ({
       ...f,
-      step: STEPS[Math.min(Math.max(STEPS.indexOf(f.step) + delta, 0), 3)],
+      step: STEPS[
+        Math.min(Math.max(STEPS.indexOf(f.step) + delta, 0), STEPS.length - 1)
+      ],
     }))
   const patch = (fields) => setFlow((f) => ({ ...f, ...fields }))
 
@@ -2800,9 +2938,11 @@ export default function V2() {
         {flow.step === 'landing' && (
           <Landing
             onStart={() => go(1)}
-            onFastMock={() =>
-              setFlow({ ...emptyFlow(), ...SAMPLE_ANSWERS, step: 'reveal' })
-            }
+            onFastMock={() => {
+              const mock = { ...emptyFlow(), ...SAMPLE_ANSWERS }
+              setFlow({ ...mock, step: 'building' })
+              startReportBuild(mock.company, mock.pains)
+            }}
           />
         )}
         {flow.step === 'company' && (
@@ -2851,22 +2991,26 @@ export default function V2() {
                which never blocks. We do this here, on the way out, so that
                going back to a blank card still shows it blank. */
             onFinish={() => {
-              setFlow((f) => ({
-                ...f,
-                pains: f.pains
-                  .map((p, i) =>
-                    isNamed(p)
-                      ? p
-                      : {
-                          ...p,
-                          text: painFor(demo, i).guess || '',
-                          fromGuess: true,
-                        },
-                  )
-                  .filter(isNamed),
-              }))
-              go(1)
+              const pains = flow.pains
+                .map((p, i) =>
+                  isNamed(p)
+                    ? p
+                    : {
+                        ...p,
+                        text: painFor(demo, i).guess || '',
+                        fromGuess: true,
+                      },
+                )
+                .filter(isNamed)
+              setFlow((current) => ({ ...current, pains }))
+              startReportBuild(flow.company, pains)
             }}
+          />
+        )}
+        {flow.step === 'building' && (
+          <ReportBuilding
+            failed={reportBuildState === 'failed'}
+            onRetry={() => submitReport(pendingReport)}
           />
         )}
         {flow.step === 'reveal' && (
