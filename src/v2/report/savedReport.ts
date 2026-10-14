@@ -10,6 +10,7 @@
 
 import { getSupabaseAdmin } from '@/src/lib/supabaseAdmin'
 import type { MiniCalculatorOutput } from '@/src/v2/report/miniCalculator'
+import type { SegmentedAnswer } from '@/src/v2/report/answerBridge'
 
 export interface SavedReportCompany {
   name: string
@@ -20,12 +21,7 @@ export interface SavedReportPain {
   text: string
   team?: string
   worst?: string
-  quant: Array<{
-    mode: 'exact' | 'range' | 'estimate'
-    exact?: string
-    low?: string
-    high?: string
-  }>
+  quant: SegmentedAnswer[]
 }
 
 export interface SavedReportFeatured {
@@ -58,12 +54,13 @@ export interface V2ReportRow {
   settings: Record<string, unknown>
 }
 
-/* What a shared link may show. No numbers until buildReport (LYR-243) rebuilds
-   them from the saved inputs; never claim_token or owner_id. */
-export type LoadedReport = Pick<
-  V2ReportRow,
-  'id' | 'company' | 'pains' | 'words'
->
+/* What a shared link may show. Figures are rebuilt from saved inputs; never
+   return claim_token or owner_id. */
+export type LoadedReport = Pick<V2ReportRow, 'id'> & {
+  company: SavedReportCompany
+  pains: SavedReportPain[]
+  research: Record<string, unknown>
+}
 
 export type LoadReportResult =
   | { status: 'ok'; report: LoadedReport }
@@ -176,7 +173,7 @@ export async function loadReport(
   try {
     const { data, error } = await getSupabaseAdmin()
       .from('v2_reports')
-      .select('id, company, pains, words')
+      .select('id, company, pains, research')
       .eq('id', id.trim())
       .maybeSingle()
 

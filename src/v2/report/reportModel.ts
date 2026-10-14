@@ -60,7 +60,12 @@ export type ReportModel = {
   // 2 · Company snapshot, copied from research findings. No AI rewrites them.
   // ★ Not in v11: `source` is a Link, so a row can only point at a page the
   // research agent really opened.
-  snapshot: { label: string; value: string; tag: string; source: Link }[]
+  snapshot: {
+    label: string
+    value: string
+    tag: string
+    source?: Link
+  }[]
 
   // 3 · Proposed AI workflows, biggest gain first
   workflowsSub: string
@@ -96,8 +101,10 @@ export type ReportModel = {
     mark: ProvenanceKind
   }[]
   totalsLabel: string
-  totalHours: HoursReturned // the sum of the hours-returned column
-  totalGain: Figure
+  totalHours?: HoursReturned // the sum of the hours-returned column
+  totalGain?: Figure
+  failedRows?: { workflow: string; message: string }[]
+  totalsFailed?: string
   rejected: { workflow: string; reason: string }[]
 
   // 4 · Process map, top workflow only, six steps
@@ -112,13 +119,13 @@ export type ReportModel = {
 
   // 5 · Profit uplift
   levers: { label: string; from: string; value: Figure }[]
-  totalOd: Figure
-  totalUplift: Figure
-  odPct: Figure // the split bar: wages back
-  upliftPct: Figure // the split bar: uplift. Always adds up to 100% with odPct
+  totalOd?: Figure
+  totalUplift?: Figure
+  odPct?: Figure // the split bar: wages back
+  upliftPct?: Figure // the split bar: uplift. Always adds up to 100% with odPct
 
   // 6 · Three-year outlook, cumulative
-  outlook: {
+  outlook?: {
     total: Figure
     label: string
     heightPct: Figure // column height against year three
@@ -127,7 +134,7 @@ export type ReportModel = {
   }[]
 
   // 7 · Cost of delay
-  delayMonthly: Figure
+  delayMonthly?: Figure
   delayCopy: string
 
   // 8 · Roadmap: four fixed phases; the agent writes only `detail`

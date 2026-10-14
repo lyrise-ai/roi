@@ -12,12 +12,21 @@ export default async function handler(req, res) {
   }
 
   const { id, company, pains } = req.body ?? {}
+  const estimates = req.body?.estimates
   if (
     !isReportId(id) ||
     !company ||
     typeof company !== 'object' ||
     Array.isArray(company) ||
-    !Array.isArray(pains)
+    !Array.isArray(pains) ||
+    (estimates !== undefined &&
+      (!Array.isArray(estimates) ||
+        estimates.length > 5 ||
+        estimates.some(
+          (estimate) =>
+            estimate !== undefined &&
+            (typeof estimate !== 'string' || estimate.length > 200),
+        )))
   ) {
     res.status(400).json({ ok: false, error: 'Invalid report details.' })
     return
@@ -38,7 +47,9 @@ export default async function handler(req, res) {
     owner_id: ownerId,
     company,
     pains,
-    research: {},
+    research: {
+      calculatorEstimates: Array.isArray(estimates) ? estimates : [],
+    },
     words: {},
     settings: SETTINGS,
   })

@@ -2837,6 +2837,7 @@ export default function V2() {
             id: report.id,
             company: report.company,
             pains: report.pains,
+            estimates: report.estimates,
           }),
         })
         const data = await res.json().catch(() => null)
@@ -2872,6 +2873,7 @@ export default function V2() {
         website: company.website || (demo && demo.domain) || '',
       },
       pains,
+      estimates: QUANT.map((_, index) => quantFor(demo, index).estimate),
     }
     reportSaveComplete.current = false
     setPendingReport(report)
