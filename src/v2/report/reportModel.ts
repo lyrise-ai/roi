@@ -53,6 +53,27 @@ export type ProvenanceKind = 'given' | 'estimated' | 'benchmarked'
 /* Who does a process-map step once the agent is in place. */
 export type After = 'agent' | 'agent-drafts' | 'unchanged'
 
+/* Everything added up from the rows: all of it, or why it failed. Never half. */
+export type Totals =
+  | {
+      ok: true
+      hours: HoursReturned // the sum of the hours-returned column
+      gain: Figure
+      od: Figure // wages you get back
+      uplift: Figure
+      odPct: Figure // the split bar: wages back
+      upliftPct: Figure // always adds up to 100% with odPct
+      outlook: {
+        total: Figure
+        label: string
+        heightPct: Figure // column height against year three
+        odPct: Figure
+        upliftPct: Figure
+      }[]
+      delayMonthly: Figure
+    }
+  | { ok: false; message: string }
+
 export type ReportModel = {
   // 1 · Recommended starting point
   thesis: string
@@ -60,12 +81,7 @@ export type ReportModel = {
   // 2 · Company snapshot, copied from research findings. No AI rewrites them.
   // ★ Not in v11: `source` is a Link, so a row can only point at a page the
   // research agent really opened.
-  snapshot: {
-    label: string
-    value: string
-    tag: string
-    source?: Link
-  }[]
+  snapshot: { label: string; value: string; tag: string; source: Link }[]
 
   // 3 · Proposed AI workflows, biggest gain first
   workflowsSub: string
@@ -101,10 +117,10 @@ export type ReportModel = {
     mark: ProvenanceKind
   }[]
   totalsLabel: string
-  totalHours?: HoursReturned // the sum of the hours-returned column
-  totalGain?: Figure
-  failedRows?: { workflow: string; message: string }[]
-  totalsFailed?: string
+  // rows that couldn't be worked out, each with what to do about it
+  failedRows: { workflow: string; message: string }[]
+  // sections 3, 5, 6 and 7 read their figures from here
+  totals: Totals
   rejected: { workflow: string; reason: string }[]
 
   // 4 · Process map, top workflow only, six steps
@@ -119,22 +135,8 @@ export type ReportModel = {
 
   // 5 · Profit uplift
   levers: { label: string; from: string; value: Figure }[]
-  totalOd?: Figure
-  totalUplift?: Figure
-  odPct?: Figure // the split bar: wages back
-  upliftPct?: Figure // the split bar: uplift. Always adds up to 100% with odPct
 
-  // 6 · Three-year outlook, cumulative
-  outlook?: {
-    total: Figure
-    label: string
-    heightPct: Figure // column height against year three
-    odPct: Figure
-    upliftPct: Figure
-  }[]
-
-  // 7 · Cost of delay
-  delayMonthly?: Figure
+  // 6 · Three-year outlook and 7 · Cost of delay: figures in `totals`
   delayCopy: string
 
   // 8 · Roadmap: four fixed phases; the agent writes only `detail`

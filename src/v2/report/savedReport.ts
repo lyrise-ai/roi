@@ -56,10 +56,12 @@ export interface V2ReportRow {
 
 /* What a shared link may show. Figures are rebuilt from saved inputs; never
    return claim_token or owner_id. */
-export type LoadedReport = Pick<V2ReportRow, 'id'> & {
+export type LoadedReport = Pick<
+  V2ReportRow,
+  'id' | 'research' | 'words' | 'settings'
+> & {
   company: SavedReportCompany
   pains: SavedReportPain[]
-  research: Record<string, unknown>
 }
 
 export type LoadReportResult =
@@ -173,7 +175,7 @@ export async function loadReport(
   try {
     const { data, error } = await getSupabaseAdmin()
       .from('v2_reports')
-      .select('id, company, pains, research')
+      .select('id, company, pains, research, words, settings')
       .eq('id', id.trim())
       .maybeSingle()
 

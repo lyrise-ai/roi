@@ -19,11 +19,19 @@
 // range, so that row is marked `estimated`.
 //
 // The fixed text (headings, journey, guarantee, assumption names and reasons)
-// is a stand-in taken from v11. LYR-209 writes the real text into
-// fixedWords.ts and replaces it here.
+// comes from fixedWords.ts (LYR-209).
 // ─────────────────────────────────────────────────────────────────────────────
 
 import { link, type Research } from '@/src/v2/research/types'
+import {
+  ASSUMPTION_WHY,
+  DISCLAIMER,
+  GUARANTEE,
+  JOURNEY,
+  LABELS,
+  LEGEND,
+  ROADMAP_PHASES,
+} from '@/src/v2/report/fixedWords'
 import { hoursReturned, hoursSpent } from '@/src/v2/report/format'
 import type {
   Figure,
@@ -225,45 +233,18 @@ export const SAMPLE_WORDS: ReportWords = {
   ],
 }
 
-/* The assumptions every row shares, after its own "how much can be automated".
-   Names and reasons are v11 stand-ins until LYR-209. */
+/* The assumptions every row shares, after its own "how much can be automated". */
 const SHARED_ASSUMPTIONS = [
-  {
-    name: 'Take-up in year one',
-    value: f('70%'),
-    why: 'Teams rarely use a new system for every case in year one.',
-    given: false,
-  },
-  {
-    name: 'Share of the saving that lands',
-    value: f('80%'),
-    why: 'Freed hours do not turn into value one for one.',
-    given: false,
-  },
-  {
-    name: 'Weeks worked a year',
-    value: f('50 weeks'),
-    why: 'Fifty-two, less leave and public holidays.',
-    given: false,
-  },
-  {
-    name: 'Cost on top of salary',
-    value: f('1.3×'),
-    why: 'What an employer pays on top of pay: tax, benefits, space.',
-    given: false,
-  },
-  {
-    name: 'What a freed hour earns on top',
-    value: f('1.3×'),
-    why: 'Freed hours go onto billable work, which earns more than the wage it saves.',
-    given: false,
-  },
+  { ...ASSUMPTION_WHY.adoption, value: f('70%'), given: false },
+  { ...ASSUMPTION_WHY.realization, value: f('80%'), given: false },
+  { ...ASSUMPTION_WHY.workingWeeks, value: f('50 weeks'), given: false },
+  { ...ASSUMPTION_WHY.overhead, value: f('1.3×'), given: false },
+  { ...ASSUMPTION_WHY.profitMultiplier, value: f('1.3×'), given: false },
 ]
 
 const automatable = (value: string) => ({
-  name: 'Share a system could take',
+  ...ASSUMPTION_WHY.automatable,
   value: f(value),
-  why: 'What you told us still needs a person.',
   given: true,
 })
 
@@ -362,9 +343,41 @@ export const SAMPLE_REPORT: ReportModel = {
       mark: 'given',
     },
   ],
-  totalsLabel: 'Totals, across three workflows',
-  totalHours: hoursReturned(1870),
-  totalGain: f('$174,347'),
+  totalsLabel: LABELS.totals(3),
+  failedRows: [],
+  totals: {
+    ok: true,
+    hours: hoursReturned(1870),
+    gain: f('$174,347'),
+    od: f('$75,803'),
+    uplift: f('$98,544'),
+    odPct: f('43%'),
+    upliftPct: f('57%'),
+    outlook: [
+      {
+        total: f('$174,347'),
+        label: 'Year 1',
+        heightPct: f('33%'),
+        odPct: f('43%'),
+        upliftPct: f('57%'),
+      },
+      {
+        total: f('$348,694'),
+        label: 'Through year 2',
+        heightPct: f('67%'),
+        odPct: f('43%'),
+        upliftPct: f('57%'),
+      },
+      {
+        total: f('$523,041'),
+        label: 'Through year 3',
+        heightPct: f('100%'),
+        odPct: f('43%'),
+        upliftPct: f('57%'),
+      },
+    ],
+    delayMonthly: f('$6,317'),
+  },
   rejected: [
     {
       workflow: 'Writing fee quotes for new matters',
@@ -395,73 +408,17 @@ export const SAMPLE_REPORT: ReportModel = {
       value: f('$11,239'),
     },
   ],
-  totalOd: f('$75,803'),
-  totalUplift: f('$98,544'),
-  odPct: f('43%'),
-  upliftPct: f('57%'),
-
-  outlook: [
-    {
-      total: f('$174,347'),
-      label: 'Year 1',
-      heightPct: f('33%'),
-      odPct: f('43%'),
-      upliftPct: f('57%'),
-    },
-    {
-      total: f('$348,694'),
-      label: 'Through year 2',
-      heightPct: f('67%'),
-      odPct: f('43%'),
-      upliftPct: f('57%'),
-    },
-    {
-      total: f('$523,041'),
-      label: 'Through year 3',
-      heightPct: f('100%'),
-      odPct: f('43%'),
-      upliftPct: f('57%'),
-    },
-  ],
-
-  delayMonthly: f('$6,317'),
   delayCopy: SAMPLE_WORDS.delayCopy,
 
-  roadmap: [
-    {
-      weeks: 'Weeks 1–2',
-      phase: 'Confirm the map',
-      detail: SAMPLE_WORDS.roadmap[0],
-    },
-    {
-      weeks: 'Weeks 2–3',
-      phase: 'Define the agents',
-      detail: SAMPLE_WORDS.roadmap[1],
-    },
-    {
-      weeks: 'Weeks 3–5',
-      phase: 'Build and connect',
-      detail: SAMPLE_WORDS.roadmap[2],
-    },
-    {
-      weeks: 'Week 6',
-      phase: 'Measure against the baseline',
-      detail: SAMPLE_WORDS.roadmap[3],
-    },
-  ],
+  roadmap: ROADMAP_PHASES.map((phase, i) => ({
+    ...phase,
+    detail: SAMPLE_WORDS.roadmap[i],
+  })),
 
   nextCopy: SAMPLE_WORDS.nextCopy,
-  journey: [
-    'Profit Map',
-    'Confirm it in a process-mapping session',
-    'Define the agents',
-    'Build and deploy',
-    'Measure against the baseline',
-  ].map((label, i) => ({ n: String(i + 1), label })),
-  guaranteeCopy:
-    'We customise the agents to how your team already works and tie the commitment to the result. Conditions travel with it: agreed scope, a baseline validated in process mapping, the access we need, what your side owns, and an agreed way of measuring.',
-  confirmSub:
-    'What this map assumes about you. Each one can move the numbers, and each one is an agenda item for the session.',
+  journey: JOURNEY.map((label, i) => ({ n: String(i + 1), label })),
+  guaranteeCopy: GUARANTEE,
+  confirmSub: LABELS.confirmSub,
   confirm: [
     {
       item: 'Pay: Client intake re-keying',
@@ -469,49 +426,8 @@ export const SAMPLE_REPORT: ReportModel = {
     },
   ],
 
-  sections: [
-    { ref: 'start', title: 'Recommended starting point', sub: '' },
-    {
-      ref: 'company',
-      title: 'Company snapshot',
-      sub: 'What we could verify before we asked you anything.',
-    },
-    { ref: 'workflows', title: 'Proposed AI workflows', sub: '' },
-    {
-      ref: 'map',
-      title: 'Process map',
-      sub: 'Your top workflow, one run, start to finish. Who does each step today, and who does it after.',
-    },
-    {
-      ref: 'uplift',
-      title: 'Profit uplift analysis',
-      sub: 'Where the freed hours go, and what they earn there.',
-    },
-    {
-      ref: 'outlook',
-      title: 'Three-year outlook',
-      sub: 'Cumulative, assuming you keep the team and the work keeps coming.',
-    },
-    { ref: 'delay', title: 'Cost of delay', sub: '' },
-    {
-      ref: 'roadmap',
-      title: 'Implementation roadmap',
-      sub: 'Six weeks on the first agent. The others wait until it holds.',
-    },
-    { ref: 'next', title: 'Next steps', sub: '' },
-  ],
-  nav: [
-    { label: 'Starting point', ref: 'start' },
-    { label: 'Company', ref: 'company' },
-    { label: 'Workflows', ref: 'workflows' },
-    { label: 'Process map', ref: 'map' },
-    { label: 'Profit uplift', ref: 'uplift' },
-    { label: '3-year outlook', ref: 'outlook' },
-    { label: 'Cost of delay', ref: 'delay' },
-    { label: 'Roadmap', ref: 'roadmap' },
-    { label: 'Next steps', ref: 'next' },
-  ],
-  legend: 'Solid values are yours. Anything marked carries its source.',
-  disclaimer:
-    'An estimate built from the figures you gave us. Not financial advice. Check it before you commit.',
+  sections: LABELS.sections,
+  nav: LABELS.nav,
+  legend: LEGEND,
+  disclaimer: DISCLAIMER,
 }

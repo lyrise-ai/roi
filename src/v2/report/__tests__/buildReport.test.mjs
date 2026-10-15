@@ -11,15 +11,21 @@ const repoRoot = path.resolve(here, '../../../..')
 
 let buildReport
 let SAMPLE_ANSWERS
+let SAMPLE_RESEARCH
+let SAMPLE_WORDS
+let SAMPLE_REPORT
+let fixed
 let tmpDir
 
 before(async () => {
   tmpDir = fs.mkdtempSync(path.join(os.tmpdir(), 'build-report-test-'))
   const entry = path.join(tmpDir, 'entry.ts')
+  const from = (file) => JSON.stringify(path.join(here, '..', file))
   fs.writeFileSync(
     entry,
-    `export { buildReport } from ${JSON.stringify(path.join(here, '../buildReport.ts'))}\n` +
-      `export { SAMPLE_ANSWERS } from ${JSON.stringify(path.join(here, '../sampleReport.ts'))}\n`,
+    `export { buildReport } from ${from('buildReport.ts')}\n` +
+      `export { SAMPLE_ANSWERS, SAMPLE_RESEARCH, SAMPLE_WORDS, SAMPLE_REPORT } from ${from('sampleReport.ts')}\n` +
+      `export * as fixed from ${from('fixedWords.ts')}\n`,
   )
 
   const outfile = path.join(tmpDir, 'bundle.mjs')
@@ -32,67 +38,86 @@ before(async () => {
     outfile,
     logLevel: 'silent',
   })
-  ;({ buildReport, SAMPLE_ANSWERS } = await import(pathToFileURL(outfile).href))
+  ;({
+    buildReport,
+    SAMPLE_ANSWERS,
+    SAMPLE_RESEARCH,
+    SAMPLE_WORDS,
+    SAMPLE_REPORT,
+    fixed,
+  } = await import(pathToFileURL(outfile).href))
 })
 
 after(() => {
   if (tmpDir) fs.rmSync(tmpDir, { recursive: true, force: true })
 })
 
-test('builds workflow figures, totals, outlook, and company snapshot from saved inputs', () => {
-  const model = buildReport(SAMPLE_ANSWERS)
+const exact = (value) => ({ mode: 'exact', exact: value })
 
-  assert.equal(model.workflowRows.length, 4)
-  assert.equal(model.workflowRows[0].workflow, SAMPLE_ANSWERS.pains[0].text)
-  assert.equal(model.workflowRows[0].total, '3,000')
-  assert.equal(model.workflowRows[0].hours, '1,092')
-  assert.equal(model.workflowRows[0].gain, '$106,115')
-  assert.equal(model.totalHours, '1,926')
-  assert.equal(model.totalGain, '$181,882')
-  assert.equal(model.totalOd, '$79,079')
-  assert.equal(model.totalUplift, '$102,803')
-  assert.equal(model.outlook[2].total, '$545,646')
-  assert.equal(model.failedRows.length, 0)
-  assert.equal(model.snapshot[0].value, SAMPLE_ANSWERS.company.name)
-  assert.equal(model.workflowRows[1].mark, 'estimated')
-  assert.ok(model.workflowRows[0].chain.includes('$106,115'))
-  assert.ok(model.sections.some((section) => section.ref === 'outlook'))
+test('the sample answers, research and words give exactly SAMPLE_REPORT', () => {
+  const model = buildReport({
+    ...SAMPLE_ANSWERS,
+    research: SAMPLE_RESEARCH,
+    words: SAMPLE_WORDS,
+  })
+  assert.deepEqual(model, SAMPLE_REPORT)
 })
 
-test('withholds totals when no workflow has complete numeric inputs', () => {
+test('a row that overflows fails alone, and the totals say so', () => {
+  // no words, so nothing is rejected and pain 3 is a row
+  const model = buildReport({
+    ...SAMPLE_ANSWERS,
+    research: SAMPLE_RESEARCH,
+    pains: [
+      ...SAMPLE_ANSWERS.pains.slice(0, 3),
+      {
+        text: 'Too big to count',
+        // 10^307 people: the hours overflow to Infinity in the Calculator
+        quant: [
+          exact('1'),
+          exact('1' + '0'.repeat(307)),
+          exact('15'),
+          exact('65000'),
+          exact('35'),
+        ],
+      },
+    ],
+  })
+
+  assert.deepEqual(
+    model.workflowRows.map((row) => row.id),
+    ['0', '1', '2'],
+  )
+  assert.deepEqual(model.failedRows, [
+    { workflow: 'Too big to count', message: fixed.ROW_FAILED },
+  ])
+  assert.deepEqual(model.totals, { ok: false, message: fixed.TOTALS_FAILED })
+})
+
+test('empty words: the thesis falls back, the figures stay the same', () => {
+  const model = buildReport({ ...SAMPLE_ANSWERS, research: SAMPLE_RESEARCH })
+
+  assert.equal(
+    model.thesis,
+    fixed.THESIS_FALLBACK(SAMPLE_ANSWERS.pains[0].text),
+  )
+  assert.equal(model.mapTitle, '')
+  assert.deepEqual(model.processMap, [])
+  for (const expected of SAMPLE_REPORT.workflowRows) {
+    const row = model.workflowRows.find((r) => r.id === expected.id)
+    assert.equal(row.gain, expected.gain)
+    assert.equal(row.hours, expected.hours)
+    assert.equal(row.workflow, SAMPLE_ANSWERS.pains[Number(row.id)].text)
+  }
+})
+
+test('no complete answers: no totals, and each row says what is missing', () => {
   const model = buildReport({
     company: { name: 'Example Co' },
     pains: [{ text: 'Reviewing records', quant: [] }],
   })
 
   assert.equal(model.workflowRows.length, 0)
-  assert.equal(model.totalHours, undefined)
-  assert.equal(model.totalGain, undefined)
-  assert.match(model.totalsFailed, /No workflows have enough readable/)
+  assert.deepEqual(model.totals, { ok: false, message: fixed.LABELS.noRows })
   assert.match(model.failedRows[0].message, /how many people/)
-  assert.equal(model.outlook, undefined)
-})
-
-test('isolates an unformattable workflow and keeps other workflow totals', () => {
-  const model = buildReport({
-    company: { name: 'Example Co' },
-    pains: [
-      ...SAMPLE_ANSWERS.pains.slice(0, 1),
-      {
-        text: 'Overflowing input',
-        quant: [
-          { mode: 'exact', exact: '1' },
-          { mode: 'exact', exact: '1e308' },
-          { mode: 'exact', exact: '15' },
-          { mode: 'exact', exact: '65000' },
-          { mode: 'exact', exact: '35' },
-        ],
-      },
-    ],
-  })
-
-  assert.equal(model.workflowRows.length, 1)
-  assert.equal(model.failedRows.length, 1)
-  assert.equal(model.totalGain, '$106,115')
-  assert.equal(model.totalsFailed, undefined)
 })
