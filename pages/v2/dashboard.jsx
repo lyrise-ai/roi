@@ -14,6 +14,7 @@ import Logo from '@/src/ui/logo.svg'
 import { createRouteClient } from '@/src/lib/supabaseRouteClient'
 import { createClient as createBrowserClient } from '@/src/lib/supabase-browser'
 import { Button, Card, Icon } from '@/src/ui'
+import { isStaff, NOT_STAFF } from '@/src/v2/staff'
 
 export async function getServerSideProps({ req, res }) {
   const supabase = createRouteClient(req, res)
@@ -29,6 +30,7 @@ export async function getServerSideProps({ req, res }) {
       },
     }
   }
+  if (!(await isStaff(req, res))) return NOT_STAFF
 
   // RLS ensures only rows where owner_id = user.id are returned
   const { data: reports, error } = await supabase
