@@ -17,6 +17,7 @@ import {
   Input,
   ProvenanceMark,
   Radio,
+  Report,
   ScanFactRow,
   SegmentedInput,
   Select,
@@ -27,6 +28,7 @@ import {
   Toast,
   Tooltip,
 } from '@/src/ui'
+import { SAMPLE_REPORT } from '@/src/v2/report/sampleReport'
 
 export function getStaticProps() {
   return { notFound: process.env.NEXT_PUBLIC_ENV === 'production', props: {} }
@@ -743,7 +745,22 @@ export default function UiKit() {
             </Card>
           </Row>
         </Section>
+
+        <Section title="Report screen">
+          <div className="report-preview">
+            <Report model={SAMPLE_REPORT} />
+          </div>
+        </Section>
       </div>
+      <style jsx>{`
+        .report-preview {
+          width: 100%;
+          margin: 0 auto;
+          border: 1px solid var(--border-subtle);
+          border-radius: var(--radius-card);
+          background: var(--surface-page);
+        }
+      `}</style>
     </main>
   )
 }
