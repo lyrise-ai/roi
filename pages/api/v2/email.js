@@ -18,6 +18,8 @@ import {
   SAMPLE_SAVED_REPORT,
 } from '@/src/v2/report/savedReport'
 
+import { requireStaff } from '@/src/v2/staff'
+
 export const config = {
   maxDuration: 60,
 }
@@ -28,6 +30,7 @@ export default async function handler(req, res) {
     res.status(405).json({ ok: false, error: 'Method not allowed' })
     return
   }
+  if (!(await requireStaff(req, res))) return
 
   const {
     reportId,

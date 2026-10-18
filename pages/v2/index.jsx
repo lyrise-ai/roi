@@ -54,6 +54,11 @@ import { chain, hoursReturned, hoursSpent, money } from '@/src/v2/report/format'
 import { SETTINGS, selectFeatured } from '@/src/v2/report/miniCalculator'
 import { buildObservationSentence } from '@/src/v2/report/observation'
 import { SAMPLE_ANSWERS } from '@/src/v2/report/sampleReport'
+import { isStaff, NOT_STAFF } from '@/src/v2/staff'
+
+export async function getServerSideProps({ req, res }) {
+  return (await isStaff(req, res)) ? { props: {} } : NOT_STAFF
+}
 
 const IS_DEV = process.env.NODE_ENV === 'development'
 
