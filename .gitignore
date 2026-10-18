@@ -67,5 +67,3 @@ temp/
 # Local workflow scratch files (but keep GitHub Actions)
 workflows/
 !.github/workflows/
-
-docs/marwan

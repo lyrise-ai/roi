@@ -3,6 +3,7 @@ import { Card } from '@/src/ui/core/Card'
 import { Icon } from '@/src/ui/core/Icon'
 import { ProvenanceMark } from '@/src/ui/roi/ProvenanceMark'
 import styles from '@/src/ui/report/Report.module.css'
+import { SCREEN } from '@/src/v2/report/fixedWords'
 
 const SECTION_REFS = [
   'start',
@@ -20,6 +21,11 @@ function hasContent(value) {
   if (Array.isArray(value)) return value.length > 0
   return typeof value === 'string' && value.trim().length > 0
 }
+
+// totals are all figures or a failure message (ReportModel.totals)
+const totalsOf = (model) => (model.totals?.ok ? model.totals : null)
+const totalsFailure = (model) =>
+  model.totals?.ok === false ? model.totals.message : ''
 
 function failureNotice(message) {
   if (!hasContent(message)) return null
@@ -75,13 +81,13 @@ function WorkflowRow({ row }) {
         </div>
         <div className={styles.workflowMetrics}>
           <Metric
-            label="Hours back"
+            label={SCREEN.hoursBack}
             value={row.hours}
             mark={row.mark}
             compact
           />
           <Metric
-            label="Annual gain"
+            label={SCREEN.annualGain}
             value={row.gain}
             mark={row.mark}
             compact
@@ -89,8 +95,8 @@ function WorkflowRow({ row }) {
         </div>
         <span className={styles.workflowAction}>
           <span className={styles.workflowActionLabel}>
-            <span>View details</span>
-            <span>Hide details</span>
+            <span>{SCREEN.viewDetails}</span>
+            <span>{SCREEN.hideDetails}</span>
           </span>
           <Icon
             name="chevron-down"
@@ -103,7 +109,7 @@ function WorkflowRow({ row }) {
         <div className={styles.todayAfter}>
           {hasContent(row.today) && (
             <div>
-              <span className={styles.eyebrow}>Today</span>
+              <span className={styles.eyebrow}>{SCREEN.today}</span>
               <p>{row.today}</p>
               {hasContent(row.total) && (
                 <strong className={styles.inlineValue}>{row.total}</strong>
@@ -112,35 +118,33 @@ function WorkflowRow({ row }) {
           )}
           {hasContent(row.agent) && (
             <div>
-              <span className={styles.eyebrow}>After</span>
+              <span className={styles.eyebrow}>{SCREEN.after}</span>
               <p>{row.agent}</p>
             </div>
           )}
         </div>
         {hasContent(row.scope) && (
           <div>
-            <span className={styles.eyebrow}>Scope</span>
+            <span className={styles.eyebrow}>{SCREEN.scope}</span>
             <p>{row.scope}</p>
           </div>
         )}
         {hasContent(row.formula) && (
           <div className={styles.formula}>
-            <span className={styles.eyebrow}>Hours today</span>
+            <span className={styles.eyebrow}>{SCREEN.hoursToday}</span>
             <p>{row.formula}</p>
           </div>
         )}
         {hasContent(row.remaining) && hasContent(row.remainPct) && (
           <div className={styles.remaining}>
             <div className={styles.remainingLabel}>
-              <span className={styles.eyebrow}>
-                Hours that stay with a person
-              </span>
+              <span className={styles.eyebrow}>{SCREEN.staysWithPerson}</span>
               <strong>{row.remaining}</strong>
             </div>
             <div
               className={styles.remainingTrack}
               role="img"
-              aria-label={`${row.remainPct} of hours stay with a person`}
+              aria-label={SCREEN.staysWithPersonAria(row.remainPct)}
             >
               <span
                 className={styles.remainingBar}
@@ -152,12 +156,14 @@ function WorkflowRow({ row }) {
         {(hasContent(row.od) || hasContent(row.uplift)) && (
           <div className={styles.valueSplit}>
             <div className={styles.odMetric}>
-              <Metric label="Wages you get back" value={row.od} />
+              <Metric label={SCREEN.wagesBack} value={row.od} />
               {hasContent(row.od) && (
-                <span className={styles.muted}>the operational dividend</span>
+                <span className={styles.muted}>
+                  {SCREEN.operationalDividend}
+                </span>
               )}
             </div>
-            <Metric label="What the freed time earns" value={row.uplift} />
+            <Metric label={SCREEN.freedTimeEarns} value={row.uplift} />
           </div>
         )}
         {Array.isArray(row.assumptions) && row.assumptions.length > 0 && (
@@ -174,7 +180,7 @@ function WorkflowRow({ row }) {
         )}
         {hasContent(row.chain) && (
           <div className={styles.formula}>
-            <span className={styles.eyebrow}>WHAT WE MULTIPLIED BY</span>
+            <span className={styles.eyebrow}>{SCREEN.multipliedBy}</span>
             <p className={styles.chain}>{row.chain}</p>
           </div>
         )}
@@ -190,9 +196,9 @@ function WorkflowSection({ model }) {
     !failedRows.length &&
     !model.rejected?.length &&
     !hasContent(model.workflowsSub) &&
-    !hasContent(model.totalHours) &&
-    !hasContent(model.totalGain) &&
-    !hasContent(model.totalsFailed)
+    !hasContent(totalsOf(model)?.hours) &&
+    !hasContent(totalsOf(model)?.gain) &&
+    !hasContent(totalsFailure(model))
   ) {
     return null
   }
@@ -213,17 +219,18 @@ function WorkflowSection({ model }) {
           </div>
         </Card>
       ))}
-      {hasContent(model.totalsFailed)
-        ? failureNotice(model.totalsFailed)
-        : (hasContent(model.totalHours) || hasContent(model.totalGain)) && (
+      {hasContent(totalsFailure(model))
+        ? failureNotice(totalsFailure(model))
+        : (hasContent(totalsOf(model)?.hours) ||
+            hasContent(totalsOf(model)?.gain)) && (
             <div className={styles.workflowTotals}>
               {hasContent(model.totalsLabel) && (
                 <strong className={styles.workflowTotalsLabel}>
                   {model.totalsLabel}
                 </strong>
               )}
-              <Metric label="Hours back" value={model.totalHours} />
-              <Metric label="Annual gain" value={model.totalGain} />
+              <Metric label={SCREEN.hoursBack} value={totalsOf(model)?.hours} />
+              <Metric label={SCREEN.annualGain} value={totalsOf(model)?.gain} />
             </div>
           )}
       {model.rejected?.map((row) => (
@@ -251,18 +258,14 @@ function ProcessMap({ steps }) {
           </div>
           {hasContent(step.today) && (
             <div className={styles.stepOwner}>
-              <span className={styles.eyebrow}>Today</span>
+              <span className={styles.eyebrow}>{SCREEN.today}</span>
               <span>{step.today}</span>
             </div>
           )}
           <div className={styles.stepOwner}>
-            <span className={styles.eyebrow}>After</span>
+            <span className={styles.eyebrow}>{SCREEN.after}</span>
             <span>
-              {step.after === 'agent'
-                ? 'Agent'
-                : step.after === 'agent-drafts'
-                  ? 'Agent drafts; person reviews'
-                  : 'Unchanged'}
+              {SCREEN.afterStep[step.after] ?? SCREEN.afterStep.unchanged}
             </span>
           </div>
         </li>
@@ -272,7 +275,7 @@ function ProcessMap({ steps }) {
 }
 
 function ProfitUplift({ model }) {
-  const failed = hasContent(model.totalsFailed)
+  const failed = hasContent(totalsFailure(model))
   return (
     <div className={styles.stack}>
       {model.levers?.map((lever) => (
@@ -287,37 +290,48 @@ function ProfitUplift({ model }) {
         </div>
       ))}
       {failed ? (
-        failureNotice(model.totalsFailed)
+        failureNotice(totalsFailure(model))
       ) : (
         <>
           <div className={styles.totalRow}>
-            <Metric label="Wages you get back" value={model.totalOd} />
-            <Metric label="Profit from the hours" value={model.totalUplift} />
+            <Metric label={SCREEN.wagesBack} value={totalsOf(model)?.od} />
+            <Metric
+              label={SCREEN.freedTimeEarns}
+              value={totalsOf(model)?.uplift}
+            />
           </div>
-          {hasContent(model.odPct) && hasContent(model.upliftPct) && (
-            <div className={styles.split}>
-              <div
-                className={styles.splitBar}
-                role="img"
-                aria-label={`${model.odPct} wages you get back, ${model.upliftPct} profit from the hours`}
-              >
-                <span
-                  className={styles.odBar}
-                  style={{ width: model.odPct }}
-                  title={model.odPct}
-                />
-                <span
-                  className={styles.upliftBar}
-                  style={{ width: model.upliftPct }}
-                  title={model.upliftPct}
-                />
+          {hasContent(totalsOf(model)?.odPct) &&
+            hasContent(totalsOf(model)?.upliftPct) && (
+              <div className={styles.split}>
+                <div
+                  className={styles.splitBar}
+                  role="img"
+                  aria-label={SCREEN.splitAria(
+                    totalsOf(model)?.odPct,
+                    totalsOf(model)?.upliftPct,
+                  )}
+                >
+                  <span
+                    className={styles.odBar}
+                    style={{ width: totalsOf(model)?.odPct }}
+                    title={totalsOf(model)?.odPct}
+                  />
+                  <span
+                    className={styles.upliftBar}
+                    style={{ width: totalsOf(model)?.upliftPct }}
+                    title={totalsOf(model)?.upliftPct}
+                  />
+                </div>
+                <div className={styles.splitLabels}>
+                  <span>
+                    {SCREEN.wagesBack} · {totalsOf(model)?.odPct}
+                  </span>
+                  <span>
+                    {SCREEN.freedTimeEarns} · {totalsOf(model)?.upliftPct}
+                  </span>
+                </div>
               </div>
-              <div className={styles.splitLabels}>
-                <span>Wages you get back · {model.odPct}</span>
-                <span>Profit from the hours · {model.upliftPct}</span>
-              </div>
-            </div>
-          )}
+            )}
           {hasContent(model.legend) && (
             <p className={styles.legend}>{model.legend}</p>
           )}
@@ -328,13 +342,13 @@ function ProfitUplift({ model }) {
 }
 
 function Outlook({ model }) {
-  if (hasContent(model.totalsFailed)) {
-    return failureNotice(model.totalsFailed)
+  if (hasContent(totalsFailure(model))) {
+    return failureNotice(totalsFailure(model))
   }
-  if (!model.outlook?.length) return null
+  if (!totalsOf(model)?.outlook?.length) return null
   return (
     <div className={styles.outlook}>
-      {model.outlook.map((year) => (
+      {totalsOf(model).outlook.map((year) => (
         <div className={styles.outlookYear} key={year.label}>
           <strong>{year.total}</strong>
           <div className={styles.outlookTrack}>
@@ -499,26 +513,29 @@ export function Report({ model, className, ...rest }) {
             model.failedRows?.length > 0 ||
             model.rejected?.length > 0 ||
             hasContent(model.workflowsSub) ||
-            hasContent(model.totalHours) ||
-            hasContent(model.totalGain) ||
-            hasContent(model.totalsFailed)
+            hasContent(totalsOf(model)?.hours) ||
+            hasContent(totalsOf(model)?.gain) ||
+            hasContent(totalsFailure(model))
           )
         case 'map':
           return model.processMap?.length > 0 || hasContent(model.mapTitle)
         case 'uplift':
           return (
             model.levers?.length > 0 ||
-            hasContent(model.totalOd) ||
-            hasContent(model.totalUplift) ||
-            hasContent(model.totalsFailed)
+            hasContent(totalsOf(model)?.od) ||
+            hasContent(totalsOf(model)?.uplift) ||
+            hasContent(totalsFailure(model))
           )
         case 'outlook':
-          return model.outlook?.length > 0 || hasContent(model.totalsFailed)
+          return (
+            totalsOf(model)?.outlook?.length > 0 ||
+            hasContent(totalsFailure(model))
+          )
         case 'delay':
           return (
-            hasContent(model.delayMonthly) ||
+            hasContent(totalsOf(model)?.delayMonthly) ||
             hasContent(model.delayCopy) ||
-            hasContent(model.totalsFailed)
+            hasContent(totalsFailure(model))
           )
         case 'roadmap':
           return model.roadmap?.length > 0
@@ -542,7 +559,7 @@ export function Report({ model, className, ...rest }) {
       {...rest}
     >
       {navItems.some((item) => visibleRefs.has(item.ref)) && (
-        <nav className={styles.nav} aria-label="Report sections">
+        <nav className={styles.nav} aria-label={SCREEN.sectionsNav}>
           {navItems
             .filter((item) => visibleRefs.has(item.ref))
             .map((item) => (
@@ -564,11 +581,11 @@ export function Report({ model, className, ...rest }) {
             className={styles.mobileNavLabel}
             htmlFor="report-section-picker"
           >
-            Jump to section
+            {SCREEN.jumpToSection}
           </label>
           <select
             id="report-section-picker"
-            aria-label="Jump to report section"
+            aria-label={SCREEN.jumpToSectionAria}
             value={activeSection}
             onChange={goToSection}
           >
@@ -647,13 +664,13 @@ export function Report({ model, className, ...rest }) {
 
         <ReportSection section={sectionFor('delay')} data-report-section>
           {visibleRefs.has('delay') &&
-            (hasContent(model.totalsFailed) ? (
-              failureNotice(model.totalsFailed)
+            (hasContent(totalsFailure(model)) ? (
+              failureNotice(totalsFailure(model))
             ) : (
               <Card className={styles.delay}>
-                {hasContent(model.delayMonthly) && (
+                {hasContent(totalsOf(model)?.delayMonthly) && (
                   <strong className={styles.delayValue}>
-                    {model.delayMonthly}
+                    {totalsOf(model)?.delayMonthly}
                   </strong>
                 )}
                 {hasContent(model.delayCopy) && <p>{model.delayCopy}</p>}

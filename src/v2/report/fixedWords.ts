@@ -165,3 +165,31 @@ export const LABELS = {
     { label: 'Next steps', ref: 'next' },
   ],
 }
+
+// Labels on the report screen (src/ui/report/Report.jsx).
+export const SCREEN = {
+  hoursBack: 'Hours back',
+  annualGain: 'Annual gain',
+  viewDetails: 'View details',
+  hideDetails: 'Hide details',
+  today: 'Today',
+  after: 'After',
+  scope: 'Scope',
+  hoursToday: 'Hours today',
+  staysWithPerson: 'Hours that stay with a person',
+  staysWithPersonAria: (pct: string) => `${pct} of hours stay with a person`,
+  wagesBack: 'Wages you get back',
+  operationalDividend: 'the operational dividend',
+  freedTimeEarns: 'What the freed time earns',
+  splitAria: (od: string, uplift: string) =>
+    `${od} wages you get back, ${uplift} what the freed time earns`,
+  multipliedBy: 'WHAT WE MULTIPLIED BY',
+  afterStep: {
+    agent: 'Agent',
+    'agent-drafts': 'Agent drafts; person reviews',
+    unchanged: 'Unchanged',
+  },
+  sectionsNav: 'Report sections',
+  jumpToSection: 'Jump to section',
+  jumpToSectionAria: 'Jump to report section',
+}
