@@ -145,7 +145,9 @@ test('save then load gives back the saved inputs, not the claim token', async ()
       id: ID,
       company: row().company,
       pains: row().pains,
+      research: row().research,
       words: row().words,
+      settings: row().settings,
     },
   })
 })
