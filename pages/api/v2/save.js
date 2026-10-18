@@ -2,6 +2,7 @@
 // Returns the claim token: only this browser gets it, and claiming needs it.
 
 import { createRouteClient } from '@/src/lib/supabaseRouteClient'
+import { SETTINGS } from '@/src/v2/report/miniCalculator'
 import { saveReport } from '@/src/v2/report/savedReport'
 import { requireStaff } from '@/src/v2/staff'
 
@@ -13,7 +14,13 @@ export default async function handler(req, res) {
   }
   if (!(await requireStaff(req, res))) return
 
-  const { id, company, pains, research, words, settings } = req.body ?? {}
+  // Only the answers come from the browser. The report is built from the
+  // settings, research and words, so those are the server's.
+  const { id, company, pains, words } = req.body ?? {}
+  const observation =
+    typeof words?.observation === 'string'
+      ? { observation: words.observation }
+      : {}
 
   // Signed in already? Then the report is theirs from the start.
   let ownerId = null
@@ -31,9 +38,9 @@ export default async function handler(req, res) {
     owner_id: ownerId,
     company,
     pains,
-    research,
-    words,
-    settings,
+    research: {},
+    words: observation,
+    settings: SETTINGS,
   })
 
   if (!claimToken) {
