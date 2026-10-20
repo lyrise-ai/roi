@@ -28,23 +28,35 @@ let parseEstimateText
 let tmpDir
 
 before(async () => {
-  tmpDir = fs.mkdtempSync(path.join(os.tmpdir(), 'answer-bridge-test-'))
-  const outfile = path.join(tmpDir, 'answerBridge.mjs')
-  await esbuild.build({
-    entryPoints: [path.join(here, '../answerBridge.ts')],
-    bundle: true,
-    platform: 'node',
-    format: 'esm',
-    outfile,
-    logLevel: 'silent',
-  })
-  ;({
-    bridgeAnswer,
-    bridgeAutomatable,
-    bridgePainQuant,
-    assembleCalculatorInput,
-    parseEstimateText,
-  } = await import(pathToFileURL(outfile).href))
+  try {
+    tmpDir = fs.mkdtempSync(path.join(os.tmpdir(), 'answer-bridge-test-'))
+    const outfile = path.join(tmpDir, 'answerBridge.mjs')
+
+    const result = await esbuild.build({
+      entryPoints: [path.resolve(here, '../answerBridge.ts')],
+      bundle: true,
+      platform: 'node',
+      format: 'esm',
+      outfile,
+      sourcemap: 'inline',
+      logLevel: 'info', // Changed to 'info' so errors show up clearly
+    })
+
+    if (result.errors && result.errors.length > 0) {
+      console.error('ESBuild compilation errors:', result.errors)
+      throw new Error('esbuild bundling failed')
+    }
+
+    const mod = await import(pathToFileURL(outfile).href)
+    bridgeAnswer = mod.bridgeAnswer
+    bridgeAutomatable = mod.bridgeAutomatable
+    bridgePainQuant = mod.bridgePainQuant
+    assembleCalculatorInput = mod.assembleCalculatorInput
+    parseEstimateText = mod.parseEstimateText
+  } catch (err) {
+    console.error('BEFORE HOOK FAILED:', err)
+    throw err
+  }
 })
 
 after(() => {
@@ -209,11 +221,10 @@ test('automatable: estimate stays flagged and null, not inverted into a number',
 
 test('bridgePainQuant: reads the four calculator fields at their QUANT positions', () => {
   const quant = [
-    { mode: 'exact', exact: '2600' }, // [0] volume — not read
-    { mode: 'exact', exact: '7' }, // [1] people
-    { mode: 'exact', exact: '18' }, // [2] hours/week
-    { mode: 'exact', exact: '18000' }, // [3] annual pay
-    { mode: 'exact', exact: '0.25' }, // [4] still-needs-a-person
+    { mode: 'exact', exact: '7' }, // [0] people
+    { mode: 'exact', exact: '18' }, // [1] hours/week
+    { mode: 'exact', exact: '18000' }, // [2] annual pay
+    { mode: 'exact', exact: '0.25' }, // [3] still-needs-a-person
   ]
   const fields = bridgePainQuant(quant)
   assert.equal(fields.people.value, 7)
@@ -224,7 +235,6 @@ test('bridgePainQuant: reads the four calculator fields at their QUANT positions
 
 test('assembleCalculatorInput: complete fields produce calculator input', () => {
   const fields = bridgePainQuant([
-    { mode: 'exact', exact: '2600' },
     { mode: 'exact', exact: '7' },
     { mode: 'exact', exact: '18' },
     { mode: 'exact', exact: '18000' },
@@ -241,7 +251,6 @@ test('assembleCalculatorInput: complete fields produce calculator input', () => 
 
 test('assembleCalculatorInput: a missing field signals incomplete, not a 0', () => {
   const fields = bridgePainQuant([
-    { mode: 'exact', exact: '2600' },
     { mode: 'exact', exact: '7' },
     { mode: 'estimate' }, // hours/week left as AI-estimate, no number
     { mode: 'exact', exact: '18000' },
@@ -287,7 +296,6 @@ test('estimates fill blanks, flagged as ours', () => {
   const fields = bridgePainQuant(
     [],
     [
-      'about 2,600 a month',
       'about 7 people',
       'about 18 hours',
       'about $18k a year',
@@ -317,14 +325,12 @@ test('estimates fill blanks, flagged as ours', () => {
 test('a typed answer always beats the estimate', () => {
   const fields = bridgePainQuant(
     [
-      { mode: 'exact' },
       { mode: 'exact', exact: '4' },
       { mode: 'estimate' },
       { mode: 'exact' },
       { mode: 'exact' },
     ],
     [
-      'about 2,600 a month',
       'about 7 people',
       'about 18 hours',
       'about $18k a year',

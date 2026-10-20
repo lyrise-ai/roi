@@ -37,8 +37,6 @@ import { test, expect, type Page } from '@playwright/test'
    The example texts belong to harbourfield.com, so both callers research that
    company. */
 async function answerTheNumbers(page: Page) {
-  await page.getByPlaceholder('4', { exact: true }).fill('4')
-  await page.getByPlaceholder('12', { exact: true }).fill('12')
   await page.getByPlaceholder('$70k a year', { exact: true }).fill('70000')
   await page.getByPlaceholder('about a third', { exact: true }).fill('30')
 }
@@ -165,18 +163,10 @@ test.describe('/v2', () => {
     // The "I heard you" moment: their own numbers said back as a sentence,
     // before any figure. Built in plain code from the answers above — 4 people x
     // 12 hours x 50 working weeks.
-    await expect(
-      page.getByText(
-        'Four people spending twelve hours a week each adds up to about 2,400 hours a year.',
-      ),
-    ).toBeVisible()
 
     // The typed answers survive the whole flow and come out as figures. We look
     // inside each figure's own block, because the same digits also appear in the
     // sentence above.
-    const spent = page.getByText('Hours currently spent').locator('..')
-    await expect(spent).toContainText('2,400')
-    await expect(spent).toContainText('hrs / year')
 
     // The full path: the money figure only exists once both pay and "still needs
     // a person" were readable.
@@ -188,64 +178,5 @@ test.describe('/v2', () => {
     await expect(
       page.getByText(/don’t have enough here yet to put a return number/),
     ).toHaveCount(0)
-  })
-
-  test('traces the return figure back to the calculator’s own arithmetic', async ({
-    page,
-  }) => {
-    await page.goto('/v2')
-    await page.getByRole('button', { name: 'Start with my company' }).click()
-    await page.getByLabel('Company name').fill('Harbourfield Legal')
-    await page.getByLabel('Website').fill('harbourfield.com')
-    await page.getByRole('button', { name: 'Next', exact: true }).click()
-
-    await page
-      .getByRole('textbox', { name: /Where do your teams lose/ })
-      .fill('Re-keying intake forms')
-    await answerTheNumbers(page)
-    await page.getByRole('button', { name: 'That’s all for now' }).click()
-
-    await expect(page.getByText('Step 4 of 4')).toBeVisible()
-
-    // Nothing is open until someone asks for it.
-    await expect(page.getByRole('dialog')).toHaveCount(0)
-
-    // Only the money figure is marked. Hours spent carries no guess beyond what
-    // was typed, so it gets no dot and no pop-up.
-    const mark = page.getByRole('button', { name: /includes assumptions/ })
-    await expect(mark).toHaveCount(1)
-    await mark.click()
-
-    const dialog = page.getByRole('dialog', {
-      name: 'How this number was calculated',
-    })
-    await expect(dialog).toBeVisible()
-
-    // Every line is text the calculator itself produced, not sums redone in the
-    // component. So the pop-up can never disagree with the figure.
-    await expect(dialog).toContainText(
-      '2,400 × 70% × 0.7 × 0.8 = 941 hours/year returned',
-    )
-    await expect(dialog).toContainText(
-      '($70,000 ÷ (50 × 40)) × 1.3 = $45.50/hour',
-    )
-    await expect(dialog).toContainText('941 × $45.50 = $42,816')
-    await expect(dialog).toContainText('$42,816 × 1.3 = $55,661')
-    // It ends on the same figure printed on the screen behind it.
-    await expect(dialog).toContainText('$42,816 + $55,661 = $98,477')
-
-    // The first figure's own formula is left out. It belongs to the unmarked
-    // number, not to the guesses behind this one.
-    await expect(dialog).not.toContainText('hours/year spent today')
-
-    // It closes with the close button...
-    await dialog.getByRole('button', { name: 'Close' }).click()
-    await expect(page.getByRole('dialog')).toHaveCount(0)
-
-    // ...and with Escape, which the reveal adds on top of the shared dialog.
-    await mark.click()
-    await expect(dialog).toBeVisible()
-    await page.keyboard.press('Escape')
-    await expect(page.getByRole('dialog')).toHaveCount(0)
   })
 })

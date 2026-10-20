@@ -15,13 +15,10 @@
 //
 // The five answers come in a fixed order, matching QUANT in
 // pages/v2/index.jsx exactly:
-//   quant[0] = how many times a month  — not used here, the calculator has no
-//                                        field for it
-//   quant[1] = how many people
-//   quant[2] = hours a week, each
-//   quant[3] = pay per year
-//   quant[4] = "how much would still need a person" after automation
-//
+// quant[0] = how many people
+// quant[1] = hours a week, each
+// quant[2] = pay per year
+// quant[3] = "how much would still need a person" after automation
 // Nothing in this file reads a file, calls a server, or imports anything. It
 // runs the same in the browser and in Node, which is what makes it easy to
 // test.
@@ -268,10 +265,10 @@ export function bridgePainQuant(
   estimates: (string | undefined)[] = [],
 ): BridgedPainFields {
   return {
-    people: orEstimate(bridgeAnswer(quant[1]), estimates[1]),
-    hoursPerWeek: orEstimate(bridgeAnswer(quant[2]), estimates[2]),
-    annualPay: orEstimate(bridgeAnswer(quant[3]), estimates[3]),
-    automatablePct: bridgeAutomatable(quant[4], estimates[4]),
+    people: orEstimate(bridgeAnswer(quant[0]), estimates[0]),
+    hoursPerWeek: orEstimate(bridgeAnswer(quant[1]), estimates[1]),
+    annualPay: orEstimate(bridgeAnswer(quant[2]), estimates[2]),
+    automatablePct: bridgeAutomatable(quant[3], estimates[3]),
   }
 }
 

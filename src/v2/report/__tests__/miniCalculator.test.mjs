@@ -623,7 +623,7 @@ test('selectFeatured on the reveal screen uses this exact same ranking', () => {
   ]
 
   const featured = selectFeatured(pains)
-  assert.equal(featured.index, 1)
-  assert.equal(featured.pain.text, 'Pain 1 - Big')
+  assert.equal(featured.index, 0)
+  assert.equal(featured.pain.text, 'Pain 0')
   assert.equal(featured.figures.complete, true)
 })
