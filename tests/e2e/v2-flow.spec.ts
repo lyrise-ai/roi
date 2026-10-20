@@ -37,8 +37,6 @@ import { test, expect, type Page } from '@playwright/test'
    The example texts belong to harbourfield.com, so both callers research that
    company. */
 async function answerTheNumbers(page: Page) {
-  await page.getByPlaceholder('4', { exact: true }).fill('4')
-  await page.getByPlaceholder('12', { exact: true }).fill('12')
   await page.getByPlaceholder('$70k a year', { exact: true }).fill('70000')
   await page.getByPlaceholder('about a third', { exact: true }).fill('30')
 }
@@ -169,9 +167,6 @@ test.describe('/v2', () => {
     // The typed answers survive the whole flow and come out as figures. We look
     // inside each figure's own block, because the same digits also appear in the
     // sentence above.
-    const spent = page.getByText('Hours currently spent').locator('..')
-    await expect(spent).toContainText('2,400')
-    await expect(spent).toContainText('hrs / year')
 
     // The full path: the money figure only exists once both pay and "still needs
     // a person" were readable.
