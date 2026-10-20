@@ -623,9 +623,9 @@ function Company({ value, onChange, onBack, onSubmit }) {
           >
             Back
           </Button>
-          {/* The button works even with the fields empty. An empty company
-              falls back to the demo company, and a demo you cannot click
-              through without typing is not a demo. */}
+          {/* The button works even with the fields empty. Research can handle
+              an empty company, and a demo can be opened by entering its
+              domain. */}
           <Button
             type="submit"
             className="v2-next-btn"
@@ -786,11 +786,11 @@ const QUANT = [
    `verdantdental.com`; any other company gets no guesses, and estimates that
    say they have nothing to stand on.
 
-   Be aware of what that mix means: the panel is live but these guesses are
-   not, so a guess may mention something the panel never showed. We get away
-   with it only because a guess is clearly marked as junior work — a dashed box
-   labelled `estimated`, sitting next to a field the user can overrule — and
-   only for the length of one card.
+   These entries are development fixtures, not production defaults. The panel
+   is live but these guesses are not, so a guess may mention something the
+   panel never showed. We get away with it only because a guess is clearly
+   marked as junior work — a dashed box labelled `estimated`, sitting next to
+   a field the user can overrule — and only for the length of one card.
 
    Nothing here may put a guessed workflow, department or "operating model"
    into the PANEL. That kind of guessing is what made the old research agent
@@ -1056,29 +1056,30 @@ const DEMOS = {
    uses: `https://www.DrJobPro.com/about` and `drjobpro.com` are the same
    company.
 
-   An empty field, or a domain we have no entry for, falls back to the demo
-   company. That is what lets you click Next, Next, Next through the whole flow
-   without typing — which is how the demo is actually given.
+   Demo entries are development fixtures only. An empty field or an unknown
+   domain has no demo, so a real prospect gets no canned guesses or estimates.
 
    `/v2?scan=none` is the way into the "we know nothing about this company"
    state. Since LYR-199 it no longer hides the panel — the panel is live now
    and there are no canned facts left to hide — but it still switches off the
    canned guesses and estimates, which is what it was really for. */
-const DEFAULT_DEMO = 'drjobpro.com'
-const demoFor = (website = '') =>
-  DEMOS[
-    website
-      .trim()
-      .toLowerCase()
-      .replace(/^https?:\/\//, '')
-      .replace(/^www\./, '')
-      .split('/')[0]
-  ] || DEMOS[DEFAULT_DEMO]
+const demoFor = (website = '') => {
+  if (!IS_DEV) return undefined
+
+  const domain = website
+    .trim()
+    .toLowerCase()
+    .replace(/^https?:\/\//, '')
+    .replace(/^www\./, '')
+    .split('/')[0]
+
+  return DEMOS[domain]
+}
 
 /* Takes the shared question and lays anything we know about this company over
-   the top of it. A company with no entry in `DEMOS` keeps the generic example
-   text and gets no `guess` at all — the guess box only appears when there is
-   one. Pain points four and beyond never get a guess, for any company. */
+   the top of it. A company with no demo keeps the generic example text and
+   gets no `guess` at all — the guess box only appears when there is one. Pain
+   points four and beyond never get a guess, for any company. */
 const painFor = (demo, i) => ({
   ...(PAINS[i] || EXTRA_PAIN),
   ...((PAINS[i] && demo && demo.pains[i]) || {}),
@@ -1514,7 +1515,9 @@ function Interview({
           >
             {sharper
               ? 'Every one you add is another part of the business I can actually see. Keep going while they’re front of mind — you can stop whenever.'
-              : 'Two makes the report hold up, and three lets me rank them and tell you which to fix first. Stop whenever you like — anything you leave blank, I fall back to my own guess and label it as mine.'}
+              : demo
+                ? 'Two makes the report hold up, and three lets me rank them and tell you which to fix first. Stop whenever you like — anything you leave blank, I fall back to my own guess and label it as mine.'
+                : 'Two makes the report hold up, and three lets me rank them and tell you which to fix first. Stop whenever you like — anything you leave blank gets an AI guess in an update. Until that ships, it shows as missing here.'}
           </p>
           <div
             className="v2-interview-actions"
