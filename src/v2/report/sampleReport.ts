@@ -55,20 +55,13 @@ export const SAMPLE_ANSWERS: {
       text: 'Reconciling client trust accounts and cross-referencing invoice disbursements',
       team: 'Finance & Compliance',
       worst: 'Chasing missing receipts at the end of each billing cycle',
-      quant: [
-        exact('12'),
-        exact('4'),
-        exact('15'),
-        exact('65000'),
-        exact('35'),
-      ],
+      quant: [exact('4'), exact('15'), exact('65000'), exact('35')],
     },
     {
       text: 'Typing each new client intake form into practice management, billing and the client portal',
       team: 'Operations',
       worst: 'Entering the same address three times',
       quant: [
-        exact('200'),
         exact('3'),
         exact('10'),
         { mode: 'range', low: '50000', high: '60000' },
@@ -78,13 +71,13 @@ export const SAMPLE_ANSWERS: {
     {
       text: 'Putting together the weekly status report for each client',
       worst: 'Copying dates out of the case system by hand',
-      quant: [exact('4'), exact('1'), exact('8'), exact('70000'), exact('15')],
+      quant: [exact('1'), exact('8'), exact('70000'), exact('15')],
     },
     {
       text: 'Writing fee quotes for new matters',
       team: 'Partners',
       worst: 'Working out the scope before we know the matter',
-      quant: [exact('40'), exact('2'), exact('5'), exact('90000'), exact('80')],
+      quant: [exact('2'), exact('5'), exact('90000'), exact('80')],
     },
   ],
 }

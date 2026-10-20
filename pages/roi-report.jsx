@@ -63,15 +63,7 @@ const COUNTRY_OPTS = [
   'United Kingdom',
   'Other',
 ]
-const TEAM_SIZE_OPTS = [
-  '1–10',
-  '11–50',
-  '51–200',
-  '201–500',
-  '501–1,000',
-  '1,001–5,000',
-  '5,000+',
-]
+
 const REVENUE_OPTS = [
   'Under $1M',
   '$1M – $5M',
@@ -506,22 +498,7 @@ function Step1({ data, onChange, errors, isAlpha }) {
           onChange={(v) => onChange('country', v)}
         />
       </div>
-      <div className="space-y-2">
-        <label className="text-[12.5px] font-semibold text-gray-800 flex items-center">
-          Team size{' '}
-          <span className="font-normal text-gray-400 ml-1">
-            — drives realistic workflow volumes
-          </span>
-          {isAlpha && (
-            <Tooltip text="Larger teams have more repetitive work to automate. This sizes the opportunity accurately." />
-          )}
-        </label>
-        <PillGroup
-          options={TEAM_SIZE_OPTS}
-          value={data.teamSize}
-          onChange={(v) => onChange('teamSize', v)}
-        />
-      </div>
+
       <div className="space-y-2">
         <label className="text-[12.5px] font-semibold text-gray-800 flex items-center">
           Estimated annual revenue{' '}
