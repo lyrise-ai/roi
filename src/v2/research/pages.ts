@@ -434,6 +434,17 @@ export async function readPage(
       }
     }
 
+    if (plain.why === 'timeout') {
+      /* A timeout is recoverable by asking for the same page with a longer
+         wait. Firecrawl cannot make a slow origin answer sooner, so retrying
+         there would spend a rescue credit before the intended recovery. */
+      return {
+        ok: false,
+        why: plain.why,
+        detail: detailFor(plain.why, key, wait),
+      }
+    }
+
     let content = plain.content
     if (content === null) {
       const budget = rescueBudget()
