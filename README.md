@@ -94,7 +94,7 @@ whole when ready (`CLAUDE.md` explains). Deleting V1 = deleting `src/v1/` and
 V1's pages.
 
 ```text
-pages/                routes (Pages Router); pages/v2 and pages/api/v2 are V2
+pages/                routes (Pages Router); pages/api/v2 is V2 API
 src/v1/               everything only V1 uses
 src/v2/research/      V2's research agent and its tools
 src/v2/report/        V2's calculator, formatter, saved reports, email
