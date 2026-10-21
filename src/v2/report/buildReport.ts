@@ -51,14 +51,11 @@ import type {
   ReportWords,
   Totals,
 } from '@/src/v2/report/reportModel'
-import type {
-  SavedReportCompany,
-  SavedReportPain,
-} from '@/src/v2/report/savedReport'
+import type { ReportCompany, ReportPain } from '@/src/v2/report/savedReport'
 
 type BuildReportInput = {
-  company: SavedReportCompany
-  pains: SavedReportPain[]
+  company: ReportCompany
+  pains: ReportPain[]
   research?: Record<string, unknown>
   words?: Partial<ReportWords> | null
   settings?: Record<string, unknown> | null
@@ -111,7 +108,7 @@ const normalizeAnswer = (value: unknown): SegmentedAnswer => {
   return { mode: 'estimate' }
 }
 
-const normalizePain = (value: unknown): SavedReportPain | null => {
+const normalizePain = (value: unknown): ReportPain | null => {
   if (!isObject(value)) return null
   return {
     text: text(value.text),
@@ -152,7 +149,7 @@ const rowMark = (fields: BridgedPainFields): ProvenanceKind =>
 
 // At most six findings, each pointing at a page research really opened.
 const makeSnapshot = (
-  company: SavedReportCompany,
+  company: ReportCompany,
   research: Record<string, unknown> | undefined,
 ) => {
   const own = cleanDomain(company.website)
@@ -198,7 +195,7 @@ export function buildReport({
   words,
   settings,
 }: BuildReportInput): ReportModel {
-  const safeCompany: SavedReportCompany = {
+  const safeCompany: ReportCompany = {
     name: isObject(company)
       ? text(company.name) || 'Your company'
       : 'Your company',
@@ -208,7 +205,7 @@ export function buildReport({
         : undefined,
   }
   const safePains = Array.isArray(pains)
-    ? pains.map(normalizePain).filter((pain): pain is SavedReportPain => !!pain)
+    ? pains.map(normalizePain).filter((pain): pain is ReportPain => !!pain)
     : []
   const safeResearch = isObject(research) ? research : undefined
   const w: Record<string, any> = isObject(words) ? words : {}
