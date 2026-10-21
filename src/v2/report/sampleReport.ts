@@ -13,8 +13,8 @@
 // formatting code, and LYR-243's test would be comparing the calculator with
 // itself, which proves nothing.
 //
-// The firm is the one in SAMPLE_SAVED_REPORT (savedReport.ts): Acme Legal
-// Services. It named four pieces of work. Three became rows, ranked by gain.
+// The firm is Acme Legal Services. It named four pieces of work. Three became
+// rows, ranked by gain.
 // The fourth, fee quotes, was left out. Client intake's pay was given as a
 // range, so that row is marked `estimated`.
 //
@@ -38,10 +38,7 @@ import type {
   ReportModel,
   ReportWords,
 } from '@/src/v2/report/reportModel'
-import type {
-  SavedReportCompany,
-  SavedReportPain,
-} from '@/src/v2/report/savedReport'
+import type { ReportCompany, ReportPain } from '@/src/v2/report/savedReport'
 
 /* Sample data only. A Figure is text only format.ts may make, and most of its
    functions arrive with LYR-242. Until then these literals stand in for what
@@ -54,8 +51,8 @@ const exact = (value: string) => ({ mode: 'exact' as const, exact: value })
    answerBridge.ts reads them: times a month, people, hours a week each, pay,
    and how much would still need a person. */
 export const SAMPLE_ANSWERS: {
-  company: SavedReportCompany
-  pains: SavedReportPain[]
+  company: ReportCompany
+  pains: ReportPain[]
 } = {
   company: { name: 'Acme Legal Services', website: 'acmelegal.com' },
   pains: [

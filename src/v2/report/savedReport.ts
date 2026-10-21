@@ -9,39 +9,18 @@
 // ─────────────────────────────────────────────────────────────────────────────
 
 import { getSupabaseAdmin } from '@/src/lib/supabaseAdmin'
-import type { MiniCalculatorOutput } from '@/src/v2/report/miniCalculator'
 import type { SegmentedAnswer } from '@/src/v2/report/answerBridge'
 
-export interface SavedReportCompany {
+export interface ReportCompany {
   name: string
   website?: string
 }
 
-export interface SavedReportPain {
+export interface ReportPain {
   text: string
   team?: string
   worst?: string
   quant: SegmentedAnswer[]
-}
-
-export interface SavedReportFeatured {
-  pain: SavedReportPain
-  figures: {
-    complete: boolean
-    calc: MiniCalculatorOutput
-  }
-}
-
-export interface SavedReport {
-  id: string
-  company: SavedReportCompany
-  createdAt: string
-  pains: SavedReportPain[]
-  featured: SavedReportFeatured
-  observation?: string
-  recipientEmail?: string
-  senderName?: string
-  shareUrl?: string
 }
 
 export interface V2ReportRow {
@@ -60,8 +39,8 @@ export type LoadedReport = Pick<
   V2ReportRow,
   'id' | 'research' | 'words' | 'settings'
 > & {
-  company: SavedReportCompany
-  pains: SavedReportPain[]
+  company: ReportCompany
+  pains: ReportPain[]
 }
 
 export type LoadReportResult =
@@ -189,73 +168,4 @@ export async function loadReport(
     console.error(`[v2_reports] read failed for ${id}:`, err)
     return { status: 'unreadable' }
   }
-}
-
-/**
- * Example report with realistic sample numbers for testing, email previews,
- * and building dependent V2 screens before database persistence lands.
- */
-export const SAMPLE_SAVED_REPORT: SavedReport = {
-  id: 'rep_sample_acme_2026',
-  company: {
-    name: 'Acme Legal Services',
-    website: 'acmelegal.com',
-  },
-  createdAt: '2026-09-21T12:00:00.000Z',
-  pains: [
-    {
-      text: 'Reconciling client trust accounts and cross-referencing invoice disbursements',
-      team: 'Finance & Compliance',
-      worst: 'Chasing missing receipts at the end of each billing cycle',
-      quant: [
-        { mode: 'exact', exact: '12' },
-        { mode: 'exact', exact: '4' },
-        { mode: 'exact', exact: '15' },
-        { mode: 'exact', exact: '65000' },
-        { mode: 'exact', exact: '35' },
-      ],
-    },
-  ],
-  featured: {
-    pain: {
-      text: 'Reconciling client trust accounts and cross-referencing invoice disbursements',
-      team: 'Finance & Compliance',
-      worst: 'Chasing missing receipts at the end of each billing cycle',
-      quant: [
-        { mode: 'exact', exact: '12' },
-        { mode: 'exact', exact: '4' },
-        { mode: 'exact', exact: '15' },
-        { mode: 'exact', exact: '65000' },
-        { mode: 'exact', exact: '35' },
-      ],
-    },
-    figures: {
-      complete: true,
-      calc: {
-        annualHours: 3000,
-        hoursReturned: 1092,
-        ratePerHour: 42.25,
-        operationalDividend: 46137,
-        profitUplift: 59978,
-        totalFinancialGain: 106115,
-        automatable: 0.65,
-      },
-    },
-  },
-  observation:
-    'Four people spend about 15 hours a week each on reconciling accounts — about 3,000 hours a year.',
-  recipientEmail: 'partner@acmelegal.com',
-  senderName: 'Elena Rostova',
-}
-
-// In-memory store for reports generated in V2 sessions before database schema lands.
-const inMemoryReports = new Map<string, SavedReport>()
-inMemoryReports.set(SAMPLE_SAVED_REPORT.id, SAMPLE_SAVED_REPORT)
-
-export function saveReportInMemory(report: SavedReport): void {
-  inMemoryReports.set(report.id, report)
-}
-
-export function getReportFromMemory(id: string): SavedReport | undefined {
-  return inMemoryReports.get(id)
 }
