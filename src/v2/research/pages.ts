@@ -436,6 +436,15 @@ export async function readPage(
 
     let content = plain.content
     if (content === null) {
+      /* A timeout is recoverable by asking the same address to wait longer.
+         Do not spend a rescue fetch before the agent gets that chance. */
+      if (plain.why === 'timeout') {
+        return {
+          ok: false,
+          why: plain.why,
+          detail: detailFor(plain.why, key, wait),
+        }
+      }
       const budget = rescueBudget()
       if (!budget.available) {
         return {
