@@ -82,13 +82,13 @@ async function stubResearch(page: Page, findings = FINDINGS, delayMs = 1200) {
   })
 }
 
-test.describe('/v2', () => {
+test.describe('Profit Map flow', () => {
   test.beforeEach(async ({ page }) => {
     await stubResearch(page)
   })
 
   test('@smoke walks all four steps and carries state', async ({ page }) => {
-    await page.goto('/v2')
+    await page.goto('/')
     // The first screen sits outside the flow: one button, no step counter, no
     // splash.
     await expect(page.getByRole('heading', { level: 1 })).toContainText(
@@ -193,7 +193,7 @@ test.describe('/v2', () => {
   test('traces the return figure back to the calculator’s own arithmetic', async ({
     page,
   }) => {
-    await page.goto('/v2')
+    await page.goto('/')
     await page.getByRole('button', { name: 'Start with my company' }).click()
     await page.getByLabel('Company name').fill('Harbourfield Legal')
     await page.getByLabel('Website').fill('harbourfield.com')

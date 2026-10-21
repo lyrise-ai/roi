@@ -18,7 +18,7 @@ export default function PublicReportError({ status, message, reportId }) {
         {reportId ? (
           <p className="v2-report-error-id">Report id: {reportId}</p>
         ) : null}
-        <Link href="/v2">Back to the Profit Map</Link>
+        <Link href="/">Back to the Profit Map</Link>
       </div>
       <style jsx>{`
         .v2-report-error {

@@ -43,7 +43,7 @@ export function buildPublicReportUrl(
     !envBase.includes('localhost') &&
     !envBase.includes('127.0.0.1')
   ) {
-    return `${envBase.replace(/\/$/, '')}/v2/report/${encodeURIComponent(reportId)}`
+    return `${envBase.replace(/\/$/, '')}/profit-map/${encodeURIComponent(reportId)}`
   }
 
   const rawHost = req?.headers?.['x-forwarded-host'] || req?.headers?.host
@@ -52,10 +52,10 @@ export function buildPublicReportUrl(
   if (host && !host.includes('localhost') && !host.includes('127.0.0.1')) {
     const rawProto = req?.headers?.['x-forwarded-proto'] || 'https'
     const proto = Array.isArray(rawProto) ? rawProto[0] : rawProto
-    return `${proto}://${host}/v2/report/${encodeURIComponent(reportId)}`
+    return `${proto}://${host}/profit-map/${encodeURIComponent(reportId)}`
   }
 
-  return `${DEFAULT_PUBLIC_BASE}/v2/report/${encodeURIComponent(reportId)}`
+  return `${DEFAULT_PUBLIC_BASE}/profit-map/${encodeURIComponent(reportId)}`
 }
 
 // In-memory deduplication registry to prevent duplicate sends (LYR-215).
