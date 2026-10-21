@@ -25,7 +25,6 @@
    carrying real generations for months. */
 import { research } from '@/src/v2/research/agent'
 import { cleanDomain } from '@/src/v2/research/search'
-import { requireStaff } from '@/src/v2/staff'
 
 export const config = {
   maxDuration: 300,
@@ -44,7 +43,6 @@ export default async function handler(req, res) {
     res.status(405).json({ error: 'method_not_allowed' })
     return
   }
-  if (!(await requireStaff(req, res))) return
 
   /* Cuts whatever the prospect typed in the Website field down to a plain
      domain. This is where outside input enters, and `cleanDomain` is the same
