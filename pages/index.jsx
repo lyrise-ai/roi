@@ -1,6 +1,6 @@
 /* POC of the redesigned Profit Map (LYR-178, scaffold: LYR-182).
 
-   Nothing under /v2 touches the live app: no `reports`/`state_data` tables and
+   The V2 experience now owns the root route: no `reports`/`state_data` tables and
    no imports from V1 (`src/v1/`). Its logic lives in `src/v2/`.
 
    It calls the server once: `/api/v2/research` (LYR-199), which fills the scan
@@ -54,10 +54,32 @@ import { chain, hoursReturned, hoursSpent, money } from '@/src/v2/report/format'
 import { SETTINGS, selectFeatured } from '@/src/v2/report/miniCalculator'
 import { buildObservationSentence } from '@/src/v2/report/observation'
 import { SAMPLE_ANSWERS } from '@/src/v2/report/sampleReport'
-import { isStaff, NOT_STAFF } from '@/src/v2/staff'
+import { isStaff } from '@/src/v2/staff'
 
-export async function getServerSideProps({ req, res }) {
-  return (await isStaff(req, res)) ? { props: {} } : NOT_STAFF
+export async function getServerSideProps({ req, res, query }) {
+  // Safety net: if Supabase's OAuth callback fails its redirectTo validation it
+  // falls back to the site root with ?code=... appended. Rescue the code here
+  // so the session exchange still happens at /auth/callback.
+  if (query.code) {
+    return {
+      redirect: {
+        destination: `/auth/callback?code=${query.code}`,
+        permanent: false,
+      },
+    }
+  }
+
+  // Signed-in staff at `/` → `/dashboard`. Everyone else sees the landing.
+  if (await isStaff(req, res)) {
+    return {
+      redirect: {
+        destination: '/dashboard',
+        permanent: false,
+      },
+    }
+  }
+
+  return { props: {} }
 }
 
 const IS_DEV = process.env.NODE_ENV === 'development'
@@ -121,7 +143,7 @@ const FORMULA_ROWS = [
 ]
 
 /* Each screen slides up 8px when it appears. It lives in this file, not in
-   styles/global.css, so /v2 stays one folder you can delete. And it is a CSS
+   styles/global.css, so this route stays self-contained. And it is a CSS
    class, not an inline style, because only a class can be overridden by the
    "user asked for less motion" media query below.
 
@@ -284,10 +306,7 @@ function Shell({ step, children }) {
           padding: 'var(--space-5) clamp(var(--space-4), 5vw, var(--space-6))',
         }}
       >
-        <Link
-          href="/v2"
-          style={{ display: 'inline-flex', alignItems: 'center' }}
-        >
+        <Link href="/" style={{ display: 'inline-flex', alignItems: 'center' }}>
           <Image src={Logo} alt="LyRise" width={70} height={24} priority />
         </Link>
         <div
@@ -337,7 +356,7 @@ function Shell({ step, children }) {
 
           {user ? (
             <Link
-              href="/v2/dashboard"
+              href="/my-reports"
               style={{
                 font: 'var(--weight-medium) var(--text-xs)/1 var(--font-body)',
                 color: 'var(--text-heading)',
@@ -355,7 +374,7 @@ function Shell({ step, children }) {
             </Link>
           ) : (
             <Link
-              href="/auth/login?next=/v2/dashboard"
+              href="/auth/login?next=/my-reports"
               style={{
                 font: 'var(--weight-medium) var(--text-xs)/1 var(--font-body)',
                 color: 'var(--text-muted)',
@@ -1065,7 +1084,7 @@ const DEMOS = {
    company. That is what lets you click Next, Next, Next through the whole flow
    without typing — which is how the demo is actually given.
 
-   `/v2?scan=none` is the way into the "we know nothing about this company"
+   `/?scan=none` is the way into the "we know nothing about this company"
    state. Since LYR-199 it no longer hides the panel — the panel is live now
    and there are no canned facts left to hide — but it still switches off the
    canned guesses and estimates, which is what it was really for. */
@@ -1607,7 +1626,7 @@ function ClaimSection({ reportId, currentUser, claimed, onClaimSuccess }) {
     setGoogleLoading(true)
     setAuthError(null)
     try {
-      const returnUrl = `/v2/report/${reportId}`
+      const returnUrl = `/profit-map/${reportId}`
       document.cookie = `auth_next=${encodeURIComponent(returnUrl)}; path=/; max-age=300; SameSite=Lax`
       const { createClient } = await import('@/src/lib/supabase-browser')
       const supabase = createClient()
@@ -1631,7 +1650,7 @@ function ClaimSection({ reportId, currentUser, claimed, onClaimSuccess }) {
     setMagicLinkSent(false)
     setAuthError(null)
     try {
-      const returnUrl = `/v2/report/${reportId}`
+      const returnUrl = `/profit-map/${reportId}`
       document.cookie = `auth_next=${encodeURIComponent(returnUrl)}; path=/; max-age=300; SameSite=Lax`
       const { createClient } = await import('@/src/lib/supabase-browser')
       const supabase = createClient()
@@ -1701,7 +1720,7 @@ function ClaimSection({ reportId, currentUser, claimed, onClaimSuccess }) {
                 Logged in as {currentUser?.email || 'authenticated user'}. You
                 can reopen this report anytime from your dashboard.
               </p>
-              <Link href="/v2/dashboard">
+              <Link href="/my-reports">
                 <Button size="sm" variant="secondary">
                   Go to My Reports →
                 </Button>
@@ -1882,7 +1901,7 @@ function ClaimSection({ reportId, currentUser, claimed, onClaimSuccess }) {
                 Saved to {currentUser?.email || 'your account'}
               </span>
             </div>
-            <Link href="/v2/dashboard">
+            <Link href="/my-reports">
               <Button size="sm" variant="secondary">
                 My Reports →
               </Button>
@@ -2044,7 +2063,7 @@ function ClaimSection({ reportId, currentUser, claimed, onClaimSuccess }) {
             }}
           >
             <Link
-              href={`/auth/login?next=${encodeURIComponent(`/v2/report/${reportId}`)}`}
+              href={`/auth/login?next=${encodeURIComponent(`/profit-map/${reportId}`)}`}
               style={{
                 fontSize: 'var(--text-xs)',
                 color: 'var(--brand)',
@@ -2062,7 +2081,7 @@ function ClaimSection({ reportId, currentUser, claimed, onClaimSuccess }) {
 
 function Reveal({ flow, demo, onRestart }) {
   // Every pain point can still be thrown away on the way in: blank, with no
-  // guess to fall back on (open /v2?scan=none, name nothing, click finish). So
+  // guess to fall back on (open /?scan=none, name nothing, click finish). So
   // there may be nothing to show. In that case we fall into the same
   // empty-handed screen a pain point with no numbers reaches, instead of
   // reading fields off a value that isn't there and crashing.

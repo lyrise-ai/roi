@@ -1,5 +1,5 @@
 // ─────────────────────────────────────────────────────────────────────────────
-// pages/v2/dashboard.jsx — Signed-in user's V2 Profit Map reports
+// pages/my-reports.jsx — Signed-in user's Profit Map reports
 //
 // Shows all previous reports created or claimed by the authenticated user.
 // Enforced by PostgreSQL RLS on public.v2_reports (auth.uid() = owner_id).
@@ -14,7 +14,6 @@ import Logo from '@/src/ui/logo.svg'
 import { createRouteClient } from '@/src/lib/supabaseRouteClient'
 import { createClient as createBrowserClient } from '@/src/lib/supabase-browser'
 import { Button, Card, Icon } from '@/src/ui'
-import { isStaff, NOT_STAFF } from '@/src/v2/staff'
 
 export async function getServerSideProps({ req, res }) {
   const supabase = createRouteClient(req, res)
@@ -25,12 +24,11 @@ export async function getServerSideProps({ req, res }) {
   if (!user) {
     return {
       redirect: {
-        destination: '/auth/login?next=/v2/dashboard',
+        destination: '/auth/login?next=/my-reports',
         permanent: false,
       },
     }
   }
-  if (!(await isStaff(req, res))) return NOT_STAFF
 
   // RLS ensures only rows where owner_id = user.id are returned
   const { data: reports, error } = await supabase
@@ -39,7 +37,7 @@ export async function getServerSideProps({ req, res }) {
     .order('created_at', { ascending: false })
 
   if (error) {
-    console.error('[v2/dashboard] failed to fetch reports:', error)
+    console.error('[my-reports] failed to fetch reports:', error)
   }
 
   return {
@@ -50,13 +48,13 @@ export async function getServerSideProps({ req, res }) {
   }
 }
 
-export default function V2Dashboard({ user, reports = [] }) {
+export default function MyReports({ user, reports = [] }) {
   const router = useRouter()
 
   const handleSignOut = async () => {
     const supabase = createBrowserClient()
     await supabase.auth.signOut()
-    router.push('/v2')
+    router.push('/')
   }
 
   return (
@@ -87,7 +85,7 @@ export default function V2Dashboard({ user, reports = [] }) {
           }}
         >
           <Link
-            href="/v2"
+            href="/"
             style={{ display: 'inline-flex', alignItems: 'center' }}
           >
             <Image src={Logo} alt="LyRise" width={70} height={24} priority />
@@ -107,7 +105,7 @@ export default function V2Dashboard({ user, reports = [] }) {
             >
               {user.email}
             </span>
-            <Link href="/v2">
+            <Link href="/">
               <Button size="sm" variant="secondary">
                 New Profit Map
               </Button>
@@ -180,7 +178,7 @@ export default function V2Dashboard({ user, reports = [] }) {
                 Generate your first Profit Map interview and save it to your
                 account on the reveal screen.
               </p>
-              <Link href="/v2">
+              <Link href="/">
                 <Button variant="primary">Start a Profit Map</Button>
               </Link>
             </Card>
@@ -201,7 +199,7 @@ export default function V2Dashboard({ user, reports = [] }) {
                 return (
                   <Link
                     key={report.id}
-                    href={`/v2/report/${encodeURIComponent(report.id)}`}
+                    href={`/profit-map/${encodeURIComponent(report.id)}`}
                     style={{ textDecoration: 'none' }}
                   >
                     <Card
