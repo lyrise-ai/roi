@@ -42,6 +42,26 @@ const nextConfig = {
         destination: '/auth/login',
         permanent: false,
       },
+      {
+        source: '/v2',
+        destination: '/',
+        permanent: true,
+      },
+      {
+        source: '/v2/report',
+        destination: '/profit-map',
+        permanent: true,
+      },
+      {
+        source: '/v2/report/:id',
+        destination: '/profit-map/:id',
+        permanent: true,
+      },
+      {
+        source: '/v2/dashboard',
+        destination: '/my-reports',
+        permanent: true,
+      },
     ]
   },
   webpack: (config) => {

@@ -29,7 +29,7 @@ pages/                      V1's pages and routes: everything not under v2/
 **Version 2 is where all new work goes. It is being built alongside.**
 
 ```
-pages/v2/, pages/api/v2/    the interview and its server side
+pages/ (landing, etc.), pages/api/v2/  the interview and its server side
 src/v2/research/            one agent with tools
 src/v2/report/              calculator, formatter, saved reports, email
 src/v2/components/          V2-only screens

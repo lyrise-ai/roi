@@ -1,5 +1,5 @@
 // ─────────────────────────────────────────────────────────────────────────────
-// observation — a sentence on /v2's reveal screen (LYR-188)
+// observation — a sentence on the Profit Map reveal screen (LYR-188)
 //
 // The "I heard you" moment: one plain sentence above the two big figures that
 // says the user's own numbers back to them — "Four people spending twelve
@@ -21,7 +21,7 @@
 //
 // If a pain point is missing one of the three, we fall back to a sentence
 // about what we DO know. In practice annualHours never exists without both
-// people and hours a week (see figuresFor in pages/v2/index.jsx), but this
+// people and hours a week (see figuresFor in pages/index.jsx), but this
 // function does not rely on that. It builds from whichever of the three it
 // has, so it stays correct on its own and can be tested on its own.
 // ─────────────────────────────────────────────────────────────────────────────

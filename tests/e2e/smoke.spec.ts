@@ -1,7 +1,8 @@
 /**
  * Smoke tests — tagged @smoke so the PostResponse Claude hook runs them fast.
  * These run in the `anon` project (no auth state) and cover the most critical
- * regressions: auth walls redirect, login page renders, APIs are alive.
+ * regressions: protected pages redirect, the public landing renders, login
+ * page renders, and APIs are alive.
  */
 import { test, expect } from '@playwright/test'
 
@@ -16,9 +17,12 @@ test.describe('auth wall @smoke', () => {
     await expect(page).toHaveURL(/auth\/login/)
   })
 
-  test('index redirects (to dashboard or login)', async ({ page }) => {
+  test('index opens the public landing', async ({ page }) => {
     await page.goto('/')
-    await expect(page).toHaveURL(/auth\/login|dashboard/)
+    await expect(page).toHaveURL(/\/$/)
+    await expect(page.getByRole('heading', { level: 1 }).first()).toContainText(
+      'Tell us how your teams actually work.',
+    )
   })
 })
 

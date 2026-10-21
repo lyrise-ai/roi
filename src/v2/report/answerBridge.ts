@@ -1,7 +1,7 @@
 // ─────────────────────────────────────────────────────────────────────────────
 // answerBridge — Profit Map POC (LYR-188 / POC 10)
 //
-// The questions page (pages/v2/index.jsx) keeps each pain point's five number
+// The questions page (pages/index.jsx) keeps each pain point's five number
 // answers exactly as the input control produced them: {mode:'exact', exact},
 // {mode:'range', low, high} or {mode:'estimate'}. None of those are numbers.
 // miniCalculator.ts needs plain numbers. This file sits between the two and
@@ -14,7 +14,7 @@
 // number.
 //
 // The five answers come in a fixed order, matching QUANT in
-// pages/v2/index.jsx exactly:
+// pages/index.jsx exactly:
 //   quant[0] = how many times a month  — not used here, the calculator has no
 //                                        field for it
 //   quant[1] = how many people
@@ -236,7 +236,7 @@ export function bridgeAnswer(
 //
 // CONFIRMED (Yousef, review of PR #56): flipping is correct. The question asks
 // for what is left over, so automatable = 1 − answer. The comment on QUANT in
-// pages/v2/index.jsx was corrected to say so. Do not "fix" this back.
+// pages/index.jsx was corrected to say so. Do not "fix" this back.
 export function bridgeAutomatable(
   answer: SegmentedAnswer | undefined,
   estimate?: string,

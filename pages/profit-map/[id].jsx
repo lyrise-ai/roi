@@ -1,4 +1,4 @@
-// /v2/report/<id> — what a forwarded report link opens (LYR-239). No account,
+// pages/profit-map/[id].jsx — what a forwarded report link opens (LYR-239). No account,
 // no chat. The server rebuilds the report from the saved answers; the browser
 // only gets the finished ReportModel.
 
@@ -42,7 +42,12 @@ export async function getServerSideProps({ params, res }) {
   }
 }
 
-export default function V2ReportPage({ reportId, company, model, error }) {
+export default function ProfitMapReportPage({
+  reportId,
+  company,
+  model,
+  error,
+}) {
   // Back from signing in: claim it, if this browser is the one that made it.
   const { user } = useAuthSession()
   React.useEffect(() => {
@@ -118,7 +123,7 @@ export default function V2ReportPage({ reportId, company, model, error }) {
         </header>
         <Report model={model} />
         <footer style={{ marginTop: 'var(--space-12)', textAlign: 'center' }}>
-          <Button as={Link} href="/v2" variant="secondary">
+          <Button as={Link} href="/" variant="secondary">
             Make your own Profit Map
           </Button>
         </footer>

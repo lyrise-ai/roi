@@ -1,5 +1,5 @@
 // domain — cuts a typed website down to a plain domain, or null.
-// Used by /v2 in the browser and by the research code on the server.
+// Used by the root Profit Map in the browser and by the research code on the server.
 
 function isValidLabel(label: string): boolean {
   if (label.length === 0 || label.length > 63) return false
