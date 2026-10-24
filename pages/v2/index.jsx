@@ -2740,6 +2740,23 @@ function useScan(website) {
 
 export default function V2() {
   const [flow, setFlow] = React.useState(emptyFlow)
+
+  // Read saved flow on initial mount (client-side only)
+  React.useEffect(() => {
+    try {
+      const saved = sessionStorage.getItem('v2_flow')
+      if (saved) {
+        setFlow(JSON.parse(saved))
+      }
+    } catch (e) {}
+  }, [])
+
+  // Save flow changes to sessionStorage
+  React.useEffect(() => {
+    try {
+      sessionStorage.setItem('v2_flow', JSON.stringify(flow))
+    } catch (e) {}
+  }, [flow])
   /* `/v2?scan=none` switches off the canned guesses and estimates. It needs its
      own way in, because a domain we do not recognise now falls back to the
      demo company instead. */
