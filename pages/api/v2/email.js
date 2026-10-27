@@ -12,13 +12,8 @@ import {
   sendReportEmail,
   isEmailAlreadySent,
 } from '@/src/v2/report/email'
-import {
-  getReportFromMemory,
-  saveReportInMemory,
-  SAMPLE_SAVED_REPORT,
-} from '@/src/v2/report/savedReport'
-
-import { requireStaff } from '@/src/v2/staff'
+import { buildReport } from '@/src/v2/report/buildReport'
+import { loadReport } from '@/src/v2/report/savedReport'
 
 export const config = {
   maxDuration: 60,
@@ -30,18 +25,10 @@ export default async function handler(req, res) {
     res.status(405).json({ ok: false, error: 'Method not allowed' })
     return
   }
-  if (!(await requireStaff(req, res))) return
+  const { reportId, type = 'self', to, senderName } = req.body ?? {}
 
-  const {
-    reportId,
-    type = 'self',
-    to,
-    senderName,
-    report: clientReport,
-  } = req.body ?? {}
-
-  if (reportId !== undefined && typeof reportId !== 'string') {
-    res.status(400).json({ ok: false, error: 'Report id must be a string.' })
+  if (typeof reportId !== 'string' || !reportId.trim()) {
+    res.status(400).json({ ok: false, error: 'A report id is required.' })
     return
   }
 
@@ -61,25 +48,25 @@ export default async function handler(req, res) {
 
   const recipient = to.trim().toLowerCase()
 
-  // 1. Resolve the report.
-  let report = clientReport
-  if (report && report.id) {
-    saveReportInMemory(report)
-  } else if (typeof reportId === 'string' && reportId) {
-    report = getReportFromMemory(reportId)
+  const loaded = await loadReport(reportId)
+  if (loaded.status !== 'ok') {
+    const status =
+      loaded.status === 'missing'
+        ? 400
+        : loaded.status === 'unreadable'
+          ? 503
+          : 404
+    const error =
+      loaded.status === 'unreadable'
+        ? 'Could not read the saved report.'
+        : 'Report not found.'
+    res.status(status).json({ ok: false, error })
+    return
   }
+  const { report } = loaded
+  const model = buildReport(report)
 
-  // If running in demo mode or memory only, fall back to sample report if missing
-  if (!report) {
-    if (reportId === SAMPLE_SAVED_REPORT.id || !reportId) {
-      report = SAMPLE_SAVED_REPORT
-    } else {
-      res.status(404).json({ ok: false, error: 'Report not found.' })
-      return
-    }
-  }
-
-  // 2. Check duplicate send early.
+  // Check duplicate sends before contacting the email provider.
   if (isEmailAlreadySent(report.id, recipient, type)) {
     res.status(200).json({
       ok: true,
@@ -93,7 +80,9 @@ export default async function handler(req, res) {
   try {
     const result = await sendReportEmail({
       to: recipient,
-      report,
+      reportId: report.id,
+      model,
+      companyName: report.company?.name || 'Your company',
       type,
       senderName,
       req,
