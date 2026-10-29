@@ -95,7 +95,7 @@ export function calculateMiniProfitMap(
     ) / 100
   const operationalDividend = round(hoursReturned * ratePerHour)
   const profitUplift = round(operationalDividend * settings.profitMultiplier)
-  const totalFinancialGain = operationalDividend + profitUplift
+  const totalFinancialGain = operationalDividend
 
   return {
     annualHours,

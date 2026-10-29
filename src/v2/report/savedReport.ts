@@ -237,7 +237,7 @@ export const SAMPLE_SAVED_REPORT: SavedReport = {
         ratePerHour: 42.25,
         operationalDividend: 46137,
         profitUplift: 59978,
-        totalFinancialGain: 106115,
+        totalFinancialGain: 46137,
         automatable: 0.65,
       },
     },

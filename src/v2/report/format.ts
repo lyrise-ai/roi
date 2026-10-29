@@ -187,6 +187,6 @@ export const chain = (
     `(${pay} ÷ (${g(s.workingWeeks)} × ${g(s.fteHoursPerWeek)})) × ${g(s.overhead)} = ${perHour}/hour`,
     `${count(out.hoursReturned)} × ${perHour} = ${od}`,
     `${od} × ${g(s.profitMultiplier)} = ${uplift}`,
-    `${od} + ${uplift} = ${money(out.totalFinancialGain, s.currency)}`,
+    `${od} = ${money(out.totalFinancialGain, s.currency)}`,
   ].join('\n') as Figure
 }
