@@ -2364,12 +2364,22 @@ function Reveal({ flow, demo, onRestart }) {
                 <span style={FIGURE_UNIT}>hrs / year</span>
               </p>
               <p style={{ ...FIGURE_VALUE, marginTop: 'var(--space-2)' }}>
-                {money(figures.calc.totalFinancialGain, SETTINGS.currency)}
+                {money(figures.calc.operationalDividend, SETTINGS.currency)}
                 {/* This one holds our guesses about how much can be
                     automated, how many people will use it, and how much of the
                     saving really lands. Clicking it opens the pop-up below. */}
                 <ProvenanceMark
                   kind="estimated"
+                  onClick={() => setFormulaOpen(true)}
+                />
+              </p>
+              <p style={{ ...FIGURE_VALUE, marginTop: 'var(--space-2)' }}>
+                <span style={{ ...FIGURE_UNIT, marginRight: 'var(--space-2)' }}>
+                  Profit uplift, our estimate:
+                </span>
+                {money(figures.calc.profitUplift, SETTINGS.currency)}
+                <ProvenanceMark
+                  kind="benchmarked"
                   onClick={() => setFormulaOpen(true)}
                 />
               </p>
@@ -2748,14 +2758,14 @@ export default function V2() {
       if (saved) {
         setFlow(JSON.parse(saved))
       }
-    } catch (e) {}
+    } catch {}
   }, [])
 
   // Save flow changes to sessionStorage
   React.useEffect(() => {
     try {
       sessionStorage.setItem('v2_flow', JSON.stringify(flow))
-    } catch (e) {}
+    } catch {}
   }, [flow])
   /* `/v2?scan=none` switches off the canned guesses and estimates. It needs its
      own way in, because a domain we do not recognise now falls back to the

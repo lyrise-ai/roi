@@ -147,21 +147,21 @@ const OUTPUTS = [
 ($65,000 ÷ (50 × 40)) × 1.3 = $42.25/hour
 1,092 × $42.25 = $46,137
 $46,137 × 1.3 = $59,978
-$46,137 + $59,978 = $106,115`,
+$46,137 = $46,137`,
 
   `12 × 10 × 50 = 6,000 hours/year spent today
 6,000 × 40% × 0.7 × 0.8 = 1,344 hours/year returned
 ($60,000 ÷ (50 × 40)) × 1.3 = $39.00/hour
 1,344 × $39.00 = $52,416
 $52,416 × 1.3 = $68,141
-$52,416 + $68,141 = $120,557`,
+$52,416 = $52,416`,
 
   `2.5 × 7.5 × 50 = 938 hours/year spent today
 938 × 33% × 0.7 × 0.8 = 173 hours/year returned
 ($48,000 ÷ (50 × 40)) × 1.3 = $31.20/hour
 173 × $31.20 = $5,398
 $5,398 × 1.3 = $7,017
-$5,398 + $7,017 = $12,415`,
+$5,398 = $5,398`,
 ]
 
 for (const [indx, input] of INPUTS.entries()) {
@@ -176,6 +176,6 @@ test('chain matches the sample report', () => {
   const input = INPUTS[0]
   assert.equal(
     format.chain(input, calculateMiniProfitMap(input), SETTINGS),
-    '4 × 15 × 50 = 3,000 hours/year spent today for Finance & Compliance\n3,000 × 65% × 0.7 × 0.8 = 1,092 hours/year returned\n($65,000 ÷ (50 × 40)) × 1.3 = $42.25/hour\n1,092 × $42.25 = $46,137\n$46,137 × 1.3 = $59,978\n$46,137 + $59,978 = $106,115',
+    '4 × 15 × 50 = 3,000 hours/year spent today for Finance & Compliance\n3,000 × 65% × 0.7 × 0.8 = 1,092 hours/year returned\n($65,000 ÷ (50 × 40)) × 1.3 = $42.25/hour\n1,092 × $42.25 = $46,137\n$46,137 × 1.3 = $59,978\n$46,137 = $46,137',
   )
 })

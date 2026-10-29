@@ -113,8 +113,8 @@ test('worked example: 12 people, 10 hrs/wk, $60k/yr, 40% automatable', () => {
   // profitUplift = 52,416 × 1.3 (PROFIT_MULTIPLIER)
   assert.equal(out.profitUplift, 68_141)
 
-  // totalFinancialGain = operationalDividend + profitUplift
-  assert.equal(out.totalFinancialGain, 120_557)
+  // Profit uplift stays separate from the operational headline.
+  assert.equal(out.totalFinancialGain, 52_416)
 
   // annualHours and hoursReturned must never collapse into one field
   assert.notEqual(out.annualHours, out.hoursReturned)
@@ -127,7 +127,7 @@ test('worked example: 12 people, 10 hrs/wk, $60k/yr, 40% automatable', () => {
   )
   assert.match(lines.hoursReturned, /^6,000 × 40% × 0\.7 × 0\.8 = /)
   assert.match(lines.ratePerHour, /\$39\.00\/hour$/)
-  assert.match(lines.totalFinancialGain, /^\$52,416 \+ \$68,141 = /)
+  assert.match(lines.totalFinancialGain, /^\$52,416 = \$52,416$/)
 })
 
 const value = (s) => Number(s.replace(/[$,%]/g, '').match(/-?\d+(\.\d+)?/)[0])
@@ -298,7 +298,7 @@ test('calculateReport returns ReportNumbers with numbers only and matches sample
   assert.equal(report.rows[0].ratePerHour, 42.25)
   assert.equal(report.rows[0].operationalDividend, 46137)
   assert.equal(report.rows[0].profitUplift, 59978)
-  assert.equal(report.rows[0].gain, 106115)
+  assert.equal(report.rows[0].gain, 46137)
 
   // Row 1
   assert.equal(report.rows[1].position, 1)
@@ -309,7 +309,7 @@ test('calculateReport returns ReportNumbers with numbers only and matches sample
   assert.equal(report.rows[1].ratePerHour, 35.75)
   assert.equal(report.rows[1].operationalDividend, 21021)
   assert.equal(report.rows[1].profitUplift, 27327)
-  assert.equal(report.rows[1].gain, 48348)
+  assert.equal(report.rows[1].gain, 21021)
 
   // Row 2
   assert.equal(report.rows[2].position, 2)
@@ -320,41 +320,41 @@ test('calculateReport returns ReportNumbers with numbers only and matches sample
   assert.equal(report.rows[2].ratePerHour, 45.5)
   assert.equal(report.rows[2].operationalDividend, 8645)
   assert.equal(report.rows[2].profitUplift, 11239)
-  assert.equal(report.rows[2].gain, 19884)
+  assert.equal(report.rows[2].gain, 8645)
 
   // Totals
   assert.equal(report.totalHours, 1870)
   assert.equal(report.totalOd, 75803)
   assert.equal(report.totalUplift, 98544)
-  assert.equal(report.totalGain, 174347)
-  assert.equal(report.odPct, 43)
-  assert.equal(report.upliftPct, 57)
+  assert.equal(report.totalGain, 75803)
+  assert.equal(report.odPct, 100)
+  assert.equal(report.upliftPct, 0)
 
   // Three-year outlook
   assert.equal(report.outlook.length, 3)
   assert.deepEqual(report.outlook[0], {
-    total: 174347,
+    total: 75803,
     od: 75803,
     uplift: 98544,
     heightPct: 33,
-    odPct: 43,
-    upliftPct: 57,
+    odPct: 100,
+    upliftPct: 0,
   })
   assert.deepEqual(report.outlook[1], {
-    total: 348694,
+    total: 151606,
     od: 151606,
     uplift: 197088,
     heightPct: 67,
-    odPct: 43,
-    upliftPct: 57,
+    odPct: 100,
+    upliftPct: 0,
   })
   assert.deepEqual(report.outlook[2], {
-    total: 523041,
+    total: 227409,
     od: 227409,
     uplift: 295632,
     heightPct: 100,
-    odPct: 43,
-    upliftPct: 57,
+    odPct: 100,
+    upliftPct: 0,
   })
 
   // Cost of delay
